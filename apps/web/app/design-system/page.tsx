@@ -75,6 +75,57 @@ function StyleFrame({ theme }: { theme: "dark" | "light" }) {
   );
 }
 
+function ReaderPatternFrame() {
+  return (
+    <article className={styles.readerFrame}>
+      <div className={styles.readerFrameChrome}>
+        <span>PRODUCT FRAME · LECTOR LOCAL</span>
+        <span>TXT / MD · PDF · IMAGEN</span>
+      </div>
+      <div className={styles.readerFrameHeader}>
+        <div>
+          <Tag>MD · Local-only</Tag>
+          <h3>Notas de campo</h3>
+          <p>Documento privado · Guardado en este dispositivo</p>
+        </div>
+        <Link
+          className={buttonClassName({ size: "sm", variant: "secondary" })}
+          href="/app/lector"
+        >
+          Ver lector
+        </Link>
+      </div>
+      <div className={styles.readerFrameBody}>
+        <div className={styles.readerFramePaper}>
+          <div>
+            <span>TEXTO PLANO · UTF-8</span>
+            <span>DOCUMENTO COMPLETO</span>
+          </div>
+          <h4>Una observación conserva su contexto</h4>
+          <p>
+            Leer localmente mantiene el documento cerca: su forma, su procedencia y el
+            permiso que hace posible abrirlo.
+          </p>
+        </div>
+        <Card className={styles.readerFrameAside}>
+          <Tag>Copia privada</Tag>
+          <strong>Sobre este archivo</strong>
+          <dl>
+            <div>
+              <dt>Formato</dt>
+              <dd>Markdown</dd>
+            </div>
+            <div>
+              <dt>Origen</dt>
+              <dd>IndexedDB local</dd>
+            </div>
+          </dl>
+        </Card>
+      </div>
+    </article>
+  );
+}
+
 export default function DesignSystemPage() {
   return (
     <main className={styles.main}>
@@ -270,6 +321,18 @@ export default function DesignSystemPage() {
           </div>
         </Card>
         </div>
+      </section>
+
+      <section aria-labelledby="product-pattern-title" className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <span>Patrones de producto</span>
+          <h2 id="product-pattern-title">El lector como frame editorial</h2>
+          <p>
+            La misma jerarquía visual cubre contenido disponible, permisos renovables y
+            fallbacks sin ocultar la procedencia local.
+          </p>
+        </div>
+        <ReaderPatternFrame />
       </section>
     </main>
   );

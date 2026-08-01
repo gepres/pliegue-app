@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { Card, Tag } from "@pliegue/ui";
 
+import { LocalDocumentReader } from "../../../components/local-document-reader";
 import { PageHeader } from "../../../components/workspace-page";
 import styles from "../workspace.module.css";
 
@@ -10,7 +11,18 @@ export const metadata: Metadata = {
   description: "Superficie de lectura de Pliegue con progreso y notas.",
 };
 
-export default function ReaderPage() {
+interface ReaderPageProps {
+  searchParams: Promise<{ document?: string | string[] }>;
+}
+
+export default async function ReaderPage({ searchParams }: ReaderPageProps) {
+  const parameters = await searchParams;
+  const documentId = Array.isArray(parameters.document)
+    ? parameters.document[0]
+    : parameters.document;
+
+  if (documentId) return <LocalDocumentReader documentId={documentId} />;
+
   return (
     <>
       <PageHeader

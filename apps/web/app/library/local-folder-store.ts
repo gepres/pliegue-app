@@ -16,7 +16,7 @@ const databaseVersion = 1;
 const documentStoreName = "documents";
 const sourceStoreName = "sources";
 
-type ReadPermissionState = "denied" | "granted" | "prompt";
+export type ReadPermissionState = "denied" | "granted" | "prompt";
 
 interface PermissionAwareDirectoryHandle extends FileSystemDirectoryHandle {
   queryPermission?: (descriptor?: { mode: "read" }) => Promise<ReadPermissionState>;
@@ -446,6 +446,42 @@ function updatePermissionSnapshot(sourceId: string, permission: ReadPermissionSt
       source.id === sourceId ? { ...source, permission } : source,
     ),
   });
+}
+
+export async function requestLinkedFolderReadPermission(sourceId: string) {
+  const handle = sourceHandles.get(sourceId);
+  if (!handle) throw new Error("La carpeta vinculada ya no está disponible.");
+
+  // Keep this as the first awaited operation so the browser preserves user activation.
+  const permission = await requestReadPermission(handle);
+  updatePermissionSnapshot(sourceId, permission);
+  return permission;
+}
+
+export async function readLinkedDocumentFile(documentId: string, sourceId: string) {
+  const handle = sourceHandles.get(sourceId);
+  if (!handle) return null;
+
+  const permission = await queryReadPermission(handle);
+  updatePermissionSnapshot(sourceId, permission);
+  if (permission !== "granted") return null;
+
+  const database = await openDatabase();
+
+  try {
+    const transaction = database.transaction(documentStoreName, "readonly");
+    const record = await requestResult(
+      transaction.objectStore(documentStoreName).get(documentId) as IDBRequest<
+        StoredLinkedFolderDocument | undefined
+      >,
+    );
+    await transactionComplete(transaction);
+
+    if (!record || record.sourceId !== sourceId) return null;
+    return { document: toLinkedDocument(record), file: await record.handle.getFile() };
+  } finally {
+    database.close();
+  }
 }
 
 export async function scanLinkedFolder(

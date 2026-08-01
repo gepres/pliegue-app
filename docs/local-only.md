@@ -50,6 +50,10 @@ los watchers del sistema operativo corresponden al shell de escritorio.
 ## Formatos y límites actuales
 
 - PDF, EPUB, DOCX, PPTX, XLSX, TXT, Markdown, PNG y JPG.
+- El lector muestra TXT y Markdown como texto plano seguro, sin interpretar HTML embebido.
+- PDF utiliza el visor nativo del navegador; PNG y JPG conservan su proporción y contenido.
+- EPUB, DOCX, PPTX y XLSX muestran un fallback explícito hasta integrar los conversores.
+- La vista textual se limita a 1 MB para proteger la fluidez; la copia original permanece intacta.
 - Máximo 50 MB por archivo durante esta primera etapa.
 - Un fingerprint `nombre + tamaño + última modificación` evita copias duplicadas.
 - El archivo vacío, demasiado grande o con extensión desconocida se rechaza antes de
@@ -60,6 +64,18 @@ los watchers del sistema operativo corresponden al shell de escritorio.
 El límite no sustituye una política de cuota. La siguiente iteración debe consultar la
 estimación de almacenamiento, avisar cuando quede poco espacio y permitir eliminar o
 exportar copias de forma verificable.
+
+## Apertura desde Biblioteca
+
+Cada copia importada y cada documento de una carpeta vinculada tiene una URL estable del
+lector (`/app/lector?document=…`). La ruta de Next.js solo interpreta el identificador; el
+archivo se recupera en un componente cliente desde IndexedDB y nunca cruza una frontera de
+servidor.
+
+Las carpetas vinculadas consultan el permiso antes de abrir. Si el navegador vuelve a estado
+`prompt` o `denied`, el lector ofrece una acción explícita para renovarlo. La solicitud es la
+primera operación asíncrona del clic para conservar la activación de usuario exigida por el
+navegador. Perder o negar el permiso no elimina el manifiesto ni toca el archivo original.
 
 ## Privacidad y recuperación
 
@@ -72,5 +88,5 @@ backup, exportación masiva y restauración corresponden a `06.4`.
 
 - Tauri: diálogo nativo, scopes mínimos, permisos persistentes y file watchers en tiempo real.
 - Expo: document picker, almacenamiento sandbox y permisos por plataforma.
-- Extracción real y vista previa por formato.
+- Extracción estructural de PDF/EPUB/Office, tablas, imágenes y archivos protegidos.
 - Eliminación, cuota, exportación y recuperación de errores.

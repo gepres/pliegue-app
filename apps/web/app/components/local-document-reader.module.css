@@ -1,0 +1,256 @@
+.localReaderLayout {
+  display: grid;
+  gap: var(--pliegue-spacing-xl);
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+
+.previewArea {
+  min-width: 0;
+}
+
+.readerStatus,
+.permissionPanel,
+.unsupportedPreview {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  justify-items: start;
+  min-height: 320px;
+  place-content: center start;
+  padding: clamp(1.5rem, 5vw, 3rem);
+}
+
+.readerStatus h2,
+.permissionPanel h2,
+.unsupportedPreview h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  font-weight: 600;
+  line-height: 1;
+  margin: 0;
+  max-width: 16ch;
+}
+
+.readerStatus p,
+.permissionPanel p,
+.unsupportedPreview p {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 42rem;
+}
+
+.permissionActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.permissionStatus {
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.textPreview,
+.pdfPreview,
+.imagePreview {
+  background-color: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  box-shadow: var(--pliegue-elevation-paper);
+  margin: 0;
+  overflow: hidden;
+}
+
+.textPreview {
+  background-image:
+    linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 3.5rem,
+      color-mix(in srgb, var(--pliegue-color-accent-warm) 28%, transparent) 3.5rem,
+      color-mix(in srgb, var(--pliegue-color-accent-warm) 28%, transparent) calc(3.5rem + 1px),
+      transparent calc(3.5rem + 1px)
+    );
+  min-height: 66vh;
+  padding: clamp(1.5rem, 7vw, 4.5rem);
+}
+
+.previewCaption {
+  align-items: center;
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  color: var(--pliegue-color-text-secondary);
+  display: flex;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  gap: var(--pliegue-spacing-md);
+  justify-content: space-between;
+  letter-spacing: 0.04em;
+  padding-bottom: var(--pliegue-spacing-sm);
+  text-transform: uppercase;
+}
+
+.textPreview pre {
+  color: var(--pliegue-color-text-primary);
+  font-family: var(--pliegue-reader-font-family);
+  font-size: var(--pliegue-reader-font-size);
+  line-height: var(--pliegue-reader-line-height);
+  margin: var(--pliegue-spacing-xl) auto 0;
+  max-width: 72ch;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.truncationNote {
+  background: var(--pliegue-color-bg-subtle);
+  border-left: 3px solid var(--pliegue-color-accent-warm);
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin: var(--pliegue-spacing-lg) 0 0;
+  padding: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
+}
+
+.imagePreview {
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.imageFrame {
+  min-height: 68vh;
+  position: relative;
+}
+
+.imageFrame img {
+  object-fit: contain;
+}
+
+.imagePreview figcaption {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  padding-top: var(--pliegue-spacing-md);
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.pdfPreview {
+  padding: var(--pliegue-spacing-md);
+}
+
+.pdfPreview .previewCaption {
+  margin-bottom: var(--pliegue-spacing-md);
+}
+
+.pdfPreview iframe {
+  background: var(--pliegue-color-bg-subtle);
+  border: 0;
+  border-radius: var(--pliegue-radius-sm);
+  height: min(76vh, 900px);
+  width: 100%;
+}
+
+.unsupportedPreview dl,
+.documentDetails dl {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  margin: 0;
+  width: 100%;
+}
+
+.unsupportedPreview dl {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 34rem;
+}
+
+.unsupportedPreview dl div,
+.documentDetails dl div {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: var(--pliegue-spacing-2xs);
+  padding-top: var(--pliegue-spacing-sm);
+}
+
+.unsupportedPreview dt,
+.documentDetails dt {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.unsupportedPreview dd,
+.documentDetails dd {
+  font-size: 0.8125rem;
+  margin: 0;
+}
+
+.documentDetails {
+  align-self: start;
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  position: sticky;
+  top: 104px;
+}
+
+.documentDetails h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.5rem;
+  margin: var(--pliegue-spacing-sm) 0 var(--pliegue-spacing-md);
+}
+
+.documentDetails p {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+@media (max-width: 960px) {
+  .localReaderLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .documentDetails {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    position: static;
+  }
+}
+
+@media (max-width: 640px) {
+  .documentDetails,
+  .unsupportedPreview dl {
+    grid-template-columns: 1fr;
+  }
+
+  .permissionActions {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .permissionActions > * {
+    width: 100%;
+  }
+
+  .previewCaption {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--pliegue-spacing-xs);
+  }
+
+  .textPreview {
+    background-image: none;
+    padding: var(--pliegue-spacing-lg);
+  }
+
+  .imageFrame {
+    min-height: 55vh;
+  }
+
+  .pdfPreview iframe {
+    height: 68vh;
+  }
+}

@@ -69,8 +69,20 @@ Figma define la intención visual. El código define el contrato consumible y de
 - Estados: reposo, foco visible y desactivado; el navegador conserva teclado y lector de pantalla.
 - Responsive: ocupa el ancho del contenedor y mantiene 44 px de altura mínima.
 
+### Patrón de lector local
+
+- Propósito: abrir contenido local sin perder título, formato, procedencia ni estado de permiso.
+- Composición: `PageHeader` + superficie editorial + `Card` lateral de metadatos y privacidad.
+- Variantes: texto/Markdown, imagen, PDF, permiso requerido, error y formato pendiente.
+- Seguridad: Markdown se presenta como texto plano; no se inyecta HTML del documento.
+- Responsive: el panel lateral pasa debajo de la lectura a 960 px y se simplifican los márgenes
+  de papel a 640 px.
+- Tokens: tipografía y espaciado de lectura consumen `--pliegue-reader-*`; superficies,
+  bordes, acento, elevación y texto usan exclusivamente el contrato semántico.
+
 El catálogo ejecutable en `/design-system` contiene ejemplos Light/Dark. Las preferencias
-de `/app/ajustes` son el primer flujo productivo que consume `Field` y `Select`.
+de `/app/ajustes` consumen `Field` y `Select`; el lector local documenta la primera
+composición de producto multiformato.
 
 ## Style frames
 

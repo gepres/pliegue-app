@@ -264,6 +264,12 @@ export function LibraryBrowser() {
                     </Button>
                     {document.imported ? (
                       <>
+                        <Link
+                          className={buttonClassName({ size: "sm", variant: "secondary" })}
+                          href={{ pathname: "/app/lector", query: { document: document.id } }}
+                        >
+                          Leer
+                        </Link>
                         <Button
                           onClick={() => void downloadCopy(document.id)}
                           size="sm"
@@ -282,7 +288,7 @@ export function LibraryBrowser() {
                     ) : document.linked ? (
                       <Link
                         className={buttonClassName({ size: "sm", variant: "secondary" })}
-                        href="/app/lector"
+                        href={{ pathname: "/app/lector", query: { document: document.id } }}
                       >
                         Ver en lector
                       </Link>

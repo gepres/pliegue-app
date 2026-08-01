@@ -135,6 +135,24 @@ export function useImportedDocuments() {
   return useSyncExternalStore(subscribe, () => snapshot, () => initialSnapshot);
 }
 
+export async function readImportedDocumentFile(documentId: string) {
+  const database = await openDatabase();
+
+  try {
+    const transaction = database.transaction(documentStoreName, "readonly");
+    const record = await requestResult(
+      transaction.objectStore(documentStoreName).get(documentId) as IDBRequest<
+        StoredImportedDocument | undefined
+      >,
+    );
+    await transactionComplete(transaction);
+
+    return record ? { blob: record.blob, document: toDocument(record) } : null;
+  } finally {
+    database.close();
+  }
+}
+
 async function findByFingerprint(database: IDBDatabase, fingerprint: string) {
   const transaction = database.transaction(documentStoreName, "readonly");
   const request = transaction
