@@ -1,4 +1,4 @@
-import type { LibraryDocument } from "./documents";
+import type { DocumentReference, LibraryDocument } from "./documents";
 import {
   createFileFingerprint,
   formatFileSize,
@@ -16,6 +16,7 @@ export interface LinkedFolderDocument extends LibraryDocument {
   fingerprint: string;
   lastModified: number;
   linked: true;
+  reference: Extract<DocumentReference, { kind: "local-folder" }>;
   relativePath: string;
   sizeBytes: number;
   sourceId: string;

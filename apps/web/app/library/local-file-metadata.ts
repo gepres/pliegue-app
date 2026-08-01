@@ -1,4 +1,4 @@
-import type { DocumentFormat, LibraryDocument } from "./documents";
+import type { DocumentFormat, DocumentReference, LibraryDocument } from "./documents";
 
 export const maxImportedFileBytes = 50 * 1024 * 1024;
 
@@ -29,6 +29,7 @@ export interface ImportedDocument extends LibraryDocument {
   lastModified: number;
   mimeType: string;
   originalName: string;
+  reference: Extract<DocumentReference, { kind: "local-copy" }>;
   sizeBytes: number;
 }
 

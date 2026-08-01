@@ -36,18 +36,7 @@ export function ReaderStart() {
         title="¿Qué quieres leer?"
       />
 
-      {storageError ? (
-        <Card className={styles.emptyState} role="alert" tone="subtle">
-          <Tag>Almacenamiento no disponible</Tag>
-          <h2>No pudimos abrir tu Biblioteca local</h2>
-          <p>{storageError}</p>
-        </Card>
-      ) : loading ? (
-        <Card aria-live="polite" className={styles.emptyState} role="status" tone="subtle">
-          <Tag>Preparando</Tag>
-          <h2>Recuperando tu Biblioteca…</h2>
-        </Card>
-      ) : documents.length ? (
+      {documents.length ? (
         <section aria-label="Documentos disponibles" className={styles.documentGrid}>
           {documents.slice(0, 6).map((document) => (
             <DocumentCard
@@ -70,6 +59,17 @@ export function ReaderStart() {
             </DocumentCard>
           ))}
         </section>
+      ) : loading ? (
+        <Card aria-live="polite" className={styles.emptyState} role="status" tone="subtle">
+          <Tag>Preparando</Tag>
+          <h2>Recuperando tu Biblioteca…</h2>
+        </Card>
+      ) : storageError ? (
+        <Card className={styles.emptyState} role="alert" tone="subtle">
+          <Tag>Almacenamiento no disponible</Tag>
+          <h2>No pudimos abrir tu Biblioteca local</h2>
+          <p>{storageError}</p>
+        </Card>
       ) : (
         <Card as="section" className={styles.onboardingCard} tone="subtle">
           <Tag>Sin documentos</Tag>

@@ -45,6 +45,12 @@
   gap: var(--pliegue-spacing-sm);
 }
 
+.readerRecoveryActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm);
+}
+
 .permissionStatus {
   font-family: var(--pliegue-font-data);
   font-size: 0.6875rem;
@@ -375,7 +381,14 @@
     width: 100%;
   }
 
-  .permissionActions > * {
+  .permissionActions > *,
+  .readerRecoveryActions > * {
+    width: 100%;
+  }
+
+  .readerRecoveryActions {
+    align-items: stretch;
+    flex-direction: column;
     width: 100%;
   }
 

@@ -31,10 +31,14 @@ import {
   saveReadingProgress,
   useReadingProgress,
 } from "../library/reading-progress-store";
+import {
+  resolveLocalReaderDocument,
+  type LocalReaderDocument,
+} from "../library/local-reader-state";
 import { PageHeader } from "./workspace-page";
 import styles from "./local-document-reader.module.css";
 
-type LocalDocument = ImportedDocument | LinkedFileDocument | LinkedFolderDocument;
+type LocalDocument = LocalReaderDocument;
 
 const readerIndexLabels = {
   error: "No disponible",
@@ -49,7 +53,15 @@ type PreviewState =
   | { preview: LocalDocumentPreview; status: "ready" };
 
 function isFolderDocument(document: LocalDocument): document is LinkedFolderDocument {
-  return "sourceId" in document;
+  return document.reference.kind === "local-folder";
+}
+
+function isLinkedFileDocument(document: LocalDocument): document is LinkedFileDocument {
+  return document.reference.kind === "local-file";
+}
+
+function isImportedDocument(document: LocalDocument): document is ImportedDocument {
+  return document.reference.kind === "local-copy";
 }
 
 function ExtractedBlock({
@@ -218,6 +230,8 @@ function PreviewCanvas({
   const sourceId = isFolderDocument(document) ? document.sourceId : null;
   const referenceKind = document.reference.kind;
   const [state, setState] = useState<PreviewState>({ status: "loading" });
+  const [attempt, setAttempt] = useState(0);
+  const [showIndexedFallback, setShowIndexedFallback] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -254,7 +268,18 @@ function PreviewCanvas({
     return () => {
       active = false;
     };
-  }, [documentId, format, onReady, referenceKind, sourceId]);
+  }, [attempt, documentId, format, onReady, referenceKind, sourceId]);
+
+  function retryOpening() {
+    setShowIndexedFallback(false);
+    setState({ status: "loading" });
+    setAttempt((currentAttempt) => currentAttempt + 1);
+  }
+
+  function openIndexedFallback() {
+    setShowIndexedFallback(true);
+    onReady();
+  }
 
   if (state.status === "loading") {
     return (
@@ -267,11 +292,43 @@ function PreviewCanvas({
   }
 
   if (state.status === "error") {
+    if (showIndexedFallback && document.searchText) {
+      return (
+        <article className={styles.textPreview}>
+          <div className={styles.previewCaption}>
+            <span>Índice local · Vista de recuperación</span>
+            <Button onClick={retryOpening} size="sm" variant="quiet">
+              Reintentar original
+            </Button>
+          </div>
+          <p className={styles.truncationNote} role="status">
+            No pudimos abrir el original: {state.message} Mostramos únicamente el texto que
+            Pliegue indexó al vincular la carpeta.
+          </p>
+          <pre>{document.searchText}</pre>
+        </article>
+      );
+    }
+
     return (
       <Card className={styles.readerStatus} role="alert" tone="subtle">
         <Tag>No disponible</Tag>
         <h2>No pudimos abrir el archivo</h2>
         <p>{state.message}</p>
+        <div className={styles.readerRecoveryActions}>
+          <Button onClick={retryOpening}>Reintentar apertura</Button>
+          {document.searchText ? (
+            <Button onClick={openIndexedFallback} variant="secondary">
+              Leer el índice disponible
+            </Button>
+          ) : null}
+          <Link
+            className={buttonClassName({ size: "md", variant: "quiet" })}
+            href="/app/biblioteca"
+          >
+            Volver a Biblioteca
+          </Link>
+        </div>
       </Card>
     );
   }
@@ -666,34 +723,13 @@ export function LocalDocumentReader({
   const importedLibrary = useImportedDocuments();
   const linkedFiles = useLinkedFiles();
   const linkedFolders = useLinkedFolders();
-  const importedDocument = importedLibrary.documents.find((item) => item.id === documentId);
-  const linkedFile = linkedFiles.documents.find((item) => item.id === documentId);
-  const linkedDocument = linkedFolders.documents.find((item) => item.id === documentId);
+  const resolution = resolveLocalReaderDocument(documentId, [
+    importedLibrary,
+    linkedFiles,
+    linkedFolders,
+  ]);
 
-  if (
-    importedLibrary.status === "error" ||
-    linkedFiles.status === "error" ||
-    linkedFolders.status === "error"
-  ) {
-    return (
-      <ReaderMessage
-        description={
-          importedLibrary.error ??
-          linkedFiles.error ??
-          linkedFolders.error ??
-          "No fue posible recuperar la biblioteca de este navegador."
-        }
-        eyebrow="Almacenamiento no disponible"
-        title="No pudimos abrir la Biblioteca local"
-      />
-    );
-  }
-
-  if (
-    importedLibrary.status !== "ready" ||
-    linkedFiles.status !== "ready" ||
-    linkedFolders.status !== "ready"
-  ) {
+  if (resolution.status === "loading") {
     return (
       <ReaderMessage
         description="Recuperando los metadatos guardados en este navegador."
@@ -703,41 +739,63 @@ export function LocalDocumentReader({
     );
   }
 
-  if (importedDocument) {
-    return <LocalReaderShell document={importedDocument} resumeRequested={resumeRequested} />;
-  }
-
-  if (linkedFile) {
+  if (resolution.status === "error") {
     return (
-      <LocalReaderShell
-        document={linkedFile}
-        permissionRequired={linkedFile.availability !== "available"}
-        requestPermission={() => requestLinkedFileReadPermission(linkedFile.id)}
-        resumeRequested={resumeRequested}
-        sourceName={linkedFile.originalName}
+      <ReaderMessage
+        description={resolution.message}
+        eyebrow="Almacenamiento no disponible"
+        title="No pudimos abrir la Biblioteca local"
       />
     );
   }
 
-  if (linkedDocument) {
-    const source = linkedFolders.sources.find((item) => item.id === linkedDocument.sourceId);
+  if (resolution.status === "missing") {
+    return (
+      <ReaderMessage
+        description="El documento pudo eliminarse, cambiar de carpeta o pertenecer a otra sesión local."
+        eyebrow="Documento no encontrado"
+        title="Este archivo ya no está en la Biblioteca"
+      />
+    );
+  }
+
+  const document = resolution.document;
+
+  if (isImportedDocument(document)) {
+    return (
+      <LocalReaderShell
+        document={document}
+        key={document.id}
+        resumeRequested={resumeRequested}
+      />
+    );
+  }
+
+  if (isLinkedFileDocument(document)) {
+    return (
+      <LocalReaderShell
+        document={document}
+        key={document.id}
+        permissionRequired={document.availability !== "available"}
+        requestPermission={() => requestLinkedFileReadPermission(document.id)}
+        resumeRequested={resumeRequested}
+        sourceName={document.originalName}
+      />
+    );
+  }
+
+  if (isFolderDocument(document)) {
+    const source = linkedFolders.sources.find((item) => item.id === document.sourceId);
 
     return (
       <LocalReaderShell
-        document={linkedDocument}
+        document={document}
+        key={document.id}
         permissionRequired={source?.permission !== "granted"}
-        requestPermission={() => requestLinkedFolderReadPermission(linkedDocument.sourceId)}
+        requestPermission={() => requestLinkedFolderReadPermission(document.sourceId)}
         resumeRequested={resumeRequested}
         sourceName={source?.name}
       />
     );
   }
-
-  return (
-    <ReaderMessage
-      description="El documento pudo eliminarse, cambiar de carpeta o pertenecer a otra sesión local."
-      eyebrow="Documento no encontrado"
-      title="Este archivo ya no está en la Biblioteca"
-    />
-  );
 }
