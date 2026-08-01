@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button, Card, Tag, buttonClassName } from "@pliegue/ui";
 
@@ -21,6 +21,10 @@ import {
   readImportedDocumentFile,
   useImportedDocuments,
 } from "../library/local-library-store";
+import {
+  saveReadingProgress,
+  useReadingProgress,
+} from "../library/reading-progress-store";
 import { PageHeader } from "./workspace-page";
 import styles from "./local-document-reader.module.css";
 
@@ -189,7 +193,13 @@ function StructuredPreview({
   );
 }
 
-function PreviewCanvas({ document }: { document: LocalDocument }) {
+function PreviewCanvas({
+  document,
+  onReady,
+}: {
+  document: LocalDocument;
+  onReady: () => void;
+}) {
   const documentId = document.id;
   const format = document.format;
   const sourceId = isLinkedDocument(document) ? document.sourceId : null;
@@ -208,7 +218,10 @@ function PreviewCanvas({ document }: { document: LocalDocument }) {
 
         const blob = "file" in record ? record.file : record.blob;
         const preview = await createLocalDocumentPreview(format, blob);
-        if (active) setState({ preview, status: "ready" });
+        if (active) {
+          setState({ preview, status: "ready" });
+          onReady();
+        }
       } catch (error) {
         if (!active) return;
         setState({
@@ -225,7 +238,7 @@ function PreviewCanvas({ document }: { document: LocalDocument }) {
     return () => {
       active = false;
     };
-  }, [documentId, format, sourceId]);
+  }, [documentId, format, onReady, sourceId]);
 
   if (state.status === "loading") {
     return (
@@ -347,9 +360,40 @@ function PermissionPanel({
   );
 }
 
-function ReaderDetails({ document }: { document: LocalDocument }) {
+function ReaderDetails({
+  document,
+  onRestart,
+  progressPercent,
+}: {
+  document: LocalDocument;
+  onRestart: () => void;
+  progressPercent: number;
+}) {
   return (
     <aside className={styles.documentDetails}>
+      <Card>
+        <Tag>Progreso local</Tag>
+        <h2>{progressPercent} % leído</h2>
+        <div
+          aria-label={`Progreso de lectura: ${progressPercent} por ciento`}
+          aria-valuemax={100}
+          aria-valuemin={0}
+          aria-valuenow={progressPercent}
+          className={styles.readingProgressBar}
+          role="progressbar"
+        >
+          <div
+            className={styles.readingProgressValue}
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+        <p>Se actualiza al desplazarte y se comparte entre pestañas de este navegador.</p>
+        {progressPercent > 0 ? (
+          <Button onClick={onRestart} size="sm" variant="quiet">
+            Empezar desde el inicio
+          </Button>
+        ) : null}
+      </Card>
       <Card>
         <Tag>{document.imported ? "Copia privada" : "Carpeta vinculada"}</Tag>
         <h2>Sobre este archivo</h2>
@@ -384,7 +428,133 @@ function ReaderDetails({ document }: { document: LocalDocument }) {
   );
 }
 
-function LocalReaderShell({ document, children }: { document: LocalDocument; children: ReactNode }) {
+function scrollToReadingPosition(root: HTMLElement, percent: number, behavior: ScrollBehavior) {
+  const rootTop = window.scrollY + root.getBoundingClientRect().top;
+  const readableDistance = Math.max(root.offsetHeight - window.innerHeight * 0.35, 0);
+  const target = rootTop + readableDistance * (percent / 100) - window.innerHeight * 0.2;
+  window.scrollTo({ behavior, top: Math.max(0, target) });
+}
+
+function useDocumentProgress(
+  document: LocalDocument,
+  contentReady: boolean,
+  resumeRequested: boolean,
+  rootRef: React.RefObject<HTMLElement | null>,
+) {
+  const { format, id, origin, title } = document;
+  const progress = useReadingProgress(document.id);
+  const lastPersistedRef = useRef(progress?.percent ?? 0);
+  const hasResumedRef = useRef(false);
+
+  useEffect(() => {
+    lastPersistedRef.current = progress?.percent ?? 0;
+  }, [progress?.percent]);
+
+  useEffect(() => {
+    saveReadingProgress({ format, id, origin, title }, 0);
+  }, [format, id, origin, title]);
+
+  useEffect(() => {
+    if (!contentReady) return;
+    let animationFrame = 0;
+
+    function measureProgress() {
+      animationFrame = 0;
+      const root = rootRef.current;
+      if (!root) return;
+
+      const rootTop = window.scrollY + root.getBoundingClientRect().top;
+      const viewportCursor = window.scrollY + window.innerHeight * 0.65;
+      const readableDistance = Math.max(root.offsetHeight - window.innerHeight * 0.35, 1);
+      const rootBottomIsVisible =
+        rootTop + root.offsetHeight <= window.scrollY + window.innerHeight + 4;
+      const measured = rootBottomIsVisible
+        ? 100
+        : Math.min(
+            99,
+            Math.max(0, Math.round(((viewportCursor - rootTop) / readableDistance) * 100)),
+          );
+
+      if (measured <= lastPersistedRef.current) return;
+      lastPersistedRef.current = measured;
+      saveReadingProgress(document, measured);
+    }
+
+    function scheduleMeasurement() {
+      if (animationFrame) return;
+      animationFrame = window.requestAnimationFrame(measureProgress);
+    }
+
+    scheduleMeasurement();
+    window.addEventListener("scroll", scheduleMeasurement, { passive: true });
+    window.addEventListener("resize", scheduleMeasurement);
+
+    return () => {
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("scroll", scheduleMeasurement);
+      window.removeEventListener("resize", scheduleMeasurement);
+    };
+  }, [contentReady, document, rootRef]);
+
+  useEffect(() => {
+    if (
+      !contentReady ||
+      !resumeRequested ||
+      hasResumedRef.current ||
+      !progress ||
+      progress.percent < 2
+    ) {
+      return;
+    }
+
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const root = rootRef.current;
+        if (!root) return;
+        hasResumedRef.current = true;
+        scrollToReadingPosition(root, progress.percent, "smooth");
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [contentReady, progress, resumeRequested, rootRef]);
+
+  const restart = useCallback(() => {
+    const root = rootRef.current;
+    saveReadingProgress(document, 0, { allowRegression: true });
+    lastPersistedRef.current = 0;
+    hasResumedRef.current = false;
+    if (root) scrollToReadingPosition(root, 0, "smooth");
+  }, [document, rootRef]);
+
+  return { progressPercent: progress?.percent ?? 0, restart };
+}
+
+function LocalReaderShell({
+  document,
+  permissionRequired = false,
+  resumeRequested,
+  sourceName,
+}: {
+  document: LocalDocument;
+  permissionRequired?: boolean;
+  resumeRequested: boolean;
+  sourceName?: string | undefined;
+}) {
+  const [contentReady, setContentReady] = useState(false);
+  const previewRef = useRef<HTMLElement>(null);
+  const markContentReady = useCallback(() => setContentReady(true), []);
+  const { progressPercent, restart } = useDocumentProgress(
+    document,
+    contentReady,
+    resumeRequested,
+    previewRef,
+  );
+
   return (
     <>
       <PageHeader
@@ -401,8 +571,18 @@ function LocalReaderShell({ document, children }: { document: LocalDocument; chi
         title={document.title}
       />
       <div className={styles.localReaderLayout}>
-        <main className={styles.previewArea}>{children}</main>
-        <ReaderDetails document={document} />
+        <main className={styles.previewArea} ref={previewRef}>
+          {permissionRequired && isLinkedDocument(document) ? (
+            <PermissionPanel document={document} sourceName={sourceName ?? "la carpeta"} />
+          ) : (
+            <PreviewCanvas document={document} onReady={markContentReady} />
+          )}
+        </main>
+        <ReaderDetails
+          document={document}
+          onRestart={restart}
+          progressPercent={progressPercent}
+        />
       </div>
     </>
   );
@@ -436,7 +616,13 @@ function ReaderMessage({
   );
 }
 
-export function LocalDocumentReader({ documentId }: { documentId: string }) {
+export function LocalDocumentReader({
+  documentId,
+  resumeRequested = false,
+}: {
+  documentId: string;
+  resumeRequested?: boolean;
+}) {
   const importedLibrary = useImportedDocuments();
   const linkedFolders = useLinkedFolders();
   const importedDocument = importedLibrary.documents.find((item) => item.id === documentId);
@@ -467,24 +653,19 @@ export function LocalDocumentReader({ documentId }: { documentId: string }) {
   }
 
   if (importedDocument) {
-    return (
-      <LocalReaderShell document={importedDocument}>
-        <PreviewCanvas document={importedDocument} key={importedDocument.id} />
-      </LocalReaderShell>
-    );
+    return <LocalReaderShell document={importedDocument} resumeRequested={resumeRequested} />;
   }
 
   if (linkedDocument) {
     const source = linkedFolders.sources.find((item) => item.id === linkedDocument.sourceId);
 
     return (
-      <LocalReaderShell document={linkedDocument}>
-        {source?.permission === "granted" ? (
-          <PreviewCanvas document={linkedDocument} key={linkedDocument.id} />
-        ) : (
-          <PermissionPanel document={linkedDocument} sourceName={source?.name ?? "la carpeta"} />
-        )}
-      </LocalReaderShell>
+      <LocalReaderShell
+        document={linkedDocument}
+        permissionRequired={source?.permission !== "granted"}
+        resumeRequested={resumeRequested}
+        sourceName={source?.name}
+      />
     );
   }
 

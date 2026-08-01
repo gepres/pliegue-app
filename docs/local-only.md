@@ -79,6 +79,24 @@ Las carpetas vinculadas consultan el permiso antes de abrir. Si el navegador vue
 primera operación asíncrona del clic para conservar la activación de usuario exigida por el
 navegador. Perder o negar el permiso no elimina el manifiesto ni toca el archivo original.
 
+## Datos reales y progreso de lectura
+
+Las rutas `/app`, `/app/biblioteca` y `/app/lector` no cargan documentos, métricas ni texto
+de demostración. Con la Biblioteca vacía muestran un onboarding explícito; después de una
+importación o vínculo, Inicio calcula documentos, favoritos, lecturas activas y recientes a
+partir de IndexedDB y de los permisos recuperados en el navegador.
+
+El progreso usa la clave versionada `pliegue-reading-progress-v1` y guarda únicamente id,
+título, formato, origen, porcentaje y fecha. Se actualiza al desplazar contenido textual o
+estructurado, emite cambios entre pestañas y nunca guarda el cuerpo del documento en
+`localStorage`. Inicio ofrece **Retomar lectura** cuando existe una posición válida.
+
+La reconciliación ignora actualizaciones antiguas y evita que un avance nuevo reduzca el
+porcentaje guardado por accidente. Solo **Empezar desde el inicio** permite una regresión
+explícita. En esta etapa, el visor PDF nativo no expone su desplazamiento interno; Pliegue
+registra que el archivo se abrió, pero no puede medir cada página dentro del plugin del
+navegador.
+
 ## Extracción de EPUB y Office
 
 Los cuatro formatos son contenedores ZIP. El lector carga

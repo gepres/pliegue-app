@@ -330,6 +330,28 @@
   margin: 0;
 }
 
+.readingProgressBar {
+  background: var(--pliegue-color-bg-subtle);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-full);
+  height: 10px;
+  margin: 0 0 var(--pliegue-spacing-md);
+  overflow: hidden;
+}
+
+.readingProgressValue {
+  background: var(--pliegue-color-action-primary);
+  height: 100%;
+  min-width: 0;
+  transition: width 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .readingProgressValue {
+    transition: none;
+  }
+}
+
 @media (max-width: 960px) {
   .localReaderLayout {
     grid-template-columns: 1fr;

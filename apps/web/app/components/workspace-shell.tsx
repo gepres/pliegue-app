@@ -67,10 +67,10 @@ export function WorkspaceShell({ children }: Readonly<{ children: ReactNode }>) 
         </Link>
 
         <div className={styles.areaIdentity}>
-          <span className={styles.areaMark}>GP</span>
+          <span className={styles.areaMark}>LO</span>
           <div>
             <strong>Área personal</strong>
-            <small>Genaro</small>
+            <small>Este dispositivo</small>
           </div>
         </div>
 

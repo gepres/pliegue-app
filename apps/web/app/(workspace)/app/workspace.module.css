@@ -308,6 +308,37 @@
   color: var(--pliegue-color-text-secondary);
 }
 
+.onboardingCard {
+  background:
+    radial-gradient(
+      circle at 88% 18%,
+      color-mix(in srgb, var(--pliegue-color-accent-warm) 20%, transparent),
+      transparent 34%
+    ),
+    var(--pliegue-color-bg-subtle);
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  justify-items: start;
+  min-height: 320px;
+  padding: clamp(1.5rem, 5vw, 3rem);
+  place-content: center start;
+}
+
+.onboardingCard h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: 1;
+  margin: 0;
+  max-width: 18ch;
+}
+
+.onboardingCard p {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 44rem;
+}
+
 .readerLayout {
   display: grid;
   gap: var(--pliegue-spacing-xl);

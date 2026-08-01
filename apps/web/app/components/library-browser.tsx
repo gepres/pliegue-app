@@ -9,7 +9,6 @@ import {
   availabilityStates,
   documentFormats,
   filterDocuments,
-  libraryDocuments,
   type AvailabilityState,
   type DocumentFormat,
   type DocumentOrigin,
@@ -22,6 +21,7 @@ import {
   useImportedDocuments,
 } from "../library/local-library-store";
 import { useLinkedFolders } from "../library/local-folder-store";
+import { clearReadingProgress } from "../library/reading-progress-store";
 import { DocumentCard } from "./workspace-page";
 import { LocalSourcesPanel } from "./local-sources-panel";
 import styles from "../(workspace)/app/workspace.module.css";
@@ -51,11 +51,7 @@ export function LibraryBrowser() {
   const favorites = useFavorites();
   const importedLibrary = useImportedDocuments();
   const linkedFolders = useLinkedFolders();
-  const allDocuments = [
-    ...importedLibrary.documents,
-    ...linkedFolders.documents,
-    ...libraryDocuments,
-  ];
+  const allDocuments = [...importedLibrary.documents, ...linkedFolders.documents];
   const favoriteIds = new Set(favorites);
   const filteredDocuments = filterDocuments(allDocuments, {
     availability,
@@ -65,6 +61,7 @@ export function LibraryBrowser() {
     origin,
     query,
   });
+  const storageError = importedLibrary.error ?? linkedFolders.error;
 
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -111,6 +108,7 @@ export function LibraryBrowser() {
 
     try {
       await removeImportedCopy(documentId);
+      clearReadingProgress(documentId);
       setImportStatus("La copia local se eliminó. El archivo original no fue modificado.");
     } catch {
       setImportStatus("No fue posible eliminar la copia local.");
@@ -123,6 +121,7 @@ export function LibraryBrowser() {
         aria-labelledby="local-import-title"
         as="section"
         className={styles.localImportPanel}
+        id="importar-archivos"
         tone="subtle"
       >
         <div>
@@ -180,7 +179,9 @@ export function LibraryBrowser() {
             value={origin}
           >
             <option value="all">Todo el espacio</option>
-            <option value="drive">Google Drive</option>
+            <option disabled value="drive">
+              Google Drive · aún no conectado
+            </option>
             <option value="local">Archivos locales</option>
           </Select>
         </Field>
@@ -233,7 +234,19 @@ export function LibraryBrowser() {
         {filteredDocuments.length} de {allDocuments.length} documentos
       </div>
 
-      {filteredDocuments.length ? (
+      {storageError ? (
+        <Card as="section" className={styles.emptyState} role="alert" tone="subtle">
+          <Tag>Almacenamiento no disponible</Tag>
+          <h2>No pudimos abrir la Biblioteca local</h2>
+          <p>{storageError}</p>
+        </Card>
+      ) : importedLibrary.status !== "ready" || linkedFolders.status !== "ready" ? (
+        <Card as="section" className={styles.emptyState} tone="subtle">
+          <Tag>Preparando</Tag>
+          <h2>Recuperando la Biblioteca local…</h2>
+          <p>Leemos las copias y permisos guardados en este navegador.</p>
+        </Card>
+      ) : filteredDocuments.length ? (
         <section aria-label="Documentos de la biblioteca" className={styles.documentGrid}>
           {filteredDocuments.map((document) => {
             const isFavorite = favoriteIds.has(document.id);
@@ -292,25 +305,29 @@ export function LibraryBrowser() {
                       >
                         Ver en lector
                       </Link>
-                    ) : (
-                      <Link
-                        className={buttonClassName({ size: "sm", variant: "secondary" })}
-                        href="/app/lector"
-                      >
-                        Abrir
-                      </Link>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </DocumentCard>
             );
           })}
         </section>
-      ) : (
+      ) : allDocuments.length ? (
         <Card as="section" className={styles.emptyState} tone="subtle">
           <Tag>Sin resultados</Tag>
           <h2>No encontramos documentos con esos filtros</h2>
           <p>Prueba otro término o amplía el origen, formato y disponibilidad.</p>
+        </Card>
+      ) : (
+        <Card as="section" className={styles.onboardingCard} tone="subtle">
+          <Tag>Biblioteca vacía</Tag>
+          <h2>Añade tu primer documento real</h2>
+          <p>
+            No hay datos de demostración. Importa una copia para probar todos los
+            navegadores o vincula una carpeta compatible para mantener los archivos en su
+            ubicación original.
+          </p>
+          <Button onClick={() => fileInputRef.current?.click()}>Importar un archivo</Button>
         </Card>
       )}
     </>

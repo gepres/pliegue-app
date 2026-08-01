@@ -79,7 +79,7 @@ function ReaderPatternFrame() {
   return (
     <article className={styles.readerFrame}>
       <div className={styles.readerFrameChrome}>
-        <span>PRODUCT FRAME · LECTOR LOCAL</span>
+        <span>MUESTRA DE CATÁLOGO · LECTOR LOCAL</span>
         <span>TXT · EPUB · OFFICE · PDF</span>
       </div>
       <div className={styles.readerFrameHeader}>
@@ -108,7 +108,17 @@ function ReaderPatternFrame() {
           </p>
         </div>
         <Card className={styles.readerFrameAside}>
-          <Tag>Archivo estructurado</Tag>
+          <Tag>Progreso local · 38 %</Tag>
+          <div
+            aria-label="Muestra de progreso de lectura: 38 por ciento"
+            aria-valuemax={100}
+            aria-valuemin={0}
+            aria-valuenow={38}
+            className={styles.readerFrameProgress}
+            role="progressbar"
+          >
+            <span />
+          </div>
           <strong>Sobre este archivo</strong>
           <dl>
             <div>

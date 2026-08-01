@@ -82,6 +82,12 @@ Figma define la intención visual. El código define el contrato consumible y de
   de papel a 640 px. Las secciones largas usan `content-visibility` para diferir su pintado.
 - Tokens: tipografía y espaciado de lectura consumen `--pliegue-reader-*`; superficies,
   bordes, acento, elevación y texto usan exclusivamente el contrato semántico.
+- Progreso: `Tag` + barra nativa con `role="progressbar"` + acción discreta de reinicio;
+  el porcentaje visible procede del almacén local versionado, no de valores incrustados.
+
+Los números y títulos dentro de `/design-system` son muestras visuales identificadas como
+**Muestra de catálogo**. Las rutas de producto no comparten esos fixtures: los estados
+vacíos, tarjetas, métricas y llamadas a retomar se construyen con datos reales del navegador.
 
 El catálogo ejecutable en `/design-system` contiene ejemplos Light/Dark. Las preferencias
 de `/app/ajustes` consumen `Field` y `Select`; el lector local documenta la primera

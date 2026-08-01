@@ -474,6 +474,22 @@
   gap: var(--pliegue-spacing-md);
 }
 
+.readerFrameProgress {
+  background: var(--pliegue-color-bg-subtle);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-full);
+  height: 8px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.readerFrameProgress span {
+  background: var(--pliegue-color-action-primary);
+  display: block;
+  height: 100%;
+  width: 38%;
+}
+
 .readerFrameAside strong {
   font-family: var(--pliegue-font-brand);
   font-size: 1.5rem;
