@@ -50,6 +50,10 @@ function describeFolderError(error: unknown) {
     return error.message;
   }
 
+  if (error instanceof Error && error.message === "Este navegador no permite vincular carpetas.") {
+    return "Esta ventana no permite conservar carpetas. Abre Pliegue en Chrome o Edge mediante HTTPS o localhost e inténtalo de nuevo.";
+  }
+
   return "No fue posible acceder a esa carpeta. Revisa el permiso del navegador.";
 }
 
@@ -131,7 +135,8 @@ export function LocalSourcesPanel() {
         </div>
         <div className={styles.linkedFolderActions}>
           <Button
-            disabled={isBusy || linkedFolders.status !== "ready" || !linkedFolders.supported}
+            aria-describedby="linked-folders-status"
+            disabled={isBusy}
             onClick={() => void linkFolder()}
             variant="secondary"
           >
@@ -147,8 +152,11 @@ export function LocalSourcesPanel() {
 
       {linkedFolders.supported === false ? (
         <div className={styles.capabilityNote} role="note">
-          <strong>Carpetas persistentes no disponibles en este navegador.</strong>
-          <p>Puedes seguir usando “Importar copia”; no perderás ninguna función existente.</p>
+          <strong>La vinculación de carpetas no está disponible en esta ventana.</strong>
+          <p>
+            Puedes reintentar con el botón. Abre Pliegue mediante HTTPS o localhost en Chrome
+            o Edge; la importación de una copia permanece como alternativa explícita.
+          </p>
         </div>
       ) : null}
 
@@ -208,7 +216,12 @@ export function LocalSourcesPanel() {
         </div>
       ) : null}
 
-      <p aria-label="Estado de carpetas vinculadas" aria-live="polite" role="status">
+      <p
+        aria-label="Estado de carpetas vinculadas"
+        aria-live="polite"
+        id="linked-folders-status"
+        role="status"
+      >
         {linkedFolders.error ?? statusMessage}
       </p>
     </Card>

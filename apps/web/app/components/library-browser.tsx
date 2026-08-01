@@ -49,6 +49,18 @@ const indexLabels = {
   pending: "Análisis pendiente",
 } as const;
 
+function describeFileLinkError(error: unknown) {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return "No se seleccionó ningún archivo.";
+  }
+
+  if (error instanceof Error && error.message === "Este navegador no permite vincular archivos.") {
+    return "Esta ventana no permite conservar referencias. Abre Pliegue en Chrome o Edge mediante HTTPS o localhost e inténtalo de nuevo.";
+  }
+
+  return "No fue posible guardar la referencia al archivo. Puedes volver a intentarlo.";
+}
+
 export function LibraryBrowser() {
   const [availability, setAvailability] = useState<AvailabilityState | "all">("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -96,11 +108,7 @@ export function LibraryBrowser() {
       ].filter(Boolean);
       setImportStatus(parts.length ? `${parts.join(" · ")}.` : "No se vinculó ningún archivo.");
     } catch (error) {
-      setImportStatus(
-        error instanceof DOMException && error.name === "AbortError"
-          ? "No se seleccionó ningún archivo."
-          : "No fue posible guardar la referencia al archivo.",
-      );
+      setImportStatus(describeFileLinkError(error));
     } finally {
       setLinkingFiles(false);
     }
@@ -193,7 +201,8 @@ export function LibraryBrowser() {
         </div>
         <div className={styles.localImportActions}>
           <Button
-            disabled={linkingFiles || linkedFiles.status !== "ready" || !linkedFiles.supported}
+            aria-describedby="linked-files-status"
+            disabled={linkingFiles}
             onClick={() => void handleLinkedFiles()}
           >
             {linkingFiles ? "Vinculando y analizando…" : "Vincular archivos"}
@@ -220,11 +229,19 @@ export function LibraryBrowser() {
         </div>
         {linkedFiles.supported === false ? (
           <div className={styles.capabilityNote} role="note">
-            <strong>Este navegador no conserva referencias a archivos individuales.</strong>
-            <p>Usa una carpeta vinculada o la importación de compatibilidad.</p>
+            <strong>La vinculación persistente no está disponible en esta ventana.</strong>
+            <p>
+              El botón sigue activo para que puedas reintentar. Abre Pliegue mediante HTTPS
+              o localhost en Chrome o Edge; nunca crearemos una copia automáticamente.
+            </p>
           </div>
         ) : null}
-        <p aria-label="Estado de vinculación o importación" aria-live="polite" role="status">
+        <p
+          aria-label="Estado de vinculación o importación"
+          aria-live="polite"
+          id="linked-files-status"
+          role="status"
+        >
           {importedLibrary.error ?? importStatus}
         </p>
       </Card>
@@ -441,10 +458,11 @@ export function LibraryBrowser() {
             alternativa de compatibilidad.
           </p>
           <Button
-            disabled={!linkedFiles.supported}
+            aria-describedby="linked-files-status"
+            disabled={linkingFiles}
             onClick={() => void handleLinkedFiles()}
           >
-            Vincular un archivo
+            {linkingFiles ? "Vinculando y analizando…" : "Vincular un archivo"}
           </Button>
         </Card>
       )}
