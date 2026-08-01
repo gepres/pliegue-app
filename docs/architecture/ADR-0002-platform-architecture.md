@@ -1,0 +1,159 @@
+# ADR-0002 · Arquitectura multiplataforma, datos, colas e IA
+
+- Estado: Propuesto — requiere aprobación humana
+- Fecha: 2026-07-31
+- Foundry: `01.3 · Aprobar arquitectura y ADR multiplataforma`
+- Diagrama editable: `docs/architecture/platform-overview.mmd`
+
+## Contexto
+
+Pliegue debe reunir documentos de Drive y del dispositivo, mantener lectura y notas
+offline, ofrecer IA BYOK con evidencia y llegar primero a web, Windows y macOS. Android
+y iOS siguen después de validar los flujos principales. La privacidad exige separar
+originales, derivados, secretos y telemetría, además de conservar procedencia y
+sensibilidad en cada operación.
+
+## Decisión propuesta
+
+### Clientes
+
+1. **Web: Next.js App Router.** Continúa siendo la referencia funcional y el catálogo
+   del sistema visual. Se despliega como servidor Node o contenedor; la plataforma de
+   hosting no debe quedar acoplada al dominio.
+2. **Windows/macOS: Tauri 2.** Envuelve la aplicación web y añade APIs nativas con
+   permisos mínimos para archivos, SQLite, bóveda, actualizaciones y ventanas. Cada
+   capacidad se declara por plataforma y ventana; no se habilitan permisos globales.
+3. **Android/iOS: Expo + React Native.** Comparte contratos, dominio, cliente API y
+   tokens, pero usa componentes nativos. No se intenta reutilizar directamente el DOM
+   del paquete `@pliegue/ui`.
+
+Referencias técnicas verificadas:
+
+- [Tauri 2 y plataformas soportadas](https://v2.tauri.app/start/)
+- [Capacidades y límites de permisos de Tauri](https://v2.tauri.app/security/capabilities/)
+- [Expo en monorepos pnpm](https://docs.expo.dev/guides/monorepos/)
+- [EAS Build en monorepos](https://docs.expo.dev/build-reference/build-with-monorepos/)
+
+### Paquetes del monorepo
+
+```text
+apps/web             aplicación Next.js y referencia responsive
+apps/desktop         shell Tauri; comandos Rust y capabilities
+apps/mobile          cliente Expo/React Native
+packages/tokens      contrato visual agnóstico
+packages/ui          componentes React DOM
+packages/ui-native   adaptadores React Native futuros
+packages/domain      entidades, reglas y casos de uso puros
+packages/contracts   DTO, eventos y esquemas versionados
+packages/sync        outbox, cursores y resolución de conflictos
+```
+
+Solo se crean `apps/desktop`, `apps/mobile` y los nuevos paquetes al comenzar sus
+tareas; este ADR no autoriza todavía dependencias o builds nativos.
+
+### Backend y almacenamiento
+
+- **Postgres** es la fuente de verdad de cuentas, Áreas, fuentes, documentos,
+  procedencia, derivados, progreso, notas, favoritos, preferencias y trabajos.
+- **Supabase** es la opción inicial propuesta para Postgres, Auth, RLS y Storage por
+  ofrecer esas piezas sobre servicios abiertos y separables. Se conserva una capa de
+  repositorios para permitir despliegue administrado o self-hosted.
+- Los **originales locales** no se suben por defecto. Los originales de Drive permanecen
+  en Drive; Pliegue guarda identificadores, permisos y versiones. Derivados solo se
+  sincronizan con consentimiento explícito y política de retención.
+- **Web offline:** IndexedDB para metadatos, texto permitido, preferencias y outbox.
+- **Desktop/móvil offline:** SQLite dentro del sandbox de la aplicación. Tauri dispone
+  de un plugin SQL con soporte SQLite; se evaluará cifrado de la base antes del MVP.
+
+Referencias:
+
+- [Arquitectura abierta de Supabase](https://supabase.com/docs/guides/getting-started/architecture)
+- [Postgres y extensiones en Supabase](https://supabase.com/docs/guides/database/overview)
+- [Plugin SQL de Tauri](https://v2.tauri.app/reference/javascript/sql/)
+
+### Colas y procesamiento documental
+
+El MVP usa una tabla transaccional `jobs` en Postgres con leasing, reintentos,
+idempotency key y dead-letter state. El cambio de documento y la creación del trabajo
+ocurren en una misma transacción. Trabajadores aislados procesan extracción, OCR,
+chunking y embeddings; cada resultado incluye versión del extractor, hash del original,
+procedencia y sensibilidad.
+
+Se migra a una cola administrada únicamente cuando latencia, volumen o aislamiento lo
+justifiquen. Los eventos de dominio se publican mediante outbox; no se promete entrega
+exactly-once, sino procesamiento idempotente y al-menos-una-vez.
+
+### IA BYOK y secretos
+
+- El dominio llama a un `AiRouter`; ningún componente invoca proveedores directamente.
+- El router elige proveedor por flujo, política, presupuesto, idioma y disponibilidad.
+- Escritorio/móvil guardan secretos en una bóveda respaldada por el sistema. Para Tauri
+  se evaluará Stronghold con una clave derivada y permisos restringidos.
+- Web usa claves de sesión por defecto. Una bóveda web persistente requerirá cifrado
+  cliente, autenticación reciente y una decisión explícita de recuperación; nunca se
+  guardan claves en `localStorage`, variables `NEXT_PUBLIC_`, logs o telemetría.
+- Las respuestas conservan citas a fragmentos, versión del documento y proveedor/modelo.
+- Ollama puede operar localmente sin enviar contenido a terceros, sujeto a controles de
+  origen y red del cliente nativo.
+
+Referencia: [Stronghold para Tauri](https://v2.tauri.app/plugin/stronghold/).
+
+### Sincronización y conflictos
+
+Cada mutación local crea una operación en outbox con `operation_id`, `entity_id`,
+`base_version`, marca temporal y dispositivo. La política depende del dato:
+
+| Dato | Estrategia inicial |
+| --- | --- |
+| Progreso de lectura | conservar el avance mayor; permitir restaurar historial |
+| Notas/resaltados | append + tombstones; conflicto editable |
+| Favoritos/etiquetas | conjunto observado con operación idempotente |
+| Preferencias | documento → Área → cuenta → dispositivo |
+| Derivados | regenerables por hash + versión; no se fusionan |
+| Secretos | nunca entran en sincronización documental |
+
+### Despliegue y versionado
+
+- Web: artefacto Next.js desplegable en Node o contenedor. Si se usan varias instancias,
+  se configura caché compartida y coordinación de invalidaciones.
+- API/worker: imágenes de contenedor inmutables, migraciones previas compatibles y
+  despliegue gradual por entorno `development → staging → production`.
+- Desktop: canal interno, beta y estable; firma en Windows y notarización en macOS.
+- Mobile: builds internos antes de tiendas; EAS es la opción inicial, no una obligación.
+- Apps y paquetes usan SemVer. Contratos API y eventos incluyen versión explícita.
+- Esquema de datos sigue `expand → migrate → contract`; una app anterior debe seguir
+  funcionando durante al menos una ventana de despliegue.
+- Extractores, prompts y embeddings se versionan aparte del binario.
+
+Next.js admite despliegue como servidor Node y contenedor; el self-hosting multiinstancia
+requiere coordinar caché e invalidación: [guía oficial](https://nextjs.org/docs/app/guides/self-hosting).
+
+## Límites de seguridad
+
+- RLS por cuenta/Área y mínimo privilegio para Drive.
+- Separación física o lógica entre originales, derivados y telemetría.
+- Trazas solo con identificadores opacos, duración, tamaños y códigos; nunca contenido.
+- Permisos nativos declarativos por ventana/plataforma.
+- Borrado verificable incluye originales administrados, derivados, caché y embeddings.
+- Cada cambio de proveedor, región o retención pasa por la matriz legal de `01.5`.
+
+## Consecuencias
+
+- Web y escritorio pueden compartir la UI React DOM sin obligar a móvil a simular DOM.
+- El dominio y los contratos son reutilizables, pero los adaptadores de almacenamiento,
+  archivos, bóveda y UI siguen siendo específicos por plataforma.
+- Postgres simplifica RLS, relaciones y trazabilidad; los trabajos asíncronos requieren
+  disciplina de idempotencia desde el inicio.
+- Local-only es un modo de producto real: debe funcionar sin cuenta ni backend, aunque
+  no ofrezca sincronización entre dispositivos.
+
+## Gates pendientes de aprobación
+
+1. Confirmar Tauri 2 frente a Electron para Windows/macOS.
+2. Confirmar Supabase administrado frente a despliegue propio y región inicial.
+3. Aprobar que las claves web sean de sesión por defecto y no recuperables.
+4. Aprobar retención de derivados, OCR y embeddings por sensibilidad.
+5. Definir SLO de sincronización y umbral para migrar desde cola Postgres.
+
+Hasta resolver estos gates, el documento permanece **Propuesto** y no se inicia la
+integración nativa, autenticación real ni almacenamiento cloud.

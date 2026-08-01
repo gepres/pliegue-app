@@ -1,0 +1,87 @@
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --pliegue-paper-50: #fbf6ec;
+  --pliegue-paper-100: #f0e5d2;
+  --pliegue-paper-200: #d8c9b2;
+  --pliegue-ink-800: #211f1c;
+  --pliegue-ink-900: #25231f;
+  --pliegue-ink-950: #171614;
+  --pliegue-forest-300: #7fa58d;
+  --pliegue-forest-500: #365b48;
+  --pliegue-ochre-500: #c99232;
+  --pliegue-terracotta-500: #b9674f;
+  --pliegue-plum-500: #76566f;
+  --pliegue-white-1000: #ffffff;
+  --pliegue-danger-500: #a9473e;
+
+  --pliegue-color-bg-canvas: var(--pliegue-paper-50);
+  --pliegue-color-bg-surface: var(--pliegue-white-1000);
+  --pliegue-color-bg-subtle: var(--pliegue-paper-100);
+  --pliegue-color-text-primary: var(--pliegue-ink-900);
+  --pliegue-color-text-secondary: var(--pliegue-forest-500);
+  --pliegue-color-action-primary: var(--pliegue-forest-500);
+  --pliegue-color-text-on-action: var(--pliegue-white-1000);
+  --pliegue-color-accent-warm: var(--pliegue-ochre-500);
+  --pliegue-color-border-default: var(--pliegue-paper-200);
+  --pliegue-color-icon-default: var(--pliegue-forest-500);
+  --pliegue-color-status-danger: var(--pliegue-danger-500);
+
+  --pliegue-spacing-2xs: 4px;
+  --pliegue-spacing-xs: 8px;
+  --pliegue-spacing-sm: 12px;
+  --pliegue-spacing-md: 16px;
+  --pliegue-spacing-lg: 24px;
+  --pliegue-spacing-xl: 32px;
+
+  --pliegue-radius-sm: 6px;
+  --pliegue-radius-md: 12px;
+  --pliegue-radius-lg: 20px;
+  --pliegue-radius-full: 999px;
+
+  --pliegue-elevation-paper: 0 1px 2px rgb(37 35 31 / 8%);
+  --pliegue-elevation-focus: 0 12px 30px rgb(37 35 31 / 14%);
+
+  --pliegue-font-brand: "Cormorant Garamond", Georgia, serif;
+  --pliegue-font-reading: "Source Serif 4", Georgia, serif;
+  --pliegue-font-ui: Inter, system-ui, sans-serif;
+  --pliegue-font-data: "IBM Plex Mono", ui-monospace, monospace;
+
+  --pliegue-motion-fast: 140ms;
+  --pliegue-motion-base: 220ms;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --pliegue-color-bg-canvas: var(--pliegue-ink-950);
+  --pliegue-color-bg-surface: var(--pliegue-ink-800);
+  --pliegue-color-bg-subtle: var(--pliegue-ink-900);
+  --pliegue-color-text-primary: var(--pliegue-paper-100);
+  --pliegue-color-text-secondary: var(--pliegue-paper-200);
+  --pliegue-color-action-primary: var(--pliegue-forest-300);
+  --pliegue-color-text-on-action: var(--pliegue-ink-950);
+  --pliegue-color-accent-warm: var(--pliegue-ochre-500);
+  --pliegue-color-border-default: var(--pliegue-forest-300);
+  --pliegue-color-icon-default: var(--pliegue-paper-100);
+  --pliegue-color-status-danger: var(--pliegue-terracotta-500);
+  --pliegue-elevation-paper: 0 1px 2px rgb(0 0 0 / 28%);
+  --pliegue-elevation-focus: 0 12px 32px rgb(0 0 0 / 36%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --pliegue-color-bg-canvas: var(--pliegue-ink-950);
+    --pliegue-color-bg-surface: var(--pliegue-ink-800);
+    --pliegue-color-bg-subtle: var(--pliegue-ink-900);
+    --pliegue-color-text-primary: var(--pliegue-paper-100);
+    --pliegue-color-text-secondary: var(--pliegue-paper-200);
+    --pliegue-color-action-primary: var(--pliegue-forest-300);
+    --pliegue-color-text-on-action: var(--pliegue-ink-950);
+    --pliegue-color-accent-warm: var(--pliegue-ochre-500);
+    --pliegue-color-border-default: var(--pliegue-forest-300);
+    --pliegue-color-icon-default: var(--pliegue-paper-100);
+    --pliegue-color-status-danger: var(--pliegue-terracotta-500);
+  }
+}

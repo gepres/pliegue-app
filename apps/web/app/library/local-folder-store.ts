@@ -1,0 +1,520 @@
+"use client";
+
+import { useSyncExternalStore } from "react";
+
+import {
+  compareFolderDocuments,
+  createLinkedFolderDocument,
+  type FolderChangeSummary,
+  type LinkedFileDescriptor,
+  type LinkedFolderDocument,
+  maxLinkedFolderFiles,
+} from "./local-folder";
+
+const databaseName = "pliegue-linked-folders";
+const databaseVersion = 1;
+const documentStoreName = "documents";
+const sourceStoreName = "sources";
+
+type ReadPermissionState = "denied" | "granted" | "prompt";
+
+interface PermissionAwareDirectoryHandle extends FileSystemDirectoryHandle {
+  queryPermission?: (descriptor?: { mode: "read" }) => Promise<ReadPermissionState>;
+  requestPermission?: (descriptor?: { mode: "read" }) => Promise<ReadPermissionState>;
+}
+
+interface DirectoryPickerWindow extends Window {
+  showDirectoryPicker?: (options?: {
+    id?: string;
+    mode?: "read" | "readwrite";
+  }) => Promise<FileSystemDirectoryHandle>;
+}
+
+interface ScannedLinkedFile extends LinkedFileDescriptor {
+  handle: FileSystemFileHandle;
+}
+
+export interface LinkedFolderSource {
+  addedAt: string;
+  fileCount: number;
+  id: string;
+  lastScannedAt: string | null;
+  name: string;
+  permission: ReadPermissionState;
+}
+
+interface StoredLinkedFolderSource extends LinkedFolderSource {
+  handle: FileSystemDirectoryHandle;
+}
+
+interface StoredLinkedFolderDocument extends LinkedFolderDocument {
+  handle: FileSystemFileHandle;
+}
+
+interface LinkedFoldersSnapshot {
+  documents: LinkedFolderDocument[];
+  error: string | null;
+  sources: LinkedFolderSource[];
+  status: "error" | "idle" | "loading" | "ready";
+  supported: boolean | null;
+}
+
+export interface FolderSyncResult extends FolderChangeSummary {
+  permission: ReadPermissionState;
+  relinked: boolean;
+  sourceId: string;
+  sourceName: string;
+}
+
+const initialSnapshot: LinkedFoldersSnapshot = {
+  documents: [],
+  error: null,
+  sources: [],
+  status: "idle",
+  supported: null,
+};
+
+let snapshot = initialSnapshot;
+let loadingPromise: Promise<void> | null = null;
+const listeners = new Set<() => void>();
+const sourceHandles = new Map<string, FileSystemDirectoryHandle>();
+
+function emitSnapshot(next: LinkedFoldersSnapshot) {
+  snapshot = next;
+  for (const listener of listeners) listener();
+}
+
+function requestResult<Result>(request: IDBRequest<Result>) {
+  return new Promise<Result>((resolve, reject) => {
+    request.addEventListener("success", () => resolve(request.result), { once: true });
+    request.addEventListener("error", () => reject(request.error), { once: true });
+  });
+}
+
+function transactionComplete(transaction: IDBTransaction) {
+  return new Promise<void>((resolve, reject) => {
+    transaction.addEventListener("complete", () => resolve(), { once: true });
+    transaction.addEventListener("abort", () => reject(transaction.error), { once: true });
+    transaction.addEventListener("error", () => reject(transaction.error), { once: true });
+  });
+}
+
+function supportsLinkedFolders() {
+  return (
+    typeof window !== "undefined" &&
+    "indexedDB" in window &&
+    typeof (window as DirectoryPickerWindow).showDirectoryPicker === "function"
+  );
+}
+
+function openDatabase() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const request = window.indexedDB.open(databaseName, databaseVersion);
+
+    request.addEventListener(
+      "upgradeneeded",
+      () => {
+        const database = request.result;
+
+        if (!database.objectStoreNames.contains(sourceStoreName)) {
+          database.createObjectStore(sourceStoreName, { keyPath: "id" });
+        }
+
+        if (!database.objectStoreNames.contains(documentStoreName)) {
+          const documents = database.createObjectStore(documentStoreName, { keyPath: "id" });
+          documents.createIndex("sourceId", "sourceId");
+        }
+      },
+      { once: true },
+    );
+    request.addEventListener(
+      "success",
+      () => {
+        const database = request.result;
+        database.addEventListener("versionchange", () => database.close());
+        resolve(database);
+      },
+      { once: true },
+    );
+    request.addEventListener("error", () => reject(request.error), { once: true });
+    request.addEventListener(
+      "blocked",
+      () => reject(new Error("El almacenamiento de carpetas está abierto en otra pestaña.")),
+      { once: true },
+    );
+  });
+}
+
+function permissionHandle(handle: FileSystemDirectoryHandle) {
+  return handle as PermissionAwareDirectoryHandle;
+}
+
+async function queryReadPermission(handle: FileSystemDirectoryHandle) {
+  const queryPermission = permissionHandle(handle).queryPermission;
+  if (!queryPermission) return "prompt" as const;
+
+  try {
+    return await queryPermission.call(handle, { mode: "read" });
+  } catch {
+    return "denied" as const;
+  }
+}
+
+async function requestReadPermission(handle: FileSystemDirectoryHandle) {
+  const requestPermission = permissionHandle(handle).requestPermission;
+  if (!requestPermission) return queryReadPermission(handle);
+
+  try {
+    return await requestPermission.call(handle, { mode: "read" });
+  } catch {
+    return "denied" as const;
+  }
+}
+
+function toLinkedDocument({ handle, ...document }: StoredLinkedFolderDocument) {
+  void handle;
+  return document;
+}
+
+async function readStoredLibrary(database: IDBDatabase) {
+  const transaction = database.transaction(
+    [sourceStoreName, documentStoreName],
+    "readonly",
+  );
+  const completed = transactionComplete(transaction);
+  const [sources, documents] = await Promise.all([
+    requestResult(
+      transaction.objectStore(sourceStoreName).getAll() as IDBRequest<
+        StoredLinkedFolderSource[]
+      >,
+    ),
+    requestResult(
+      transaction.objectStore(documentStoreName).getAll() as IDBRequest<
+        StoredLinkedFolderDocument[]
+      >,
+    ),
+  ]);
+  await completed;
+  return { documents, sources };
+}
+
+async function loadLinkedFolders() {
+  if (!supportsLinkedFolders()) {
+    sourceHandles.clear();
+    emitSnapshot({
+      documents: [],
+      error: null,
+      sources: [],
+      status: "ready",
+      supported: false,
+    });
+    return;
+  }
+
+  emitSnapshot({ ...snapshot, error: null, status: "loading", supported: true });
+
+  try {
+    const database = await openDatabase();
+    const storedLibrary = await readStoredLibrary(database);
+    database.close();
+    const permissions = await Promise.all(
+      storedLibrary.sources.map((source) => queryReadPermission(source.handle)),
+    );
+    const permissionBySource = new Map<string, ReadPermissionState>();
+
+    sourceHandles.clear();
+    storedLibrary.sources.forEach((source, index) => {
+      sourceHandles.set(source.id, source.handle);
+      permissionBySource.set(source.id, permissions[index] ?? "prompt");
+    });
+
+    emitSnapshot({
+      documents: storedLibrary.documents
+        .map((storedDocument): LinkedFolderDocument => {
+          const document = toLinkedDocument(storedDocument);
+          const availability: LinkedFolderDocument["availability"] =
+            permissionBySource.get(document.sourceId) === "granted"
+              ? "available"
+              : "disconnected";
+
+          return { ...document, availability };
+        })
+        .sort((left, right) => left.relativePath.localeCompare(right.relativePath, "es")),
+      error: null,
+      sources: storedLibrary.sources
+        .map(({ handle, ...source }, index) => {
+          void handle;
+          return { ...source, permission: permissions[index] ?? "prompt" };
+        })
+        .sort((left, right) => left.name.localeCompare(right.name, "es")),
+      status: "ready",
+      supported: true,
+    });
+  } catch {
+    sourceHandles.clear();
+    emitSnapshot({
+      documents: [],
+      error: "No fue posible recuperar las carpetas vinculadas de este navegador.",
+      sources: [],
+      status: "error",
+      supported: true,
+    });
+  }
+}
+
+function ensureLinkedFoldersLoaded() {
+  if (loadingPromise || snapshot.status === "ready") return;
+  loadingPromise = loadLinkedFolders().finally(() => {
+    loadingPromise = null;
+  });
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  ensureLinkedFoldersLoaded();
+  return () => listeners.delete(listener);
+}
+
+export function useLinkedFolders() {
+  return useSyncExternalStore(subscribe, () => snapshot, () => initialSnapshot);
+}
+
+async function scanDirectory(
+  directory: FileSystemDirectoryHandle,
+  prefix = "",
+): Promise<ScannedLinkedFile[]> {
+  const entries: Array<FileSystemDirectoryHandle | FileSystemFileHandle> = [];
+  for await (const entry of directory.values()) entries.push(entry);
+
+  const nestedFiles = await Promise.all(
+    entries.map(async (entry): Promise<ScannedLinkedFile[]> => {
+      const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+
+      if (entry.kind === "directory") return scanDirectory(entry, relativePath);
+
+      const file = await entry.getFile();
+      return [
+        {
+          handle: entry,
+          lastModified: file.lastModified,
+          name: file.name,
+          relativePath,
+          size: file.size,
+          type: file.type,
+        },
+      ];
+    }),
+  );
+  const files = nestedFiles.flat();
+
+  if (files.length > maxLinkedFolderFiles) {
+    throw new Error(`La carpeta supera el límite inicial de ${maxLinkedFolderFiles} archivos.`);
+  }
+
+  return files;
+}
+
+function buildStoredDocuments(
+  files: readonly ScannedLinkedFile[],
+  sourceId: string,
+  sourceName: string,
+) {
+  return files.flatMap((file) => {
+    const document = createLinkedFolderDocument(file, sourceId, sourceName);
+    return document ? [{ ...document, handle: file.handle }] : [];
+  });
+}
+
+async function readDocumentsForSource(database: IDBDatabase, sourceId: string) {
+  const transaction = database.transaction(documentStoreName, "readonly");
+  const completed = transactionComplete(transaction);
+  const documents = await requestResult(
+    transaction.objectStore(documentStoreName).index("sourceId").getAll(sourceId) as IDBRequest<
+      StoredLinkedFolderDocument[]
+    >,
+  );
+  await completed;
+  return documents;
+}
+
+async function saveFolderScan(
+  source: StoredLinkedFolderSource,
+  documents: readonly StoredLinkedFolderDocument[],
+) {
+  const database = await openDatabase();
+
+  try {
+    const previous = await readDocumentsForSource(database, source.id);
+    const summary = compareFolderDocuments(
+      previous.map(toLinkedDocument),
+      documents.map(toLinkedDocument),
+    );
+    const transaction = database.transaction(
+      [sourceStoreName, documentStoreName],
+      "readwrite",
+    );
+    const completed = transactionComplete(transaction);
+    const sourceStore = transaction.objectStore(sourceStoreName);
+    const documentStore = transaction.objectStore(documentStoreName);
+
+    sourceStore.put(source);
+    previous.forEach((document) => documentStore.delete(document.id));
+    documents.forEach((document) => documentStore.put(document));
+    await completed;
+    return summary;
+  } finally {
+    database.close();
+  }
+}
+
+async function readStoredSources() {
+  const database = await openDatabase();
+
+  try {
+    const transaction = database.transaction(sourceStoreName, "readonly");
+    const completed = transactionComplete(transaction);
+    const sources = await requestResult(
+      transaction.objectStore(sourceStoreName).getAll() as IDBRequest<
+        StoredLinkedFolderSource[]
+      >,
+    );
+    await completed;
+    return sources;
+  } finally {
+    database.close();
+  }
+}
+
+function pickerWindow() {
+  return window as DirectoryPickerWindow;
+}
+
+export async function linkLocalFolder(): Promise<FolderSyncResult> {
+  const showDirectoryPicker = pickerWindow().showDirectoryPicker;
+  if (!showDirectoryPicker) throw new Error("Este navegador no permite vincular carpetas.");
+
+  // The picker must be the first awaited operation so the browser keeps user activation.
+  const [handle, existingSources] = await Promise.all([
+    showDirectoryPicker.call(window, {
+      id: "pliegue-library",
+      mode: "read",
+    }),
+    readStoredSources(),
+  ]);
+  const [matches, files] = await Promise.all([
+    Promise.all(existingSources.map((source) => source.handle.isSameEntry(handle))),
+    scanDirectory(handle),
+  ]);
+  const existingSource = existingSources.find((_, index) => matches[index]);
+  const sourceId = existingSource?.id ?? crypto.randomUUID();
+  const documents = buildStoredDocuments(files, sourceId, handle.name);
+  const scannedAt = new Date().toISOString();
+  const source: StoredLinkedFolderSource = {
+    addedAt: existingSource?.addedAt ?? scannedAt,
+    fileCount: documents.length,
+    handle,
+    id: sourceId,
+    lastScannedAt: scannedAt,
+    name: handle.name,
+    permission: "granted",
+  };
+  const summary = await saveFolderScan(source, documents);
+
+  sourceHandles.set(sourceId, handle);
+  await loadLinkedFolders();
+  return {
+    ...summary,
+    permission: "granted",
+    relinked: Boolean(existingSource),
+    sourceId,
+    sourceName: handle.name,
+  };
+}
+
+function updatePermissionSnapshot(sourceId: string, permission: ReadPermissionState) {
+  emitSnapshot({
+    ...snapshot,
+    documents: snapshot.documents.map((document) =>
+      document.sourceId === sourceId
+        ? {
+            ...document,
+            availability: permission === "granted" ? "available" : "disconnected",
+          }
+        : document,
+    ),
+    sources: snapshot.sources.map((source) =>
+      source.id === sourceId ? { ...source, permission } : source,
+    ),
+  });
+}
+
+export async function scanLinkedFolder(
+  sourceId: string,
+  requestAccess = false,
+): Promise<FolderSyncResult> {
+  const source = snapshot.sources.find((item) => item.id === sourceId);
+  const handle = sourceHandles.get(sourceId);
+  if (!source || !handle) throw new Error("La carpeta vinculada ya no está disponible.");
+
+  const permission = requestAccess
+    ? await requestReadPermission(handle)
+    : await queryReadPermission(handle);
+  updatePermissionSnapshot(sourceId, permission);
+
+  if (permission !== "granted") {
+    return {
+      added: 0,
+      changed: 0,
+      permission,
+      relinked: false,
+      removed: 0,
+      sourceId,
+      sourceName: source.name,
+      total: source.fileCount,
+      unchanged: source.fileCount,
+    };
+  }
+
+  const files = await scanDirectory(handle);
+  const documents = buildStoredDocuments(files, sourceId, source.name);
+  const storedSource: StoredLinkedFolderSource = {
+    ...source,
+    fileCount: documents.length,
+    handle,
+    lastScannedAt: new Date().toISOString(),
+    permission,
+  };
+  const summary = await saveFolderScan(storedSource, documents);
+
+  await loadLinkedFolders();
+  return {
+    ...summary,
+    permission,
+    relinked: false,
+    sourceId,
+    sourceName: source.name,
+  };
+}
+
+export async function unlinkLocalFolder(sourceId: string) {
+  const database = await openDatabase();
+
+  try {
+    const documents = await readDocumentsForSource(database, sourceId);
+    const transaction = database.transaction(
+      [sourceStoreName, documentStoreName],
+      "readwrite",
+    );
+    const completed = transactionComplete(transaction);
+
+    transaction.objectStore(sourceStoreName).delete(sourceId);
+    const documentStore = transaction.objectStore(documentStoreName);
+    documents.forEach((document) => documentStore.delete(document.id));
+    await completed;
+  } finally {
+    database.close();
+  }
+
+  sourceHandles.delete(sourceId);
+  await loadLinkedFolders();
+}

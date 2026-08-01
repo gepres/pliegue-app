@@ -1,0 +1,16 @@
+{
+  "name": "@pliegue/tokens",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens.css": "./src/tokens.css"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint --config ../../eslint.packages.config.mjs src",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test"
+  }
+}

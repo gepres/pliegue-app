@@ -1,0 +1,89 @@
+.pageHeader {
+  align-items: flex-end;
+  display: flex;
+  gap: var(--pliegue-spacing-xl);
+  justify-content: space-between;
+  margin-bottom: clamp(2rem, 5vw, 4rem);
+}
+
+.pageHeader h1 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(2.75rem, 7vw, 5.5rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 0.95;
+  margin: var(--pliegue-spacing-md) 0;
+}
+
+.pageHeader p {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 42rem;
+}
+
+.pageActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm);
+  justify-content: flex-end;
+}
+
+.metricCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pliegue-spacing-sm);
+  min-height: 170px;
+}
+
+.metricCard > span,
+.documentCard > span {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.metricCard strong {
+  font-family: var(--pliegue-font-brand);
+  font-size: 2.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.metricCard small {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.4;
+}
+
+.documentCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.documentCard h3 {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.documentCard p {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .pageHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pageActions {
+    justify-content: flex-start;
+  }
+}

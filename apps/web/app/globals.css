@@ -1,0 +1,78 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--pliegue-color-bg-canvas);
+  color: var(--pliegue-color-text-primary);
+  font-family: var(--pliegue-font-ui);
+  min-width: 320px;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+:root {
+  --pliegue-reader-font-family: var(--pliegue-font-reading);
+  --pliegue-reader-font-size: 1.125rem;
+  --pliegue-reader-line-height: 1.75;
+}
+
+[data-reader-font="sans"] {
+  --pliegue-reader-font-family: var(--pliegue-font-ui);
+}
+
+[data-reader-scale="90"] {
+  --pliegue-reader-font-size: 1rem;
+}
+
+[data-reader-scale="115"] {
+  --pliegue-reader-font-size: 1.3rem;
+}
+
+[data-reader-scale="130"] {
+  --pliegue-reader-font-size: 1.4625rem;
+}
+
+[data-reader-line-height="compact"] {
+  --pliegue-reader-line-height: 1.5;
+}
+
+[data-reader-line-height="relaxed"] {
+  --pliegue-reader-line-height: 1.95;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: var(--pliegue-color-accent-warm);
+  color: var(--pliegue-ink-950);
+}
+
+.skip-link {
+  background: var(--pliegue-color-bg-surface);
+  border-radius: var(--pliegue-radius-sm);
+  color: var(--pliegue-color-text-primary);
+  left: var(--pliegue-spacing-md);
+  padding: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
+  position: fixed;
+  top: -100px;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  top: var(--pliegue-spacing-md);
+}

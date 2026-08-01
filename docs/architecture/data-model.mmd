@@ -1,0 +1,139 @@
+erDiagram
+  ACCOUNT ||--o{ DEVICE : registers
+  ACCOUNT ||--o{ WORKSPACE_MEMBER : joins
+  WORKSPACE ||--o{ WORKSPACE_MEMBER : contains
+  WORKSPACE ||--o{ SOURCE : connects
+  SOURCE ||--o{ DOCUMENT : provides
+  DOCUMENT ||--o{ DOCUMENT_VERSION : versions
+  DOCUMENT_VERSION ||--o{ DERIVATIVE : produces
+  DOCUMENT_VERSION ||--o{ ANNOTATION : anchors
+  DOCUMENT_VERSION ||--o{ READING_PROGRESS : tracks
+  ACCOUNT ||--o{ FAVORITE : owns
+  DOCUMENT ||--o{ FAVORITE : receives
+  DOCUMENT_VERSION ||--o{ TRANSLATION : translates
+  DOCUMENT_VERSION ||--o{ EMBEDDING : embeds
+  DOCUMENT ||--o{ OFFER : matches
+  WORKSPACE ||--o{ RETENTION_POLICY : governs
+  WORKSPACE ||--o{ DELETION_REQUEST : requests
+  DEVICE ||--o{ SYNC_OPERATION : emits
+  WORKSPACE ||--o{ SYNC_OPERATION : receives
+
+  ACCOUNT {
+    uuid id PK
+    text email
+    text locale
+    timestamptz created_at
+  }
+
+  DEVICE {
+    uuid id PK
+    uuid account_id FK
+    text platform
+    text app_version
+    timestamptz last_seen_at
+  }
+
+  WORKSPACE {
+    uuid id PK
+    text name
+    text index_scope
+    text default_sensitivity
+    timestamptz created_at
+  }
+
+  SOURCE {
+    uuid id PK
+    uuid workspace_id FK
+    text kind
+    text external_ref
+    text status
+    text sensitivity
+    uuid bound_device_id
+  }
+
+  DOCUMENT {
+    uuid id PK
+    uuid source_id FK
+    text title
+    text format
+    text origin
+    text sensitivity
+    text external_ref
+    text content_hash
+  }
+
+  DOCUMENT_VERSION {
+    uuid id PK
+    uuid document_id FK
+    text source_version
+    text content_hash
+    timestamptz observed_at
+  }
+
+  DERIVATIVE {
+    uuid id PK
+    uuid document_version_id FK
+    text kind
+    text processor_version
+    text storage_ref
+    text sensitivity
+    timestamptz expires_at
+  }
+
+  ANNOTATION {
+    uuid id PK
+    uuid document_version_id FK
+    uuid account_id FK
+    text kind
+    text anchor
+    text quoted_text
+    text body
+    timestamptz deleted_at
+  }
+
+  READING_PROGRESS {
+    uuid id PK
+    uuid document_version_id FK
+    uuid account_id FK
+    uuid device_id FK
+    text position
+    int progress_basis_points
+    timestamptz observed_at
+  }
+
+  TRANSLATION {
+    uuid id PK
+    uuid document_version_id FK
+    text scope
+    text language_from
+    text language_to
+    text provider
+    text provider_version
+    text storage_ref
+  }
+
+  EMBEDDING {
+    uuid id PK
+    uuid document_version_id FK
+    text chunk_ref
+    text model
+    int dimensions
+    text sensitivity
+  }
+
+  RETENTION_POLICY {
+    uuid id PK
+    uuid workspace_id FK
+    text artifact_kind
+    int retention_days
+    bool sync_allowed
+  }
+
+  DELETION_REQUEST {
+    uuid id PK
+    uuid workspace_id FK
+    text target_type
+    uuid target_id
+    text status
+    timestamptz verified_at
+  }

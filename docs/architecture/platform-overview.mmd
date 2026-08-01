@@ -1,0 +1,60 @@
+flowchart TB
+  subgraph clients[Clientes]
+    web[Web · Next.js]
+    desktop[Windows/macOS · Tauri]
+    mobile[Android/iOS · Expo]
+  end
+
+  subgraph shared[Paquetes compartidos]
+    domain[Dominio y casos de uso]
+    contracts[Contratos API y eventos]
+    tokens[Tokens de diseño]
+    uiweb[UI React web]
+    uinative[Adaptador UI nativo]
+  end
+
+  subgraph local[Persistencia local]
+    browserdb[IndexedDB web]
+    sqlite[SQLite nativo]
+    vault[Bóveda de credenciales]
+    outbox[Outbox de sincronización]
+  end
+
+  subgraph cloud[Servicios de cuenta]
+    api[API/BFF]
+    auth[Auth + RLS]
+    postgres[(Postgres)]
+    objects[Objetos derivados permitidos]
+    jobs[Trabajadores de extracción/OCR]
+    aigw[Router de IA BYOK]
+  end
+
+  sources[Drive y archivos locales]
+  providers[OpenAI · Claude · Ollama · traducción]
+
+  web --> domain
+  desktop --> domain
+  mobile --> domain
+  web --> uiweb
+  desktop --> uiweb
+  mobile --> uinative
+  uiweb --> tokens
+  uinative --> tokens
+  domain --> contracts
+  web --> browserdb
+  desktop --> sqlite
+  mobile --> sqlite
+  desktop --> vault
+  mobile --> vault
+  browserdb --> outbox
+  sqlite --> outbox
+  sources --> domain
+  outbox --> api
+  api --> auth
+  api --> postgres
+  api --> objects
+  api --> jobs
+  jobs --> postgres
+  jobs --> objects
+  api --> aigw
+  aigw --> providers

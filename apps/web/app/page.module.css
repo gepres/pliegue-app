@@ -1,0 +1,162 @@
+.page {
+  background:
+    radial-gradient(circle at 14% 10%, rgb(201 146 50 / 10%), transparent 28rem),
+    var(--pliegue-color-bg-canvas);
+  min-height: 100vh;
+}
+
+.header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin: 0 auto;
+  max-width: 1280px;
+  padding: var(--pliegue-spacing-lg) clamp(1rem, 5vw, 4rem);
+}
+
+.wordmark {
+  align-items: center;
+  display: inline-flex;
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.75rem;
+  font-weight: 600;
+  gap: var(--pliegue-spacing-sm);
+  text-decoration: none;
+}
+
+.nav {
+  align-items: center;
+  display: flex;
+  font-size: 0.875rem;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.nav > a {
+  border-radius: var(--pliegue-radius-sm);
+  padding: var(--pliegue-spacing-sm);
+  text-decoration: none;
+}
+
+.nav > a:focus-visible,
+.wordmark:focus-visible {
+  outline: 3px solid var(--pliegue-color-accent-warm);
+  outline-offset: 3px;
+}
+
+.main {
+  margin: 0 auto;
+  max-width: 1280px;
+  padding: 0 clamp(1rem, 5vw, 4rem) var(--pliegue-spacing-xl);
+}
+
+.hero {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: min(760px, calc(100vh - 96px));
+  padding: 5rem 0;
+  text-align: center;
+}
+
+.mark {
+  height: 88px;
+  margin: var(--pliegue-spacing-lg) 0 var(--pliegue-spacing-md);
+  width: 88px;
+}
+
+.hero h1 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(4rem, 9vw, 6.5rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 0.95;
+  margin: 0;
+}
+
+.hero > p {
+  color: var(--pliegue-color-text-secondary);
+  font-size: clamp(1rem, 2vw, 1.125rem);
+  line-height: 1.55;
+  margin: var(--pliegue-spacing-lg) 0;
+  max-width: 38rem;
+}
+
+.rule {
+  background: var(--pliegue-color-accent-warm);
+  height: 2px;
+  margin-bottom: var(--pliegue-spacing-lg);
+  width: 220px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm);
+  justify-content: center;
+}
+
+.foundationSection {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: var(--pliegue-spacing-xl);
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  padding: 5rem 0;
+}
+
+.eyebrow,
+.cardLabel {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.foundationSection h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 600;
+  line-height: 1.05;
+  margin: var(--pliegue-spacing-md) 0 0;
+  max-width: 12ch;
+}
+
+.grid {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.grid article {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pliegue-spacing-md);
+  min-height: 160px;
+}
+
+.grid strong {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+@media (max-width: 800px) {
+  .nav > a {
+    display: none;
+  }
+
+  .foundationSection {
+    grid-template-columns: 1fr;
+  }
+
+  .foundationSection h2 {
+    max-width: 16ch;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
