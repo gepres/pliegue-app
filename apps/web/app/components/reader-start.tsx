@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { Card, Tag, buttonClassName } from "@pliegue/ui";
 
+import { useLinkedFiles } from "../library/local-file-reference-store";
 import { useLinkedFolders } from "../library/local-folder-store";
 import { useImportedDocuments } from "../library/local-library-store";
 import styles from "../(workspace)/app/workspace.module.css";
@@ -11,14 +12,21 @@ import { DocumentCard, PageHeader } from "./workspace-page";
 
 export function ReaderStart() {
   const importedLibrary = useImportedDocuments();
+  const linkedFiles = useLinkedFiles();
   const linkedFolders = useLinkedFolders();
-  const documents = [...importedLibrary.documents, ...linkedFolders.documents];
+  const documents = [
+    ...linkedFiles.documents,
+    ...linkedFolders.documents,
+    ...importedLibrary.documents,
+  ];
   const loading =
     importedLibrary.status === "idle" ||
     importedLibrary.status === "loading" ||
+    linkedFiles.status === "idle" ||
+    linkedFiles.status === "loading" ||
     linkedFolders.status === "idle" ||
     linkedFolders.status === "loading";
-  const storageError = importedLibrary.error ?? linkedFolders.error;
+  const storageError = importedLibrary.error ?? linkedFiles.error ?? linkedFolders.error;
 
   return (
     <>
@@ -67,11 +75,11 @@ export function ReaderStart() {
           <Tag>Sin documentos</Tag>
           <h2>Primero añade un archivo a tu Biblioteca</h2>
           <p>
-            El lector ya no muestra contenido de demostración. Importa o vincula un archivo
-            para comprobar la extracción y el guardado de progreso con tus propios datos.
+            El lector ya no muestra contenido de demostración. Vincula un archivo o carpeta
+            para analizarlo sin duplicar el binario y abrirlo desde su ubicación original.
           </p>
           <Link className={buttonClassName()} href="/app/biblioteca#importar-archivos">
-            Ir a importar archivos
+            Ir a vincular archivos
           </Link>
         </Card>
       )}

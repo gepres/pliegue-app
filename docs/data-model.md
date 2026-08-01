@@ -29,8 +29,9 @@ un dispositivo mediante `bound_device_id` y puede figurar como no disponible en 
 
 Todo `document` incluye:
 
-- `origin`: `drive | local | imported_copy`;
-- `source_id` y `external_ref` opaco;
+- `origin`: `drive | local`;
+- `reference.kind`: `google-drive | local-file | local-folder | local-copy`;
+- `source_id` y `external_ref` opaco; nunca una ruta local absoluta;
 - `content_hash` y versión de fuente cuando exista;
 - `sensitivity`: `public | internal | confidential | restricted`;
 - formato, propietario visible y disponibilidad.
@@ -58,7 +59,7 @@ procesador, se crea una nueva versión; no se sobrescribe silenciosamente el art
 | `account` | identidad y locale | no contiene secretos BYOK |
 | `device` | plataforma, versión y último acceso | revocable por cuenta |
 | `workspace` | Área y alcance de índice | sensibilidad por defecto |
-| `source` | Drive, carpeta local o copia | estado y dispositivo vinculado |
+| `source` | Drive, archivo/carpeta local o copia de compatibilidad | estado y dispositivo vinculado |
 | `document` | identidad visible | procedencia y sensibilidad obligatorias |
 | `document_version` | snapshot lógico del original | hash y versión de fuente |
 | `derivative` | OCR, texto, imagen, tabla, chunk | expiración y procesador |
@@ -91,7 +92,8 @@ desconocidas se ignoran y cada payload incluye `schema_version` para migraciones
 | Original local vinculado | nunca se copia | nunca se sube por defecto | se conserva solo la referencia |
 | Copia importada | hasta borrado | solo con consentimiento | se conserva según política |
 | Metadatos | hasta borrado | mientras exista cuenta/Área | se marca desconectado |
-| Texto/OCR | configurable | 30 días por defecto | expira o se borra a pedido |
+| Índice textual local | hasta 32.000 caracteres por versión | solo con consentimiento | expira o se borra a pedido |
+| Texto/OCR completo | configurable | 30 días por defecto | expira o se borra a pedido |
 | Miniaturas | caché LRU | 30 días por defecto | se purgan a pedido |
 | Embeddings | configurable | solo con consentimiento | borrado verificable |
 | Traducciones | caché configurable | solo si el usuario elige | expiran según política |

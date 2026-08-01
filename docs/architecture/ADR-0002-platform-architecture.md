@@ -61,7 +61,9 @@ tareas; este ADR no autoriza todavía dependencias o builds nativos.
 - Los **originales locales** no se suben por defecto. Los originales de Drive permanecen
   en Drive; Pliegue guarda identificadores, permisos y versiones. Derivados solo se
   sincronizan con consentimiento explícito y política de retención.
-- **Web offline:** IndexedDB para metadatos, texto permitido, preferencias y outbox.
+- **Web offline:** IndexedDB para handles opacos de archivos/carpetas, metadatos, un
+  índice textual limitado, preferencias y outbox. El binario original se resuelve desde
+  la referencia solo al analizar una versión nueva o abrir el documento.
 - **Desktop/móvil offline:** SQLite dentro del sandbox de la aplicación. Tauri dispone
   de un plugin SQL con soporte SQLite; se evaluará cifrado de la base antes del MVP.
 

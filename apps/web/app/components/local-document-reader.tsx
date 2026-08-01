@@ -10,6 +10,12 @@ import {
   type LocalDocumentPreview,
 } from "../library/local-document-preview";
 import type { StructuredDocumentBlock } from "../library/structured-document-extractor";
+import type { LinkedFileDocument } from "../library/local-file-reference";
+import {
+  readLinkedFile,
+  requestLinkedFileReadPermission,
+  useLinkedFiles,
+} from "../library/local-file-reference-store";
 import type { LinkedFolderDocument } from "../library/local-folder";
 import {
   readLinkedDocumentFile,
@@ -28,14 +34,21 @@ import {
 import { PageHeader } from "./workspace-page";
 import styles from "./local-document-reader.module.css";
 
-type LocalDocument = ImportedDocument | LinkedFolderDocument;
+type LocalDocument = ImportedDocument | LinkedFileDocument | LinkedFolderDocument;
+
+const readerIndexLabels = {
+  error: "No disponible",
+  indexed: "Contenido indexado",
+  "metadata-only": "Solo metadatos",
+  pending: "Pendiente",
+} as const;
 
 type PreviewState =
   | { status: "loading" }
   | { message: string; status: "error" }
   | { preview: LocalDocumentPreview; status: "ready" };
 
-function isLinkedDocument(document: LocalDocument): document is LinkedFolderDocument {
+function isFolderDocument(document: LocalDocument): document is LinkedFolderDocument {
   return "sourceId" in document;
 }
 
@@ -202,7 +215,8 @@ function PreviewCanvas({
 }) {
   const documentId = document.id;
   const format = document.format;
-  const sourceId = isLinkedDocument(document) ? document.sourceId : null;
+  const sourceId = isFolderDocument(document) ? document.sourceId : null;
+  const referenceKind = document.reference.kind;
   const [state, setState] = useState<PreviewState>({ status: "loading" });
 
   useEffect(() => {
@@ -212,7 +226,9 @@ function PreviewCanvas({
       try {
         const record = sourceId
           ? await readLinkedDocumentFile(documentId, sourceId)
-          : await readImportedDocumentFile(documentId);
+          : referenceKind === "local-file"
+            ? await readLinkedFile(documentId)
+            : await readImportedDocumentFile(documentId);
 
         if (!record) throw new Error("El archivo ya no está disponible en su origen local.");
 
@@ -238,7 +254,7 @@ function PreviewCanvas({
     return () => {
       active = false;
     };
-  }, [documentId, format, onReady, sourceId]);
+  }, [documentId, format, onReady, referenceKind, sourceId]);
 
   if (state.status === "loading") {
     return (
@@ -309,10 +325,10 @@ function PreviewCanvas({
 }
 
 function PermissionPanel({
-  document,
+  onRequestPermission,
   sourceName,
 }: {
-  document: LinkedFolderDocument;
+  onRequestPermission: () => Promise<"denied" | "granted" | "prompt">;
   sourceName: string;
 }) {
   const [requestState, setRequestState] = useState<"idle" | "requesting" | "denied" | "error">(
@@ -323,7 +339,7 @@ function PermissionPanel({
     setRequestState("requesting");
 
     try {
-      const permission = await requestLinkedFolderReadPermission(document.sourceId);
+      const permission = await onRequestPermission();
       if (permission !== "granted") setRequestState("denied");
     } catch {
       setRequestState("error");
@@ -369,6 +385,17 @@ function ReaderDetails({
   onRestart: () => void;
   progressPercent: number;
 }) {
+  const sourceLabel =
+    document.reference.kind === "local-file"
+      ? "Archivo original"
+      : document.reference.kind === "local-folder"
+        ? "Carpeta vinculada"
+        : "Copia de compatibilidad";
+  const storageLabel =
+    document.reference.kind === "local-copy"
+      ? "Blob en IndexedDB"
+      : "Handle seguro en IndexedDB";
+
   return (
     <aside className={styles.documentDetails}>
       <Card>
@@ -395,7 +422,7 @@ function ReaderDetails({
         ) : null}
       </Card>
       <Card>
-        <Tag>{document.imported ? "Copia privada" : "Carpeta vinculada"}</Tag>
+        <Tag>{sourceLabel}</Tag>
         <h2>Sobre este archivo</h2>
         <dl>
           <div>
@@ -404,16 +431,24 @@ function ReaderDetails({
           </div>
           <div>
             <dt>Origen</dt>
-            <dd>{document.imported ? "IndexedDB local" : "Archivo original"}</dd>
+            <dd>{storageLabel}</dd>
           </div>
           <div>
             <dt>Disponibilidad</dt>
             <dd>
-              {document.imported
-                ? "Disponible offline"
+              {document.reference.kind === "local-copy"
+                ? "Copia disponible offline"
                 : document.availability === "available"
                   ? "Disponible"
                   : "Permiso requerido"}
+            </dd>
+          </div>
+          <div>
+            <dt>Índice local</dt>
+            <dd>
+              {document.indexStatus
+                ? readerIndexLabels[document.indexStatus]
+                : "Estado desconocido"}
             </dd>
           </div>
         </dl>
@@ -537,11 +572,13 @@ function useDocumentProgress(
 function LocalReaderShell({
   document,
   permissionRequired = false,
+  requestPermission,
   resumeRequested,
   sourceName,
 }: {
   document: LocalDocument;
   permissionRequired?: boolean;
+  requestPermission?: (() => Promise<"denied" | "granted" | "prompt">) | undefined;
   resumeRequested: boolean;
   sourceName?: string | undefined;
 }) {
@@ -572,8 +609,11 @@ function LocalReaderShell({
       />
       <div className={styles.localReaderLayout}>
         <main className={styles.previewArea} ref={previewRef}>
-          {permissionRequired && isLinkedDocument(document) ? (
-            <PermissionPanel document={document} sourceName={sourceName ?? "la carpeta"} />
+          {permissionRequired && requestPermission ? (
+            <PermissionPanel
+              onRequestPermission={requestPermission}
+              sourceName={sourceName ?? "el origen"}
+            />
           ) : (
             <PreviewCanvas document={document} onReady={markContentReady} />
           )}
@@ -624,15 +664,22 @@ export function LocalDocumentReader({
   resumeRequested?: boolean;
 }) {
   const importedLibrary = useImportedDocuments();
+  const linkedFiles = useLinkedFiles();
   const linkedFolders = useLinkedFolders();
   const importedDocument = importedLibrary.documents.find((item) => item.id === documentId);
+  const linkedFile = linkedFiles.documents.find((item) => item.id === documentId);
   const linkedDocument = linkedFolders.documents.find((item) => item.id === documentId);
 
-  if (importedLibrary.status === "error" || linkedFolders.status === "error") {
+  if (
+    importedLibrary.status === "error" ||
+    linkedFiles.status === "error" ||
+    linkedFolders.status === "error"
+  ) {
     return (
       <ReaderMessage
         description={
           importedLibrary.error ??
+          linkedFiles.error ??
           linkedFolders.error ??
           "No fue posible recuperar la biblioteca de este navegador."
         }
@@ -642,7 +689,11 @@ export function LocalDocumentReader({
     );
   }
 
-  if (importedLibrary.status !== "ready" || linkedFolders.status !== "ready") {
+  if (
+    importedLibrary.status !== "ready" ||
+    linkedFiles.status !== "ready" ||
+    linkedFolders.status !== "ready"
+  ) {
     return (
       <ReaderMessage
         description="Recuperando los metadatos guardados en este navegador."
@@ -656,6 +707,18 @@ export function LocalDocumentReader({
     return <LocalReaderShell document={importedDocument} resumeRequested={resumeRequested} />;
   }
 
+  if (linkedFile) {
+    return (
+      <LocalReaderShell
+        document={linkedFile}
+        permissionRequired={linkedFile.availability !== "available"}
+        requestPermission={() => requestLinkedFileReadPermission(linkedFile.id)}
+        resumeRequested={resumeRequested}
+        sourceName={linkedFile.originalName}
+      />
+    );
+  }
+
   if (linkedDocument) {
     const source = linkedFolders.sources.find((item) => item.id === linkedDocument.sourceId);
 
@@ -663,6 +726,7 @@ export function LocalDocumentReader({
       <LocalReaderShell
         document={linkedDocument}
         permissionRequired={source?.permission !== "granted"}
+        requestPermission={() => requestLinkedFolderReadPermission(linkedDocument.sourceId)}
         resumeRequested={resumeRequested}
         sourceName={source?.name}
       />

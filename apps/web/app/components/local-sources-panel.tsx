@@ -62,7 +62,7 @@ export function LocalSourcesPanel() {
   const linkedFolders = useLinkedFolders();
   const [busySourceId, setBusySourceId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState(
-    "Los cambios se comprueban bajo demanda; Pliegue nunca modifica los originales.",
+    "Los cambios y el índice derivado se actualizan bajo demanda; Pliegue nunca copia ni modifica los originales.",
   );
   const isBusy = busySourceId !== null;
 
@@ -125,8 +125,8 @@ export function LocalSourcesPanel() {
           <Tag>Local-only · carpeta viva</Tag>
           <h2 id="linked-folders-title">Vincula una carpeta sin copiarla</h2>
           <p>
-            Pliegue conserva el permiso y un manifiesto de metadatos. “Buscar cambios”
-            compara altas, modificaciones y eliminaciones cuando tú lo decides.
+            Pliegue conserva el permiso, un manifiesto y hasta 32.000 caracteres de índice
+            por documento. “Buscar cambios” vuelve a analizar solo archivos nuevos o modificados.
           </p>
         </div>
         <div className={styles.linkedFolderActions}>
@@ -176,7 +176,7 @@ export function LocalSourcesPanel() {
                       size="sm"
                       variant="secondary"
                     >
-                      {sourceIsBusy ? "Comparando…" : "Buscar cambios"}
+                      {sourceIsBusy ? "Comparando y analizando…" : "Buscar cambios"}
                     </Button>
                   ) : (
                     <Button

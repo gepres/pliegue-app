@@ -84,6 +84,8 @@ Figma define la intención visual. El código define el contrato consumible y de
   bordes, acento, elevación y texto usan exclusivamente el contrato semántico.
 - Progreso: `Tag` + barra nativa con `role="progressbar"` + acción discreta de reinicio;
   el porcentaje visible procede del almacén local versionado, no de valores incrustados.
+- Referencia: el frame separa visualmente **archivo vinculado**, **índice derivado** y
+  **apertura del original**. “Copia” solo se usa para el fallback de compatibilidad.
 
 Los números y títulos dentro de `/design-system` son muestras visuales identificadas como
 **Muestra de catálogo**. Las rutas de producto no comparten esos fixtures: los estados

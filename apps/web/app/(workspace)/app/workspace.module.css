@@ -103,7 +103,7 @@
   align-items: center;
   display: grid;
   gap: var(--pliegue-spacing-md) var(--pliegue-spacing-xl);
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
   margin-bottom: var(--pliegue-spacing-lg);
 }
 
@@ -124,12 +124,16 @@
   grid-column: 1 / -1;
 }
 
+.localImportPanel > .capabilityNote {
+  grid-column: 1 / -1;
+}
+
 .localImportActions {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: var(--pliegue-spacing-sm);
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .localImportActions span {
@@ -208,6 +212,46 @@
 .capabilityNote strong {
   font-family: var(--pliegue-font-reading);
   font-size: 1rem;
+}
+
+.driveReferencePanel {
+  align-items: center;
+  display: grid;
+  gap: var(--pliegue-spacing-md) var(--pliegue-spacing-xl);
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: var(--pliegue-spacing-xl);
+}
+
+.driveReferencePanel h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.5rem;
+  margin: var(--pliegue-spacing-sm) 0;
+}
+
+.driveReferencePanel p {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.driveReferencePanel code {
+  color: var(--pliegue-color-text-primary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.8125rem;
+}
+
+.driveReferenceActions {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.driveReferenceActions span {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
 }
 
 .folderSourceList {
@@ -633,6 +677,7 @@
   }
 
   .linkedFolderHeader,
+  .driveReferencePanel,
   .folderSourceItem {
     align-items: stretch;
     grid-template-columns: 1fr;
@@ -643,8 +688,10 @@
   }
 
   .localImportActions,
+  .driveReferenceActions,
   .linkedFolderActions,
   .folderSourceControls {
+    align-items: flex-start;
     justify-content: flex-start;
   }
 
@@ -689,6 +736,7 @@
   }
 
   .localImportActions,
+  .driveReferenceActions,
   .linkedFolderActions,
   .folderSourceControls {
     align-items: stretch;

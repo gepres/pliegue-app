@@ -98,6 +98,7 @@ export function createImportedDocument(
     mimeType: file.type || "application/octet-stream",
     origin: "local",
     originalName: file.name,
+    reference: { kind: "local-copy", storageId: id },
     sizeBytes: file.size,
     tags: title.toLocaleLowerCase("es").split(/\s+/).filter(Boolean),
     title: title || file.name,

@@ -474,6 +474,13 @@
   gap: var(--pliegue-spacing-md);
 }
 
+.readerFrameAside > small {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  letter-spacing: 0.04em;
+}
+
 .readerFrameProgress {
   background: var(--pliegue-color-bg-subtle);
   border: 1px solid var(--pliegue-color-border-default);

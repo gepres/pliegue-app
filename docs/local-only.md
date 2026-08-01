@@ -23,11 +23,15 @@ expone `showDirectoryPicker`, handles serializables y permisos de lectura del
 
 | Acción | Uso recomendado | Comportamiento |
 | --- | --- | --- |
-| Importar copia | portabilidad y uso web | guarda un Blob privado en IndexedDB |
-| Vincular archivo | biblioteca viva | queda cubierto por el manifiesto de una carpeta vinculada |
+| Vincular archivo | documento individual | guarda un `FileSystemFileHandle`, metadatos e índice derivado; no guarda el binario |
 | Vincular carpeta | corpus mantenido fuera de Pliegue | guarda handle + metadatos; no copia el contenido |
+| Importar copia | compatibilidad excepcional | guarda un Blob privado en IndexedDB cuando el navegador no admite handles |
 
 La interfaz explica esta diferencia antes del selector.
+
+La web no puede leer ni persistir una ruta absoluta como `C:\Documentos\archivo.pdf`. El
+navegador entrega un handle opaco y revocable. Ese handle es la “dirección” segura: se puede
+serializar en IndexedDB, pero no revela la estructura privada del sistema de archivos.
 
 ## Carpetas vinculadas en web
 
@@ -38,8 +42,8 @@ La interfaz explica esta diferencia antes del selector.
   disponible. Un handle recuperado desde IndexedDB puede volver a `prompt`, tal como
   advierte la especificación; en ese caso la UI solicita renovar acceso.
 - **Buscar cambios** recorre subcarpetas y compara `ruta relativa + nombre + tamaño + última
-  modificación`. Informa altas, modificaciones y eliminaciones y reemplaza únicamente el
-  manifiesto de Pliegue.
+  modificación`. Informa altas, modificaciones y eliminaciones, vuelve a analizar solo los
+  elementos nuevos/modificados y reemplaza únicamente el manifiesto e índice de Pliegue.
 - **Desvincular** elimina handle y metadatos. Nunca borra ni modifica archivos originales.
 - Si la capacidad no existe, el bloque queda deshabilitado con explicación y “Importar
   copia” continúa disponible.
@@ -96,6 +100,19 @@ porcentaje guardado por accidente. Solo **Empezar desde el inicio** permite una 
 explícita. En esta etapa, el visor PDF nativo no expone su desplazamiento interno; Pliegue
 registra que el archivo se abrió, pero no puede medir cada página dentro del plugin del
 navegador.
+
+## Índice derivado sin copia del archivo
+
+Al vincular un archivo o escanear una carpeta, Pliegue abre temporalmente cada original,
+extrae texto con el mismo pipeline seguro del lector y conserva como máximo 32.000
+caracteres normalizados por documento. TXT, Markdown, EPUB y Office pueden quedar
+`indexed`; PDF e imágenes quedan `metadata-only` hasta incorporar extracción PDF/OCR.
+
+El índice sirve para búsqueda local y no contiene el `Blob` original. Al abrir un resultado,
+el lector resuelve su referencia, comprueba permiso y ejecuta `handle.getFile()` contra la
+ubicación original. Si el archivo cambió, **Buscar cambios** renueva fingerprint e índice.
+Si fue movido, eliminado o se revocó el permiso, la tarjeta permanece trazable como
+desconectada y solicita relink/permiso.
 
 ## Extracción de EPUB y Office
 

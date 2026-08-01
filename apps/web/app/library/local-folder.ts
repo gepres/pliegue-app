@@ -67,6 +67,7 @@ export function createLinkedFolderDocument(
     linked: true,
     meta: `${relativePath} · ${formatFileSize(file.size)}`,
     origin: "local",
+    reference: { kind: "local-folder", relativePath, sourceId },
     relativePath,
     sizeBytes: file.size,
     sourceId,

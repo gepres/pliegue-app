@@ -7,6 +7,7 @@ import { Card, Tag, buttonClassName } from "@pliegue/ui";
 
 import type { LibraryDocument } from "../library/documents";
 import { useFavorites } from "../library/favorite-store";
+import { useLinkedFiles } from "../library/local-file-reference-store";
 import { useLinkedFolders } from "../library/local-folder-store";
 import { useImportedDocuments } from "../library/local-library-store";
 import { useReadingProgressEntries } from "../library/reading-progress-store";
@@ -30,12 +31,17 @@ function documentDate(document: LibraryDocument) {
 
 export function WorkspaceDashboard() {
   const importedLibrary = useImportedDocuments();
+  const linkedFiles = useLinkedFiles();
   const linkedFolders = useLinkedFolders();
   const favorites = useFavorites();
   const progressEntries = useReadingProgressEntries();
   const documents = useMemo(
-    () => [...importedLibrary.documents, ...linkedFolders.documents],
-    [importedLibrary.documents, linkedFolders.documents],
+    () => [
+      ...linkedFiles.documents,
+      ...linkedFolders.documents,
+      ...importedLibrary.documents,
+    ],
+    [importedLibrary.documents, linkedFiles.documents, linkedFolders.documents],
   );
   const documentsById = useMemo(
     () => new Map(documents.map((document) => [document.id, document])),
@@ -70,9 +76,11 @@ export function WorkspaceDashboard() {
   const loading =
     importedLibrary.status === "idle" ||
     importedLibrary.status === "loading" ||
+    linkedFiles.status === "idle" ||
+    linkedFiles.status === "loading" ||
     linkedFolders.status === "idle" ||
     linkedFolders.status === "loading";
-  const storageError = importedLibrary.error ?? linkedFolders.error;
+  const storageError = importedLibrary.error ?? linkedFiles.error ?? linkedFolders.error;
 
   return (
     <>
@@ -90,14 +98,14 @@ export function WorkspaceDashboard() {
             </Link>
           </>
         }
-        description="Importa archivos o vincula una carpeta; el resumen se calcula únicamente con lo guardado en este navegador."
+        description="Vincula archivos o carpetas; Pliegue conserva referencias e índices derivados y abre el original desde su ubicación."
         eyebrow="Área local · Datos reales"
         title="Tu biblioteca de trabajo"
       />
 
       <section aria-label="Resumen real del área" className={styles.metricGrid}>
         <MetricCard
-          detail={`${importedLibrary.documents.length} copias · ${linkedFolders.documents.length} vinculados`}
+          detail={`${linkedFiles.documents.length} archivos · ${linkedFolders.documents.length} en carpetas · ${importedLibrary.documents.length} copias heredadas`}
           label="Documentos"
           value={loading ? "—" : String(documents.length)}
         />
@@ -174,11 +182,12 @@ export function WorkspaceDashboard() {
           <Tag>Biblioteca vacía</Tag>
           <h2>Prueba Pliegue con uno de tus archivos</h2>
           <p>
-            No cargamos documentos de muestra. Importa un PDF, EPUB, DOCX, PPTX, XLSX,
-            TXT, Markdown, PNG o JPG y aparecerá aquí inmediatamente.
+            No cargamos documentos de muestra ni duplicamos tus archivos por defecto.
+            Vincula un PDF, EPUB, DOCX, PPTX, XLSX, TXT, Markdown, PNG o JPG y aparecerá
+            aquí con su índice derivado.
           </p>
           <Link className={buttonClassName()} href="/app/biblioteca#importar-archivos">
-            Importar mi primer archivo
+            Vincular mi primer archivo
           </Link>
         </Card>
       )}

@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
+import { createLocalContentIndex } from "./local-content-index";
 import {
   compareFolderDocuments,
   createLinkedFolderDocument,
@@ -173,7 +174,16 @@ async function requestReadPermission(handle: FileSystemDirectoryHandle) {
 
 function toLinkedDocument({ handle, ...document }: StoredLinkedFolderDocument) {
   void handle;
-  return document;
+  return document.reference
+    ? document
+    : {
+        ...document,
+        reference: {
+          kind: "local-folder" as const,
+          relativePath: document.relativePath,
+          sourceId: document.sourceId,
+        },
+      };
 }
 
 async function readStoredLibrary(database: IDBDatabase) {
@@ -349,6 +359,44 @@ async function saveFolderScan(
       previous.map(toLinkedDocument),
       documents.map(toLinkedDocument),
     );
+    const previousById = new Map(previous.map((document) => [document.id, document]));
+    const indexedDocuments: StoredLinkedFolderDocument[] = new Array(documents.length);
+    let nextIndex = 0;
+
+    async function indexNextDocument() {
+      while (nextIndex < documents.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        const document = documents[index];
+        if (!document) continue;
+        const priorDocument = previousById.get(document.id);
+
+        if (
+          priorDocument?.fingerprint === document.fingerprint &&
+          priorDocument.indexStatus &&
+          priorDocument.indexedAt
+        ) {
+          indexedDocuments[index] = {
+            ...document,
+            indexedAt: priorDocument.indexedAt,
+            indexStatus: priorDocument.indexStatus,
+            searchText: priorDocument.searchText ?? "",
+          };
+          continue;
+        }
+
+        const file = await document.handle.getFile();
+        const contentIndex = await createLocalContentIndex(document.format, file);
+        indexedDocuments[index] = { ...document, ...contentIndex };
+      }
+    }
+
+    await Promise.all(
+      Array.from(
+        { length: Math.min(4, documents.length) },
+        () => indexNextDocument(),
+      ),
+    );
     const transaction = database.transaction(
       [sourceStoreName, documentStoreName],
       "readwrite",
@@ -359,7 +407,7 @@ async function saveFolderScan(
 
     sourceStore.put(source);
     previous.forEach((document) => documentStore.delete(document.id));
-    documents.forEach((document) => documentStore.put(document));
+    indexedDocuments.forEach((document) => documentStore.put(document));
     await completed;
     return summary;
   } finally {

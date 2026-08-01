@@ -15,6 +15,11 @@ import {
 } from "../library/documents";
 import { toggleFavorite, useFavorites } from "../library/favorite-store";
 import {
+  linkLocalFiles,
+  unlinkLocalFile,
+  useLinkedFiles,
+} from "../library/local-file-reference-store";
+import {
   downloadImportedCopy,
   importLocalFiles,
   removeImportedCopy,
@@ -37,6 +42,13 @@ const originLabels: Record<DocumentOrigin, string> = {
   local: "Local",
 };
 
+const indexLabels = {
+  error: "Índice no disponible",
+  indexed: "Contenido indexado",
+  "metadata-only": "Solo metadatos",
+  pending: "Análisis pendiente",
+} as const;
+
 export function LibraryBrowser() {
   const [availability, setAvailability] = useState<AvailabilityState | "all">("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -44,14 +56,20 @@ export function LibraryBrowser() {
   const [origin, setOrigin] = useState<DocumentOrigin | "all">("all");
   const [query, setQuery] = useState("");
   const [importing, setImporting] = useState(false);
+  const [linkingFiles, setLinkingFiles] = useState(false);
   const [importStatus, setImportStatus] = useState(
-    "Selecciona copias de hasta 50 MB; no se enviarán fuera de este dispositivo.",
+    "Vincula un archivo: guardaremos su referencia, metadatos e índice; no el original.",
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const favorites = useFavorites();
   const importedLibrary = useImportedDocuments();
+  const linkedFiles = useLinkedFiles();
   const linkedFolders = useLinkedFolders();
-  const allDocuments = [...importedLibrary.documents, ...linkedFolders.documents];
+  const allDocuments = [
+    ...linkedFiles.documents,
+    ...linkedFolders.documents,
+    ...importedLibrary.documents,
+  ];
   const favoriteIds = new Set(favorites);
   const filteredDocuments = filterDocuments(allDocuments, {
     availability,
@@ -61,7 +79,32 @@ export function LibraryBrowser() {
     origin,
     query,
   });
-  const storageError = importedLibrary.error ?? linkedFolders.error;
+  const storageError = importedLibrary.error ?? linkedFiles.error ?? linkedFolders.error;
+
+  async function handleLinkedFiles() {
+    setLinkingFiles(true);
+    setImportStatus("Leyendo metadatos y creando el índice derivado…");
+
+    try {
+      const result = await linkLocalFiles();
+      const parts = [
+        result.linked ? `${result.linked} vinculado${result.linked === 1 ? "" : "s"}` : "",
+        result.updated ? `${result.updated} actualizado${result.updated === 1 ? "" : "s"}` : "",
+        result.rejected.length
+          ? `${result.rejected.length} rechazado${result.rejected.length === 1 ? "" : "s"}`
+          : "",
+      ].filter(Boolean);
+      setImportStatus(parts.length ? `${parts.join(" · ")}.` : "No se vinculó ningún archivo.");
+    } catch (error) {
+      setImportStatus(
+        error instanceof DOMException && error.name === "AbortError"
+          ? "No se seleccionó ningún archivo."
+          : "No fue posible guardar la referencia al archivo.",
+      );
+    } finally {
+      setLinkingFiles(false);
+    }
+  }
 
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -115,6 +158,21 @@ export function LibraryBrowser() {
     }
   }
 
+  async function removeFileReference(documentId: string, title: string) {
+    const confirmed = window.confirm(
+      `¿Quitar la referencia a «${title}»? El archivo original no se eliminará ni modificará.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await unlinkLocalFile(documentId);
+      clearReadingProgress(documentId);
+      setImportStatus("La referencia se eliminó. El archivo original permanece intacto.");
+    } catch {
+      setImportStatus("No fue posible eliminar la referencia local.");
+    }
+  }
+
   return (
     <>
       <Card
@@ -125,19 +183,27 @@ export function LibraryBrowser() {
         tone="subtle"
       >
         <div>
-          <Tag>Local-only · importar copia</Tag>
-          <h2 id="local-import-title">Añade documentos sin crear una cuenta</h2>
+          <Tag>Referencia local · sin copia</Tag>
+          <h2 id="local-import-title">Vincula archivos y conserva el original en su carpeta</h2>
           <p>
-            “Importar” guarda una copia privada en IndexedDB. Si prefieres conservar el
-            original fuera de Pliegue, vincula una carpeta compatible en el siguiente bloque.
+            Pliegue guarda un permiso seguro, metadatos y un índice textual limitado. El
+            archivo completo permanece en su ubicación y se vuelve a leer solo cuando lo
+            abres.
           </p>
         </div>
         <div className={styles.localImportActions}>
           <Button
+            disabled={linkingFiles || linkedFiles.status !== "ready" || !linkedFiles.supported}
+            onClick={() => void handleLinkedFiles()}
+          >
+            {linkingFiles ? "Vinculando y analizando…" : "Vincular archivos"}
+          </Button>
+          <Button
             disabled={importing || importedLibrary.status === "error"}
             onClick={() => fileInputRef.current?.click()}
+            variant="quiet"
           >
-            {importing ? "Importando…" : "Importar archivos"}
+            {importing ? "Importando copia…" : "Importar copia · compatibilidad"}
           </Button>
           <input
             accept=".pdf,.epub,.docx,.pptx,.xlsx,.txt,.md,.png,.jpg,.jpeg"
@@ -148,14 +214,45 @@ export function LibraryBrowser() {
             ref={fileInputRef}
             type="file"
           />
-          <span>{importedLibrary.documents.length} copias locales</span>
+          <span>
+            {linkedFiles.documents.length} referencias · {importedLibrary.documents.length} copias
+          </span>
         </div>
-        <p aria-label="Estado de importación" aria-live="polite" role="status">
+        {linkedFiles.supported === false ? (
+          <div className={styles.capabilityNote} role="note">
+            <strong>Este navegador no conserva referencias a archivos individuales.</strong>
+            <p>Usa una carpeta vinculada o la importación de compatibilidad.</p>
+          </div>
+        ) : null}
+        <p aria-label="Estado de vinculación o importación" aria-live="polite" role="status">
           {importedLibrary.error ?? importStatus}
         </p>
       </Card>
 
       <LocalSourcesPanel />
+
+      <Card
+        aria-labelledby="drive-reference-title"
+        as="section"
+        className={styles.driveReferencePanel}
+        tone="subtle"
+      >
+        <div>
+          <Tag>Google Drive · referencia remota</Tag>
+          <h2 id="drive-reference-title">Conecta Drive sin duplicar sus archivos</h2>
+          <p>
+            La capa documental ya contempla <code>fileId</code> y <code>driveId</code>. La
+            autorización OAuth y la renovación segura del acceso siguen pendientes antes de
+            habilitar esta fuente.
+          </p>
+        </div>
+        <div className={styles.driveReferenceActions}>
+          <Button disabled variant="quiet">
+            Conectar Google Drive
+          </Button>
+          <span>OAuth pendiente · Foundry 03.1</span>
+        </div>
+      </Card>
 
       <form className={styles.toolbar} onSubmit={(event) => event.preventDefault()} role="search">
         <Field
@@ -240,7 +337,9 @@ export function LibraryBrowser() {
           <h2>No pudimos abrir la Biblioteca local</h2>
           <p>{storageError}</p>
         </Card>
-      ) : importedLibrary.status !== "ready" || linkedFolders.status !== "ready" ? (
+      ) : importedLibrary.status !== "ready" ||
+        linkedFiles.status !== "ready" ||
+        linkedFolders.status !== "ready" ? (
         <Card as="section" className={styles.emptyState} tone="subtle">
           <Tag>Preparando</Tag>
           <h2>Recuperando la Biblioteca local…</h2>
@@ -250,6 +349,8 @@ export function LibraryBrowser() {
         <section aria-label="Documentos de la biblioteca" className={styles.documentGrid}>
           {filteredDocuments.map((document) => {
             const isFavorite = favoriteIds.has(document.id);
+            const isCopy = document.reference.kind === "local-copy";
+            const isFileReference = document.reference.kind === "local-file";
 
             return (
               <DocumentCard
@@ -261,6 +362,7 @@ export function LibraryBrowser() {
                 <p>{document.meta}</p>
                 <div className={styles.documentMeta}>
                   <Tag>{availabilityLabels[document.availability]}</Tag>
+                  {document.indexStatus ? <Tag>{indexLabels[document.indexStatus]}</Tag> : null}
                   <div className={styles.documentActions}>
                     <Button
                       aria-label={
@@ -275,7 +377,7 @@ export function LibraryBrowser() {
                     >
                       {isFavorite ? "★ Favorito" : "☆ Guardar"}
                     </Button>
-                    {document.imported ? (
+                    {isCopy ? (
                       <>
                         <Link
                           className={buttonClassName({ size: "sm", variant: "secondary" })}
@@ -299,12 +401,23 @@ export function LibraryBrowser() {
                         </Button>
                       </>
                     ) : document.linked ? (
-                      <Link
-                        className={buttonClassName({ size: "sm", variant: "secondary" })}
-                        href={{ pathname: "/app/lector", query: { document: document.id } }}
-                      >
-                        Ver en lector
-                      </Link>
+                      <>
+                        <Link
+                          className={buttonClassName({ size: "sm", variant: "secondary" })}
+                          href={{ pathname: "/app/lector", query: { document: document.id } }}
+                        >
+                          Ver en lector
+                        </Link>
+                        {isFileReference ? (
+                          <Button
+                            onClick={() => void removeFileReference(document.id, document.title)}
+                            size="sm"
+                            variant="quiet"
+                          >
+                            Quitar referencia
+                          </Button>
+                        ) : null}
+                      </>
                     ) : null}
                   </div>
                 </div>
@@ -323,11 +436,16 @@ export function LibraryBrowser() {
           <Tag>Biblioteca vacía</Tag>
           <h2>Añade tu primer documento real</h2>
           <p>
-            No hay datos de demostración. Importa una copia para probar todos los
-            navegadores o vincula una carpeta compatible para mantener los archivos en su
-            ubicación original.
+            No hay datos de demostración. Vincula un archivo o una carpeta compatible para
+            conservar los originales en su ubicación. La copia queda disponible solo como
+            alternativa de compatibilidad.
           </p>
-          <Button onClick={() => fileInputRef.current?.click()}>Importar un archivo</Button>
+          <Button
+            disabled={!linkedFiles.supported}
+            onClick={() => void handleLinkedFiles()}
+          >
+            Vincular un archivo
+          </Button>
         </Card>
       )}
     </>

@@ -86,7 +86,9 @@ function openDatabase() {
 
 function toDocument({ blob, ...document }: StoredImportedDocument) {
   void blob;
-  return document;
+  return document.reference
+    ? document
+    : { ...document, reference: { kind: "local-copy" as const, storageId: document.id } };
 }
 
 async function loadDocuments() {

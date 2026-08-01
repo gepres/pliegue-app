@@ -10,6 +10,7 @@ const testDocuments: LibraryDocument[] = [
     id: "hallazgos-investigacion",
     meta: "Documento de prueba",
     origin: "drive",
+    reference: { fileId: "drive-1", kind: "google-drive" },
     tags: ["entrevistas", "hallazgos", "investigación"],
     title: "Hallazgos de investigación",
   },
@@ -20,6 +21,7 @@ const testDocuments: LibraryDocument[] = [
     id: "sistemas-aprenden",
     meta: "Documento de prueba",
     origin: "local",
+    reference: { kind: "local-file", referenceId: "local-1" },
     tags: ["sistemas", "aprendizaje"],
     title: "Sistemas que aprenden",
   },
@@ -30,6 +32,7 @@ const testDocuments: LibraryDocument[] = [
     id: "corpus-validacion",
     meta: "Documento de prueba",
     origin: "drive",
+    reference: { fileId: "drive-2", kind: "google-drive" },
     tags: ["corpus", "validación"],
     title: "Corpus de validación",
   },
@@ -73,5 +76,19 @@ describe("filterDocuments", () => {
     });
 
     expect(result.map((document) => document.id)).toEqual(["corpus-validacion"]);
+  });
+
+  it("busca dentro del índice derivado sin necesitar el archivo completo", () => {
+    const result = filterDocuments(
+      [
+        {
+          ...testDocuments[1]!,
+          searchText: "La observación participante requiere registrar el contexto.",
+        },
+      ],
+      { ...baseFilters, query: "PARTICIPANTE" },
+    );
+
+    expect(result.map((document) => document.id)).toEqual(["sistemas-aprenden"]);
   });
 });

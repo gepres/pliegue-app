@@ -80,13 +80,13 @@ function ReaderPatternFrame() {
     <article className={styles.readerFrame}>
       <div className={styles.readerFrameChrome}>
         <span>MUESTRA DE CATÁLOGO · LECTOR LOCAL</span>
-        <span>TXT · EPUB · OFFICE · PDF</span>
+        <span>REFERENCIA → ÍNDICE → APERTURA</span>
       </div>
       <div className={styles.readerFrameHeader}>
         <div>
-          <Tag>DOCX · Local-only</Tag>
+          <Tag>DOCX · Archivo vinculado</Tag>
           <h3>Informe de hallazgos</h3>
-          <p>Documento estructurado · Guardado en este dispositivo</p>
+          <p>Handle seguro + índice derivado · Original en su carpeta</p>
         </div>
         <Link
           className={buttonClassName({ size: "sm", variant: "secondary" })}
@@ -108,7 +108,8 @@ function ReaderPatternFrame() {
           </p>
         </div>
         <Card className={styles.readerFrameAside}>
-          <Tag>Progreso local · 38 %</Tag>
+          <Tag>Referencia local · Sin copia</Tag>
+          <small>PROGRESO LOCAL · 38 %</small>
           <div
             aria-label="Muestra de progreso de lectura: 38 por ciento"
             aria-valuemax={100}
@@ -127,7 +128,11 @@ function ReaderPatternFrame() {
             </div>
             <div>
               <dt>Origen</dt>
-              <dd>IndexedDB local</dd>
+              <dd>Handle autorizado</dd>
+            </div>
+            <div>
+              <dt>Índice</dt>
+              <dd>32.000 caracteres</dd>
             </div>
           </dl>
         </Card>

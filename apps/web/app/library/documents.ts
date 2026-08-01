@@ -14,6 +14,13 @@ export const availabilityStates = ["available", "offline", "disconnected"] as co
 export type DocumentOrigin = "drive" | "local";
 export type DocumentFormat = (typeof documentFormats)[number];
 export type AvailabilityState = (typeof availabilityStates)[number];
+export type DocumentIndexStatus = "error" | "indexed" | "metadata-only" | "pending";
+
+export type DocumentReference =
+  | { kind: "google-drive"; driveId?: string; fileId: string }
+  | { kind: "local-copy"; storageId: string }
+  | { kind: "local-file"; referenceId: string }
+  | { kind: "local-folder"; relativePath: string; sourceId: string };
 
 export interface LibraryDocument {
   author: string;
@@ -21,9 +28,13 @@ export interface LibraryDocument {
   format: DocumentFormat;
   id: string;
   imported?: boolean;
+  indexedAt?: string;
+  indexStatus?: DocumentIndexStatus;
   linked?: boolean;
   meta: string;
   origin: DocumentOrigin;
+  reference: DocumentReference;
+  searchText?: string;
   tags: string[];
   title: string;
 }
@@ -60,7 +71,7 @@ export function filterDocuments(
     if (!query) return true;
 
     return normalizeSearchText(
-      [document.title, document.author, ...document.tags].join(" "),
+      [document.title, document.author, ...document.tags, document.searchText ?? ""].join(" "),
     ).includes(query);
   });
 }
