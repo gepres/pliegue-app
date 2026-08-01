@@ -73,10 +73,13 @@ Figma define la intención visual. El código define el contrato consumible y de
 
 - Propósito: abrir contenido local sin perder título, formato, procedencia ni estado de permiso.
 - Composición: `PageHeader` + superficie editorial + `Card` lateral de metadatos y privacidad.
-- Variantes: texto/Markdown, imagen, PDF, permiso requerido, error y formato pendiente.
+- Variantes: texto/Markdown, documento estructurado, hoja tabular, imagen, PDF, permiso
+  requerido y error.
 - Seguridad: Markdown se presenta como texto plano; no se inyecta HTML del documento.
+- Documentos estructurados: EPUB, DOCX, PPTX y XLSX comparten secciones editoriales;
+  las hojas usan regiones tabulares desplazables y enfocables con teclado.
 - Responsive: el panel lateral pasa debajo de la lectura a 960 px y se simplifican los márgenes
-  de papel a 640 px.
+  de papel a 640 px. Las secciones largas usan `content-visibility` para diferir su pintado.
 - Tokens: tipografía y espaciado de lectura consumen `--pliegue-reader-*`; superficies,
   bordes, acento, elevación y texto usan exclusivamente el contrato semántico.
 

@@ -52,7 +52,9 @@ los watchers del sistema operativo corresponden al shell de escritorio.
 - PDF, EPUB, DOCX, PPTX, XLSX, TXT, Markdown, PNG y JPG.
 - El lector muestra TXT y Markdown como texto plano seguro, sin interpretar HTML embebido.
 - PDF utiliza el visor nativo del navegador; PNG y JPG conservan su proporción y contenido.
-- EPUB, DOCX, PPTX y XLSX muestran un fallback explícito hasta integrar los conversores.
+- EPUB preserva el orden del `spine` y convierte capítulos en secciones editoriales.
+- DOCX recupera encabezados, párrafos y listas; PPTX ordena las diapositivas y XLSX
+  reconstruye hojas y celdas compartidas en tablas desplazables.
 - La vista textual se limita a 1 MB para proteger la fluidez; la copia original permanece intacta.
 - Máximo 50 MB por archivo durante esta primera etapa.
 - Un fingerprint `nombre + tamaño + última modificación` evita copias duplicadas.
@@ -77,6 +79,24 @@ Las carpetas vinculadas consultan el permiso antes de abrir. Si el navegador vue
 primera operación asíncrona del clic para conservar la activación de usuario exigida por el
 navegador. Perder o negar el permiso no elimina el manifiesto ni toca el archivo original.
 
+## Extracción de EPUB y Office
+
+Los cuatro formatos son contenedores ZIP. El lector carga
+[`fflate`](https://github.com/101arrowz/fflate) únicamente cuando abre uno de ellos y ejecuta
+la descompresión dentro del navegador. No hay ruta de servidor ni subida temporal.
+
+La primera versión aplica estas defensas:
+
+- máximo 50 MB de entrada, 5 MB por XML y 16 MB de salida XML acumulada;
+- máximo 5.000 entradas detectadas y 800 entradas seleccionadas;
+- rechazo de rutas relativas inseguras, ratios de compresión anómalos y ZIP dañados;
+- máximo 1.000.000 de caracteres renderizados, 300 secciones, 1.000 filas y 64 columnas;
+- scripts, estilos, SVG y navegación EPUB no entran al texto extraído.
+
+El resultado es una vista de lectura, no una réplica visual completa. En esta etapa no se
+renderizan imágenes embebidas, comentarios, macros, animaciones, fórmulas evaluadas ni estilos
+de Office. El archivo original siempre permanece disponible sin modificación.
+
 ## Privacidad y recuperación
 
 IndexedDB no es una bóveda criptográfica. Puede guardar documentos porque pertenecen al
@@ -88,5 +108,5 @@ backup, exportación masiva y restauración corresponden a `06.4`.
 
 - Tauri: diálogo nativo, scopes mínimos, permisos persistentes y file watchers en tiempo real.
 - Expo: document picker, almacenamiento sandbox y permisos por plataforma.
-- Extracción estructural de PDF/EPUB/Office, tablas, imágenes y archivos protegidos.
+- Extracción estructural de PDF, imágenes embebidas, tablas complejas y archivos protegidos.
 - Eliminación, cuota, exportación y recuperación de errores.

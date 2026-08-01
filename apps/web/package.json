@@ -16,6 +16,7 @@
     "@fontsource/source-serif-4": "5.3.0",
     "@pliegue/tokens": "workspace:*",
     "@pliegue/ui": "workspace:*",
+    "fflate": "0.8.3",
     "next": "16.2.12",
     "react": "19.2.8",
     "react-dom": "19.2.8"

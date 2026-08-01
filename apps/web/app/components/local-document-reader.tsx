@@ -1,8 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button, Card, Tag, buttonClassName } from "@pliegue/ui";
 
@@ -10,6 +9,7 @@ import {
   createLocalDocumentPreview,
   type LocalDocumentPreview,
 } from "../library/local-document-preview";
+import type { StructuredDocumentBlock } from "../library/structured-document-extractor";
 import type { LinkedFolderDocument } from "../library/local-folder";
 import {
   readLinkedDocumentFile,
@@ -29,10 +29,164 @@ type LocalDocument = ImportedDocument | LinkedFolderDocument;
 type PreviewState =
   | { status: "loading" }
   | { message: string; status: "error" }
-  | { objectUrl: string | null; preview: LocalDocumentPreview; status: "ready" };
+  | { preview: LocalDocumentPreview; status: "ready" };
 
 function isLinkedDocument(document: LocalDocument): document is LinkedFolderDocument {
   return "sourceId" in document;
+}
+
+function ExtractedBlock({
+  block,
+  sectionTitle,
+}: {
+  block: StructuredDocumentBlock;
+  sectionTitle: string;
+}) {
+  if (block.kind === "heading") {
+    return block.level <= 2 ? <h3>{block.text}</h3> : <h4>{block.text}</h4>;
+  }
+
+  if (block.kind === "paragraph") return <p>{block.text}</p>;
+
+  return (
+    <div
+      aria-label={`Tabla extraída de ${sectionTitle}`}
+      className={styles.extractedTableViewport}
+      role="region"
+      tabIndex={0}
+    >
+      <table>
+        <tbody>
+          {block.rows.map((row, rowIndex) => (
+            <tr key={`row-${rowIndex}`}>
+              {row.map((cell, cellIndex) => (
+                <td key={`cell-${rowIndex}-${cellIndex}`}>{cell || "—"}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function BinaryPreview({
+  document,
+  preview,
+}: {
+  document: LocalDocument;
+  preview: Extract<LocalDocumentPreview, { blob: Blob }>;
+}) {
+  const objectRef = useRef<HTMLObjectElement>(null);
+  const openLinkRef = useRef<HTMLAnchorElement>(null);
+
+  useEffect(() => {
+    const objectUrl = URL.createObjectURL(preview.blob);
+    const objectElement = objectRef.current;
+    const openLink = openLinkRef.current;
+    if (objectElement) objectElement.data = objectUrl;
+    if (openLink) openLink.href = objectUrl;
+
+    return () => {
+      objectElement?.removeAttribute("data");
+      openLink?.removeAttribute("href");
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [preview.blob]);
+
+  if (preview.kind === "image") {
+    return (
+      <figure className={styles.imagePreview}>
+        <div className={styles.imageFrame}>
+          <object
+            aria-label={`Vista previa de ${document.title}`}
+            ref={objectRef}
+            type={preview.blob.type || `image/${document.format}`}
+          >
+            La imagen no pudo mostrarse en este navegador.
+          </object>
+        </div>
+        <figcaption>Imagen original · Ajustada al área de lectura</figcaption>
+      </figure>
+    );
+  }
+
+  return (
+    <div className={styles.pdfPreview}>
+      <div className={styles.previewCaption}>
+        <span>PDF original</span>
+        <a ref={openLinkRef} rel="noreferrer" target="_blank">
+          Abrir en otra pestaña
+        </a>
+      </div>
+      <object
+        aria-label={`Documento PDF: ${document.title}`}
+        ref={objectRef}
+        type="application/pdf"
+      >
+        <p>El navegador no pudo mostrar el PDF. Usa “Abrir en otra pestaña”.</p>
+      </object>
+    </div>
+  );
+}
+
+function StructuredPreview({
+  preview,
+}: {
+  preview: Extract<LocalDocumentPreview, { kind: "structured" }>;
+}) {
+  const formatLabel =
+    preview.format === "docx"
+      ? "Word"
+      : preview.format === "pptx"
+        ? "PowerPoint"
+        : preview.format === "xlsx"
+          ? "Excel"
+          : "EPUB";
+
+  return (
+    <article className={styles.structuredPreview}>
+      <div className={styles.previewCaption}>
+        <span>{formatLabel} · Extracción local</span>
+        <span>
+          {preview.sections.length} sección{preview.sections.length === 1 ? "" : "es"}
+        </span>
+      </div>
+      {preview.truncated ? (
+        <p className={styles.truncationNote} role="status">
+          Esta vista alcanzó un límite de seguridad o extensión. Mostramos el contenido
+          disponible sin modificar el archivo original.
+        </p>
+      ) : null}
+      <div className={styles.structuredSections}>
+        {preview.sections.map((section) => {
+          const headingId = `extracted-${section.id}`;
+
+          return (
+            <section
+              aria-labelledby={headingId}
+              className={styles.structuredSection}
+              key={section.id}
+            >
+              <header>
+                <span>{section.label}</span>
+                <h2 id={headingId}>{section.title}</h2>
+              </header>
+              <div className={styles.extractedBlocks}>
+                {section.blocks.map((block, index) => (
+                  <ExtractedBlock
+                    block={block}
+                    key={`${section.id}-${block.kind}-${index}`}
+                    sectionTitle={section.title}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </article>
+  );
 }
 
 function PreviewCanvas({ document }: { document: LocalDocument }) {
@@ -43,7 +197,6 @@ function PreviewCanvas({ document }: { document: LocalDocument }) {
 
   useEffect(() => {
     let active = true;
-    let objectUrl: string | null = null;
 
     async function loadPreview() {
       try {
@@ -55,16 +208,7 @@ function PreviewCanvas({ document }: { document: LocalDocument }) {
 
         const blob = "file" in record ? record.file : record.blob;
         const preview = await createLocalDocumentPreview(format, blob);
-
-        if (preview.kind === "image" || preview.kind === "pdf") {
-          objectUrl = URL.createObjectURL(preview.blob);
-          if (!active) {
-            URL.revokeObjectURL(objectUrl);
-            return;
-          }
-        }
-
-        if (active) setState({ objectUrl, preview, status: "ready" });
+        if (active) setState({ preview, status: "ready" });
       } catch (error) {
         if (!active) return;
         setState({
@@ -80,7 +224,6 @@ function PreviewCanvas({ document }: { document: LocalDocument }) {
     void loadPreview();
     return () => {
       active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [documentId, format, sourceId]);
 
@@ -104,7 +247,7 @@ function PreviewCanvas({ document }: { document: LocalDocument }) {
     );
   }
 
-  const { objectUrl, preview } = state;
+  const { preview } = state;
 
   if (preview.kind === "text") {
     return (
@@ -124,37 +267,11 @@ function PreviewCanvas({ document }: { document: LocalDocument }) {
     );
   }
 
-  if (preview.kind === "image" && objectUrl) {
-    return (
-      <figure className={styles.imagePreview}>
-        <div className={styles.imageFrame}>
-          <Image
-            alt={`Vista previa de ${document.title}`}
-            fill
-            priority
-            sizes="(max-width: 960px) 100vw, 70vw"
-            src={objectUrl}
-            unoptimized
-          />
-        </div>
-        <figcaption>Imagen original · Ajustada al área de lectura</figcaption>
-      </figure>
-    );
+  if (preview.kind === "image" || preview.kind === "pdf") {
+    return <BinaryPreview document={document} preview={preview} />;
   }
 
-  if (preview.kind === "pdf" && objectUrl) {
-    return (
-      <div className={styles.pdfPreview}>
-        <div className={styles.previewCaption}>
-          <span>PDF original</span>
-          <Link href={objectUrl} rel="noreferrer" target="_blank">
-            Abrir en otra pestaña
-          </Link>
-        </div>
-        <iframe src={objectUrl} title={`Documento PDF: ${document.title}`} />
-      </div>
-    );
-  }
+  if (preview.kind === "structured") return <StructuredPreview preview={preview} />;
 
   return (
     <Card className={styles.unsupportedPreview} tone="subtle">

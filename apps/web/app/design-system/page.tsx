@@ -80,13 +80,13 @@ function ReaderPatternFrame() {
     <article className={styles.readerFrame}>
       <div className={styles.readerFrameChrome}>
         <span>PRODUCT FRAME · LECTOR LOCAL</span>
-        <span>TXT / MD · PDF · IMAGEN</span>
+        <span>TXT · EPUB · OFFICE · PDF</span>
       </div>
       <div className={styles.readerFrameHeader}>
         <div>
-          <Tag>MD · Local-only</Tag>
-          <h3>Notas de campo</h3>
-          <p>Documento privado · Guardado en este dispositivo</p>
+          <Tag>DOCX · Local-only</Tag>
+          <h3>Informe de hallazgos</h3>
+          <p>Documento estructurado · Guardado en este dispositivo</p>
         </div>
         <Link
           className={buttonClassName({ size: "sm", variant: "secondary" })}
@@ -98,22 +98,22 @@ function ReaderPatternFrame() {
       <div className={styles.readerFrameBody}>
         <div className={styles.readerFramePaper}>
           <div>
-            <span>TEXTO PLANO · UTF-8</span>
-            <span>DOCUMENTO COMPLETO</span>
+            <span>WORD · EXTRACCIÓN LOCAL</span>
+            <span>3 SECCIONES</span>
           </div>
-          <h4>Una observación conserva su contexto</h4>
+          <h4>Una observación conserva su estructura</h4>
           <p>
-            Leer localmente mantiene el documento cerca: su forma, su procedencia y el
-            permiso que hace posible abrirlo.
+            El lector recupera títulos, párrafos y listas sin subir el archivo ni perder su
+            procedencia.
           </p>
         </div>
         <Card className={styles.readerFrameAside}>
-          <Tag>Copia privada</Tag>
+          <Tag>Archivo estructurado</Tag>
           <strong>Sobre este archivo</strong>
           <dl>
             <div>
               <dt>Formato</dt>
-              <dd>Markdown</dd>
+              <dd>Word</dd>
             </div>
             <div>
               <dt>Origen</dt>

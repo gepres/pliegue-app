@@ -15,11 +15,11 @@ describe("previsualización de documentos locales", () => {
     expect(classifyLocalDocumentPreview("pdf")).toBe("pdf");
   });
 
-  it("expone un fallback para formatos que requieren extracción", () => {
-    expect(classifyLocalDocumentPreview("epub")).toBe("unsupported");
-    expect(classifyLocalDocumentPreview("docx")).toBe("unsupported");
-    expect(classifyLocalDocumentPreview("pptx")).toBe("unsupported");
-    expect(classifyLocalDocumentPreview("xlsx")).toBe("unsupported");
+  it("deriva formatos comprimidos al extractor estructurado", () => {
+    expect(classifyLocalDocumentPreview("epub")).toBe("structured");
+    expect(classifyLocalDocumentPreview("docx")).toBe("structured");
+    expect(classifyLocalDocumentPreview("pptx")).toBe("structured");
+    expect(classifyLocalDocumentPreview("xlsx")).toBe("structured");
   });
 
   it("lee TXT y Markdown como texto plano sin interpretar HTML", async () => {
