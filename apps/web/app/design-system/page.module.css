@@ -527,6 +527,94 @@
   margin: 0;
 }
 
+.catalogFrameBody {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  grid-template-columns: minmax(220px, 0.35fr) minmax(0, 0.65fr);
+  padding: 0 clamp(1.25rem, 4vw, 2.25rem) clamp(1.25rem, 4vw, 2.25rem);
+}
+
+.catalogFrameFilters,
+.catalogFrameDocument {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+}
+
+.catalogFrameFilters {
+  align-content: start;
+}
+
+.catalogFrameFilters small {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  line-height: 1.5;
+}
+
+.catalogFrameDocument {
+  background:
+    radial-gradient(
+      circle at 92% 12%,
+      color-mix(in srgb, var(--pliegue-color-accent-warm) 18%, transparent),
+      transparent 32%
+    ),
+    var(--pliegue-color-bg-surface);
+  padding: clamp(1.5rem, 5vw, 3rem);
+}
+
+.catalogFrameTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.catalogFrameDocument h4 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: 1;
+  margin: var(--pliegue-spacing-sm) 0 0;
+}
+
+.catalogFrameDocument > strong {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1.125rem;
+}
+
+.catalogFrameDocument > p {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-reading);
+  line-height: 1.65;
+  margin: 0;
+  max-width: 56ch;
+}
+
+.catalogFrameDocument dl {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.catalogFrameDocument dl div {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+  padding-top: var(--pliegue-spacing-sm);
+}
+
+.catalogFrameDocument dt {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  text-transform: uppercase;
+}
+
+.catalogFrameDocument dd {
+  font-size: 0.8125rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 800px) {
   .header,
   .componentDemo,
@@ -546,7 +634,8 @@
 
   .frameControls,
   .cardDemoRow,
-  .readerFrameBody {
+  .readerFrameBody,
+  .catalogFrameBody {
     grid-template-columns: 1fr;
   }
 }
@@ -587,5 +676,9 @@
 
   .readerFrameChrome span:last-child {
     display: none;
+  }
+
+  .catalogFrameDocument dl {
+    grid-template-columns: 1fr;
   }
 }

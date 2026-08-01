@@ -91,12 +91,18 @@ exactly-once, sino procesamiento idempotente y al-menos-una-vez.
 - El router elige proveedor por flujo, política, presupuesto, idioma y disponibilidad.
 - Escritorio/móvil guardan secretos en una bóveda respaldada por el sistema. Para Tauri
   se evaluará Stronghold con una clave derivada y permisos restringidos.
-- Web usa claves de sesión por defecto. Una bóveda web persistente requerirá cifrado
+- Web usa claves de sesión por defecto. El incremento de catálogo las mantiene en memoria
+  de la pestaña y las transmite en headers únicamente a una ruta fija de proveedor. Una
+  bóveda web persistente requerirá cifrado
   cliente, autenticación reciente y una decisión explícita de recuperación; nunca se
   guardan claves en `localStorage`, variables `NEXT_PUBLIC_`, logs o telemetría.
 - Las respuestas conservan citas a fragmentos, versión del documento y proveedor/modelo.
 - Ollama puede operar localmente sin enviar contenido a terceros, sujeto a controles de
   origen y red del cliente nativo.
+
+El primer adaptador web comparte un esquema de catálogo entre OpenAI, Anthropic y Ollama.
+Solo envía un extracto acotado del índice y persiste el resultado como derivado idempotente;
+no implementa todavía el router completo por sensibilidad, presupuesto y disponibilidad.
 
 Referencia: [Stronghold para Tauri](https://v2.tauri.app/plugin/stronghold/).
 

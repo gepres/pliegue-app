@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { filterDocuments, type LibraryDocument } from "./documents";
+import {
+  applyDocumentCatalogs,
+  catalogFacets,
+  filterDocuments,
+  type LibraryDocument,
+} from "./documents";
 
 const testDocuments: LibraryDocument[] = [
   {
@@ -90,5 +95,53 @@ describe("filterDocuments", () => {
     );
 
     expect(result.map((document) => document.id)).toEqual(["sistemas-aprenden"]);
+  });
+});
+
+describe("document catalog layer", () => {
+  const record = {
+    analyzedAt: "2026-08-01T00:00:00.000Z",
+    catalog: {
+      authors: ["Ursula K. Le Guin"],
+      canonicalTitle: "Contar es escuchar",
+      confidence: 0.93,
+      genres: ["Ensayo"],
+      language: "español",
+      publicationYear: 2004,
+      summary: "Ensayos sobre narración y oficio.",
+      topics: ["Escritura"],
+      workType: "essay" as const,
+    },
+    documentId: testDocuments[0]!.id,
+    error: null,
+    inputFingerprint: "v1:abc",
+    model: "test-model",
+    provider: "openai" as const,
+    schemaVersion: 1 as const,
+    status: "analyzed" as const,
+  };
+
+  it("mezcla el catálogo sin alterar la referencia original", () => {
+    const [document] = applyDocumentCatalogs(testDocuments.slice(0, 1), [record]);
+
+    expect(document?.catalog?.authors).toEqual(["Ursula K. Le Guin"]);
+    expect(document?.reference).toEqual(testDocuments[0]!.reference);
+  });
+
+  it("filtra por tipo, género y año y construye facetas", () => {
+    const enriched = applyDocumentCatalogs(testDocuments.slice(0, 1), [record]);
+    const result = filterDocuments(enriched, {
+      ...baseFilters,
+      genre: "Ensayo",
+      publicationYear: 2004,
+      query: "ursula",
+      workType: "essay",
+    });
+
+    expect(result).toHaveLength(1);
+    expect(catalogFacets(enriched)).toEqual({
+      genres: ["Ensayo"],
+      publicationYears: [2004],
+    });
   });
 });

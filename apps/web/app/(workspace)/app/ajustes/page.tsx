@@ -4,6 +4,7 @@ import { Card, Tag } from "@pliegue/ui";
 
 import { PreferencesPanel } from "../../../components/preferences-panel";
 import { WorkspaceModePanel } from "../../../components/workspace-mode-panel";
+import { AiSettingsPanel } from "../../../components/ai-settings-panel";
 import { PageHeader } from "../../../components/workspace-page";
 import styles from "../workspace.module.css";
 
@@ -23,6 +24,7 @@ export default function SettingsPage() {
 
       <PreferencesPanel />
       <WorkspaceModePanel />
+      <AiSettingsPanel />
 
       <section aria-label="Otras categorías de ajustes" className={styles.settingsGrid}>
         <Card className={styles.settingsCard}>
@@ -30,12 +32,6 @@ export default function SettingsPage() {
           <h2>Drive y archivos locales</h2>
           <p>Administra ubicaciones conectadas, permisos y disponibilidad offline.</p>
           <span className={styles.pendingLabel}>Próximo incremento</span>
-        </Card>
-        <Card className={styles.settingsCard}>
-          <Tag>IA · BYOK</Tag>
-          <h2>Proveedores personales</h2>
-          <p>Configura OpenAI, Claude u Ollama sin compartir las credenciales.</p>
-          <span className={styles.pendingLabel}>Bóveda pendiente</span>
         </Card>
         <Card className={styles.settingsCard}>
           <Tag>Privacidad</Tag>

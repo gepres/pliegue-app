@@ -12,7 +12,8 @@ local-only desde Ajustes y el shell muestra ese estado. En esta modalidad:
 - los metadatos y copias importadas viven en IndexedDB;
 - no existe sincronización entre dispositivos ni recuperación remota;
 - borrar los datos del sitio o el perfil del navegador elimina la biblioteca local;
-- ninguna copia se envía a Drive, Supabase o un proveedor de IA.
+- ninguna copia binaria se envía a Drive, Supabase o un proveedor de IA; un extracto
+  textual solo sale cuando el usuario inicia o activa expresamente el catálogo IA.
 
 ## Importar frente a vincular
 
@@ -114,6 +115,17 @@ ubicación original. Si el archivo cambió, **Buscar cambios** renueva fingerpri
 Si fue movido, eliminado o se revocó el permiso, la tarjeta permanece trazable como
 desconectada y solicita relink/permiso.
 
+## Catálogo IA opcional
+
+Sobre ese índice local, Pliegue puede solicitar una ficha estructurada a OpenAI, Anthropic
+u Ollama. El flujo está apagado por defecto, limita el extracto y omite versiones sin
+cambios. Autor, título canónico, año, género, tipo, idioma, temas, resumen y confianza se
+guardan en una base IndexedDB separada y alimentan búsqueda y filtros de Biblioteca.
+
+PDF e imágenes quedan `needs-content` hasta incorporar extracción PDF/OCR. El contrato,
+privacidad, credenciales de sesión y límites están documentados en
+[`ai-catalog.md`](./ai-catalog.md).
+
 ## Extracción de EPUB y Office
 
 Los cuatro formatos son contenedores ZIP. El lector carga
@@ -134,10 +146,12 @@ de Office. El archivo original siempre permanece disponible sin modificación.
 
 ## Privacidad y recuperación
 
-IndexedDB no es una bóveda criptográfica. Puede guardar documentos porque pertenecen al
-perfil del navegador, pero nunca se usa para claves BYOK o tokens OAuth. Esos secretos
-siguen bloqueados por `02.5`. Las copias pueden descargarse nuevamente desde Biblioteca;
-backup, exportación masiva y restauración corresponden a `06.4`.
+IndexedDB no es una bóveda criptográfica. Puede guardar documentos y fichas derivadas
+porque pertenecen al perfil del navegador, pero nunca se usa para claves BYOK o tokens
+OAuth. OpenAI y Anthropic aceptan una clave temporal que vive únicamente en memoria de la
+pestaña; la bóveda persistente sigue bloqueada por `02.5`. Las copias pueden descargarse
+nuevamente desde Biblioteca; backup, exportación masiva y restauración corresponden a
+`06.4`.
 
 ## Pendientes multiplataforma
 

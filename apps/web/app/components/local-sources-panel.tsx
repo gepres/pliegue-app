@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { Button, Card, Tag } from "@pliegue/ui";
 
+import { removeDocumentCatalogRecords } from "../ai/document-catalog-store";
 import {
   linkLocalFolder,
   scanLinkedFolder,
@@ -107,7 +108,11 @@ export function LocalSourcesPanel() {
     setBusySourceId(source.id);
 
     try {
+      const documentIds = linkedFolders.documents
+        .filter((document) => document.sourceId === source.id)
+        .map((document) => document.id);
       await unlinkLocalFolder(source.id);
+      await removeDocumentCatalogRecords(documentIds).catch(() => undefined);
       setStatusMessage(`«${source.name}» se desvinculó. Los originales permanecen intactos.`);
     } catch {
       setStatusMessage("No fue posible desvincular la carpeta.");

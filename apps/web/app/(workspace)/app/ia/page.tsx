@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 
-import { Button, Card, Tag } from "@pliegue/ui";
+import { Card, Tag } from "@pliegue/ui";
 
 import { publicConfig } from "../../../config/public-config";
+import { AiCatalogDashboard } from "../../../components/ai-catalog-dashboard";
 import { PageHeader } from "../../../components/workspace-page";
 import styles from "../workspace.module.css";
 
@@ -40,38 +41,7 @@ export default function AiPage() {
         title="Panel de IA"
       />
 
-      <div className={styles.aiPanel}>
-        <Card className={styles.conversation}>
-          <Tag>Consulta del espacio</Tag>
-          <div className={styles.message}>
-            <strong>Pliegue</strong>
-            <p>
-              Puedo ayudarte a resumir, comparar o conectar ideas. Cada respuesta
-              mostrará los documentos y fragmentos utilizados como evidencia.
-            </p>
-          </div>
-          <form className={styles.promptForm}>
-            <div className={styles.promptField}>
-              <label htmlFor="ai-prompt">Pregunta sobre tus documentos</label>
-              <input
-                id="ai-prompt"
-                name="prompt"
-                placeholder="Compara las ideas principales…"
-              />
-            </div>
-            <Button type="submit">Preguntar</Button>
-          </form>
-        </Card>
-
-        <Card>
-          <Tag>Proveedores · {publicConfig.environment}</Tag>
-          <h2>Sin credenciales</h2>
-          <p>
-            Añade tu clave de OpenAI, Claude o una URL de Ollama desde Ajustes. Las
-            credenciales serán personales y no se incluirán en el repositorio.
-          </p>
-        </Card>
-      </div>
+      <AiCatalogDashboard />
     </>
   );
 }

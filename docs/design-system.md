@@ -87,6 +87,15 @@ Figma define la intención visual. El código define el contrato consumible y de
 - Referencia: el frame separa visualmente **archivo vinculado**, **índice derivado** y
   **apertura del original**. “Copia” solo se usa para el fallback de compatibilidad.
 
+### Patrón de catálogo IA
+
+- Composición: métricas compactas + cola principal + actividad lateral.
+- Biblioteca conserva filtros básicos y agrupa tipo de obra, género y año en un fieldset
+  derivado claramente rotulado.
+- La ficha muestra título canónico, autor, año, género, idioma y confianza sin reemplazar
+  título observado, procedencia ni referencia del original.
+- Los estados `analyzing`, `analyzed`, `needs-content` y `error` deben permanecer visibles.
+
 Los números y títulos dentro de `/design-system` son muestras visuales identificadas como
 **Muestra de catálogo**. Las rutas de producto no comparten esos fixtures: los estados
 vacíos, tarjetas, métricas y llamadas a retomar se construyen con datos reales del navegador.
@@ -108,3 +117,6 @@ frame combina rail, jerarquía editorial, métricas, formulario y acciones para 
 
 La composición deriva del frame Foundations `16:2` de Figma: canvas cálido, secciones
 amplias, muestras compactas, un frame Dark contenido y tarjetas tipográficas editoriales.
+El patrón **Catálogo IA como capa** documenta la jerarquía para proveedor/modelo, confianza,
+metadatos derivados y dirección segura del original. La clasificación nunca debe parecer
+una edición del archivo fuente ni ocultar estados `needs-content` o `error`.

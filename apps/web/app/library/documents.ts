@@ -1,3 +1,10 @@
+import type {
+  CatalogAnalysisStatus,
+  DocumentCatalogMetadata,
+  DocumentCatalogRecord,
+  DocumentWorkType,
+} from "../ai/document-catalog";
+
 export const documentFormats = [
   "pdf",
   "epub",
@@ -25,6 +32,9 @@ export type DocumentReference =
 export interface LibraryDocument {
   author: string;
   availability: AvailabilityState;
+  catalog?: DocumentCatalogMetadata;
+  catalogError?: string;
+  catalogStatus?: CatalogAnalysisStatus;
   format: DocumentFormat;
   id: string;
   imported?: boolean;
@@ -44,8 +54,11 @@ export interface DocumentFilters {
   favoriteIds: ReadonlySet<string>;
   favoritesOnly: boolean;
   format: DocumentFormat | "all";
+  genre?: string | "all";
   origin: DocumentOrigin | "all";
+  publicationYear?: number | "all";
   query: string;
+  workType?: DocumentWorkType | "all";
 }
 
 function normalizeSearchText(value: string) {
@@ -67,11 +80,76 @@ export function filterDocuments(
     if (filters.availability !== "all" && document.availability !== filters.availability) {
       return false;
     }
+    if (
+      filters.workType &&
+      filters.workType !== "all" &&
+      document.catalog?.workType !== filters.workType
+    ) {
+      return false;
+    }
+    if (
+      filters.genre &&
+      filters.genre !== "all" &&
+      !document.catalog?.genres.some(
+        (genre) => normalizeSearchText(genre) === normalizeSearchText(filters.genre as string),
+      )
+    ) {
+      return false;
+    }
+    if (
+      filters.publicationYear &&
+      filters.publicationYear !== "all" &&
+      document.catalog?.publicationYear !== filters.publicationYear
+    ) {
+      return false;
+    }
     if (filters.favoritesOnly && !filters.favoriteIds.has(document.id)) return false;
     if (!query) return true;
 
     return normalizeSearchText(
-      [document.title, document.author, ...document.tags, document.searchText ?? ""].join(" "),
+      [
+        document.title,
+        document.author,
+        ...document.tags,
+        document.searchText ?? "",
+        document.catalog?.canonicalTitle ?? "",
+        ...(document.catalog?.authors ?? []),
+        ...(document.catalog?.genres ?? []),
+        ...(document.catalog?.topics ?? []),
+        document.catalog?.language ?? "",
+        document.catalog?.summary ?? "",
+        document.catalog?.publicationYear?.toString() ?? "",
+      ].join(" "),
     ).includes(query);
   });
+}
+
+export function applyDocumentCatalogs(
+  documents: readonly LibraryDocument[],
+  records: readonly DocumentCatalogRecord[],
+) {
+  const recordsByDocument = new Map(records.map((record) => [record.documentId, record]));
+  return documents.map((document): LibraryDocument => {
+    const record = recordsByDocument.get(document.id);
+    if (!record) return document;
+    return {
+      ...document,
+      ...(record.catalog ? { catalog: record.catalog } : {}),
+      ...(record.error ? { catalogError: record.error } : {}),
+      catalogStatus: record.status,
+    };
+  });
+}
+
+export function catalogFacets(documents: readonly LibraryDocument[]) {
+  const genres = new Set<string>();
+  const publicationYears = new Set<number>();
+  for (const document of documents) {
+    document.catalog?.genres.forEach((genre) => genres.add(genre));
+    if (document.catalog?.publicationYear) publicationYears.add(document.catalog.publicationYear);
+  }
+  return {
+    genres: [...genres].sort((left, right) => left.localeCompare(right, "es")),
+    publicationYears: [...publicationYears].sort((left, right) => right - left),
+  };
 }

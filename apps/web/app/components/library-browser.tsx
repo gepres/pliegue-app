@@ -1,12 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button, Card, Field, Input, Select, Tag, buttonClassName } from "@pliegue/ui";
 
+import { analyzeDocumentCatalogs } from "../ai/catalog-analysis";
+import { useAiSettings } from "../ai/ai-settings-store";
+import { useAiSessionSecrets } from "../ai/ai-session-secret-store";
 import {
+  documentWorkTypes,
+  type DocumentWorkType,
+} from "../ai/document-catalog";
+import {
+  removeDocumentCatalogRecord,
+  useDocumentCatalogs,
+} from "../ai/document-catalog-store";
+import {
+  applyDocumentCatalogs,
   availabilityStates,
+  catalogFacets,
   documentFormats,
   filterDocuments,
   type AvailabilityState,
@@ -49,6 +62,37 @@ const indexLabels = {
   pending: "Análisis pendiente",
 } as const;
 
+const catalogStatusLabels = {
+  analyzed: "Catálogo IA listo",
+  analyzing: "IA analizando",
+  error: "Error de catálogo",
+  "needs-content": "Requiere PDF/OCR",
+} as const;
+
+const workTypeLabels: Record<DocumentWorkType, string> = {
+  article: "Artículo",
+  book: "Libro",
+  essay: "Ensayo",
+  image: "Imagen",
+  notes: "Notas",
+  other: "Otro",
+  presentation: "Presentación",
+  report: "Informe",
+  spreadsheet: "Hoja de cálculo",
+  thesis: "Tesis",
+};
+
+function describeCatalogSummary(summary: Awaited<ReturnType<typeof analyzeDocumentCatalogs>>) {
+  return [
+    summary.analyzed ? `${summary.analyzed} catalogado${summary.analyzed === 1 ? "" : "s"}` : "",
+    summary.needsContent ? `${summary.needsContent} requiere extracción` : "",
+    summary.failed ? `${summary.failed} con error` : "",
+    summary.skipped ? `${summary.skipped} ya estaba al día` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function describeFileLinkError(error: unknown) {
   if (error instanceof DOMException && error.name === "AbortError") {
     return "No se seleccionó ningún archivo.";
@@ -65,8 +109,11 @@ export function LibraryBrowser() {
   const [availability, setAvailability] = useState<AvailabilityState | "all">("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [format, setFormat] = useState<DocumentFormat | "all">("all");
+  const [genre, setGenre] = useState<string | "all">("all");
   const [origin, setOrigin] = useState<DocumentOrigin | "all">("all");
+  const [publicationYear, setPublicationYear] = useState<number | "all">("all");
   const [query, setQuery] = useState("");
+  const [workType, setWorkType] = useState<DocumentWorkType | "all">("all");
   const [importing, setImporting] = useState(false);
   const [linkingFiles, setLinkingFiles] = useState(false);
   const [importStatus, setImportStatus] = useState(
@@ -77,21 +124,82 @@ export function LibraryBrowser() {
   const importedLibrary = useImportedDocuments();
   const linkedFiles = useLinkedFiles();
   const linkedFolders = useLinkedFolders();
-  const allDocuments = [
-    ...linkedFiles.documents,
-    ...linkedFolders.documents,
-    ...importedLibrary.documents,
-  ];
+  const catalogs = useDocumentCatalogs();
+  const aiSettings = useAiSettings();
+  const aiSecrets = useAiSessionSecrets();
+  const [catalogMessage, setCatalogMessage] = useState(
+    "El catálogo IA es opcional. Actívalo en Ajustes o analiza un documento bajo demanda.",
+  );
+  const baseDocuments = useMemo(
+    () => [
+      ...linkedFiles.documents,
+      ...linkedFolders.documents,
+      ...importedLibrary.documents,
+    ],
+    [importedLibrary.documents, linkedFiles.documents, linkedFolders.documents],
+  );
+  const allDocuments = useMemo(
+    () => applyDocumentCatalogs(baseDocuments, catalogs.records),
+    [baseDocuments, catalogs.records],
+  );
   const favoriteIds = new Set(favorites);
+  const facets = catalogFacets(allDocuments);
   const filteredDocuments = filterDocuments(allDocuments, {
     availability,
     favoriteIds,
     favoritesOnly,
     format,
+    genre,
     origin,
+    publicationYear,
     query,
+    workType,
   });
   const storageError = importedLibrary.error ?? linkedFiles.error ?? linkedFolders.error;
+  const providerReady =
+    aiSettings.provider === "ollama" || Boolean(aiSecrets[aiSettings.provider]);
+  const catalogedCount = allDocuments.filter(
+    (document) => document.catalogStatus === "analyzed",
+  ).length;
+
+  useEffect(() => {
+    if (
+      !aiSettings.autoAnalyzeAfterLink ||
+      !providerReady ||
+      catalogs.status !== "ready" ||
+      linkedFiles.status !== "ready" ||
+      linkedFolders.status !== "ready" ||
+      importedLibrary.status !== "ready" ||
+      !baseDocuments.length
+    ) {
+      return;
+    }
+
+    let active = true;
+    void analyzeDocumentCatalogs(baseDocuments, aiSettings)
+      .then((summary) => {
+        if (active) setCatalogMessage(describeCatalogSummary(summary) || "El catálogo está al día.");
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setCatalogMessage(
+            error instanceof Error ? error.message : "No fue posible iniciar el catálogo automático.",
+          );
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    aiSettings,
+    baseDocuments,
+    catalogs.status,
+    importedLibrary.status,
+    linkedFiles.status,
+    linkedFolders.status,
+    providerReady,
+  ]);
 
   async function handleLinkedFiles() {
     setLinkingFiles(true);
@@ -159,6 +267,7 @@ export function LibraryBrowser() {
 
     try {
       await removeImportedCopy(documentId);
+      await removeDocumentCatalogRecord(documentId).catch(() => undefined);
       clearReadingProgress(documentId);
       setImportStatus("La copia local se eliminó. El archivo original no fue modificado.");
     } catch {
@@ -174,10 +283,29 @@ export function LibraryBrowser() {
 
     try {
       await unlinkLocalFile(documentId);
+      await removeDocumentCatalogRecord(documentId).catch(() => undefined);
       clearReadingProgress(documentId);
       setImportStatus("La referencia se eliminó. El archivo original permanece intacto.");
     } catch {
       setImportStatus("No fue posible eliminar la referencia local.");
+    }
+  }
+
+  async function analyzeOneDocument(documentId: string) {
+    const document = baseDocuments.find((candidate) => candidate.id === documentId);
+    if (!document) return;
+    setCatalogMessage(`Analizando «${document.title}»…`);
+
+    try {
+      const summary = await analyzeDocumentCatalogs([document], aiSettings, {
+        force: true,
+        retryErrors: true,
+      });
+      setCatalogMessage(describeCatalogSummary(summary) || "El documento ya estaba al día.");
+    } catch (error) {
+      setCatalogMessage(
+        error instanceof Error ? error.message : "No fue posible analizar el documento.",
+      );
     }
   }
 
@@ -339,6 +467,62 @@ export function LibraryBrowser() {
         </label>
       </form>
 
+      <fieldset className={styles.catalogFilters}>
+        <legend>Filtros del catálogo inteligente</legend>
+        <Field label="Tipo de obra" labelFor="library-work-type">
+          <Select
+            id="library-work-type"
+            onChange={(event) => setWorkType(event.target.value as DocumentWorkType | "all")}
+            value={workType}
+          >
+            <option value="all">Todos los tipos</option>
+            {documentWorkTypes.map((item) => (
+              <option key={item} value={item}>
+                {workTypeLabels[item]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Género" labelFor="library-genre">
+          <Select
+            id="library-genre"
+            onChange={(event) => setGenre(event.target.value)}
+            value={genre}
+          >
+            <option value="all">Todos los géneros</option>
+            {facets.genres.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Año de publicación" labelFor="library-year">
+          <Select
+            id="library-year"
+            onChange={(event) =>
+              setPublicationYear(event.target.value === "all" ? "all" : Number(event.target.value))
+            }
+            value={publicationYear}
+          >
+            <option value="all">Cualquier año</option>
+            {facets.publicationYears.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <div className={styles.catalogFilterStatus}>
+          <Tag>IA · {catalogedCount}/{allDocuments.length}</Tag>
+          <Link href="/app/ajustes">Configurar proveedor</Link>
+        </div>
+      </fieldset>
+
+      <p aria-live="polite" className={styles.catalogMessage} role="status">
+        {catalogs.error ?? catalogMessage}
+      </p>
+
       <div
         aria-label="Cantidad de documentos filtrados"
         aria-live="polite"
@@ -373,13 +557,35 @@ export function LibraryBrowser() {
               <DocumentCard
                 eyebrow={`${document.format.toUpperCase()} · ${originLabels[document.origin]}`}
                 key={document.id}
-                title={document.title}
+                title={document.catalog?.canonicalTitle ?? document.title}
               >
-                <p>{document.author}</p>
+                <p>
+                  {document.catalog?.authors.length
+                    ? document.catalog.authors.join(", ")
+                    : document.author}
+                </p>
                 <p>{document.meta}</p>
+                {document.catalog?.summary ? (
+                  <p className={styles.catalogSummary}>{document.catalog.summary}</p>
+                ) : null}
+                {document.catalog ? (
+                  <div className={styles.catalogMetadata}>
+                    <Tag>{workTypeLabels[document.catalog.workType]}</Tag>
+                    {document.catalog.publicationYear ? (
+                      <Tag>{document.catalog.publicationYear}</Tag>
+                    ) : null}
+                    {document.catalog.genres.slice(0, 2).map((item) => (
+                      <Tag key={item}>{item}</Tag>
+                    ))}
+                    {document.catalog.language ? <Tag>{document.catalog.language}</Tag> : null}
+                  </div>
+                ) : null}
                 <div className={styles.documentMeta}>
                   <Tag>{availabilityLabels[document.availability]}</Tag>
                   {document.indexStatus ? <Tag>{indexLabels[document.indexStatus]}</Tag> : null}
+                  {document.catalogStatus ? (
+                    <Tag>{catalogStatusLabels[document.catalogStatus]}</Tag>
+                  ) : null}
                   <div className={styles.documentActions}>
                     <Button
                       aria-label={
@@ -394,6 +600,20 @@ export function LibraryBrowser() {
                     >
                       {isFavorite ? "★ Favorito" : "☆ Guardar"}
                     </Button>
+                    {document.indexStatus === "indexed" ? (
+                      <Button
+                        disabled={!providerReady || document.catalogStatus === "analyzing"}
+                        onClick={() => void analyzeOneDocument(document.id)}
+                        size="sm"
+                        variant="quiet"
+                      >
+                        {document.catalogStatus === "analyzing"
+                          ? "Analizando…"
+                          : document.catalogStatus === "analyzed"
+                            ? "Actualizar catálogo"
+                            : "Analizar con IA"}
+                      </Button>
+                    ) : null}
                     {isCopy ? (
                       <>
                         <Link

@@ -141,6 +141,74 @@ function ReaderPatternFrame() {
   );
 }
 
+function CatalogPatternFrame() {
+  return (
+    <article className={styles.readerFrame}>
+      <div className={styles.readerFrameChrome}>
+        <span>MUESTRA DE CATÁLOGO · CAPA IA</span>
+        <span>ÍNDICE LOCAL → EXTRACTO → METADATOS</span>
+      </div>
+      <div className={styles.readerFrameHeader}>
+        <div>
+          <Tag>Catálogo inteligente · BYOK</Tag>
+          <h3>Una ficha que se puede filtrar</h3>
+          <p>El archivo original permanece en su carpeta; la clasificación es un derivado local.</p>
+        </div>
+        <Link
+          className={buttonClassName({ size: "sm", variant: "secondary" })}
+          href="/app/ajustes"
+        >
+          Configurar IA
+        </Link>
+      </div>
+      <div className={styles.catalogFrameBody}>
+        <Card className={styles.catalogFrameFilters} tone="subtle">
+          <Tag>Filtros derivados</Tag>
+          <Field label="Tipo de obra" labelFor="catalog-frame-type">
+            <Select defaultValue="essay" id="catalog-frame-type">
+              <option value="all">Todos</option>
+              <option value="book">Libro</option>
+              <option value="essay">Ensayo</option>
+              <option value="report">Informe</option>
+            </Select>
+          </Field>
+          <Field label="Año" labelFor="catalog-frame-year">
+            <Select defaultValue="2004" id="catalog-frame-year">
+              <option value="all">Cualquier año</option>
+              <option value="2004">2004</option>
+            </Select>
+          </Field>
+          <small>OPENAI · GPT-5.6-LUNA · 93 % CONFIANZA</small>
+        </Card>
+        <Card className={styles.catalogFrameDocument}>
+          <div className={styles.catalogFrameTags}>
+            <Tag>Ensayo</Tag>
+            <Tag>2004</Tag>
+            <Tag>Literatura</Tag>
+            <Tag>Español</Tag>
+          </div>
+          <h4>Contar es escuchar</h4>
+          <strong>Ursula K. Le Guin</strong>
+          <p>
+            Ensayos sobre narración, lectura y el oficio de escribir, catalogados desde un
+            extracto local trazable.
+          </p>
+          <dl>
+            <div>
+              <dt>Temas</dt>
+              <dd>Escritura · lectura · narración</dd>
+            </div>
+            <div>
+              <dt>Original</dt>
+              <dd>Libros/Ensayos/contar-es-escuchar.epub</dd>
+            </div>
+          </dl>
+        </Card>
+      </div>
+    </article>
+  );
+}
+
 export default function DesignSystemPage() {
   return (
     <main className={styles.main}>
@@ -348,6 +416,18 @@ export default function DesignSystemPage() {
           </p>
         </div>
         <ReaderPatternFrame />
+      </section>
+
+      <section aria-labelledby="catalog-pattern-title" className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <span>Patrones de producto</span>
+          <h2 id="catalog-pattern-title">El catálogo IA como capa, no como original</h2>
+          <p>
+            La clasificación añade filtros y contexto sin ocultar el estado de extracción,
+            el proveedor ni la ubicación segura del documento.
+          </p>
+        </div>
+        <CatalogPatternFrame />
       </section>
     </main>
   );

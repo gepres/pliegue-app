@@ -30,11 +30,17 @@ El manifiesto guarda solo:
 - id, nombre, formato, tamaño, modificación y fingerprint;
 - procedencia, disponibilidad y descriptor de referencia;
 - estado/fecha del índice y hasta 32.000 caracteres de texto normalizado;
+- ficha de catálogo IA en una base derivada separada, con proveedor, modelo, confianza y
+  fingerprint de entrada;
 - favoritos y progreso en sus almacenes versionados.
 
 No guarda el binario, miniaturas ni secretos. PDF e imágenes empiezan como `metadata-only`;
 DOCX, PPTX, XLSX, EPUB, TXT y Markdown usan extracción local. Un error de análisis no rompe
 la referencia: el original puede seguir abriéndose.
+
+El catálogo IA recibe únicamente un extracto configurable del índice y devuelve título,
+autores, año, género, tipo, idioma, temas y resumen. La ficha es regenerable y nunca cambia
+la dirección del original. Véase [`ai-catalog.md`](./ai-catalog.md).
 
 ## Resolución Google Drive
 

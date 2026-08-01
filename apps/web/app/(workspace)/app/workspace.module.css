@@ -332,6 +332,69 @@
   text-transform: uppercase;
 }
 
+.catalogFilters {
+  align-items: end;
+  background:
+    linear-gradient(
+      120deg,
+      color-mix(in srgb, var(--pliegue-color-bg-subtle) 82%, transparent),
+      color-mix(in srgb, var(--pliegue-color-bg-surface) 94%, transparent)
+    );
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: repeat(3, minmax(150px, 1fr)) auto;
+  margin: calc(var(--pliegue-spacing-md) * -1) 0 var(--pliegue-spacing-xl);
+  padding: var(--pliegue-spacing-md);
+}
+
+.catalogFilters legend {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  letter-spacing: 0.05em;
+  padding: 0 var(--pliegue-spacing-xs);
+  text-transform: uppercase;
+}
+
+.catalogFilterStatus {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pliegue-spacing-xs);
+  justify-content: center;
+  min-height: 44px;
+}
+
+.catalogFilterStatus a {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.75rem;
+}
+
+.catalogMessage,
+.aiCatalogStatus {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  margin: calc(var(--pliegue-spacing-lg) * -1) 0 var(--pliegue-spacing-lg);
+}
+
+.catalogSummary {
+  border-left: 2px solid var(--pliegue-color-accent-warm);
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  padding-left: var(--pliegue-spacing-sm);
+}
+
+.catalogMetadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-xs);
+}
+
 .emptyState {
   display: grid;
   gap: var(--pliegue-spacing-sm);
@@ -463,6 +526,111 @@
   grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.6fr);
 }
 
+.catalogMetricGrid {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: var(--pliegue-spacing-lg);
+}
+
+.catalogMetric {
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.catalogMetric span,
+.catalogMetric small {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.75rem;
+}
+
+.catalogMetric span {
+  font-family: var(--pliegue-font-data);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.catalogMetric strong {
+  font-family: var(--pliegue-font-brand);
+  font-size: 2.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.aiCatalogLayout {
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+}
+
+.aiCatalogQueue,
+.aiCatalogRecent {
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+}
+
+.aiCatalogHeader {
+  align-items: start;
+  display: flex;
+  gap: var(--pliegue-spacing-lg);
+  justify-content: space-between;
+}
+
+.aiCatalogHeader h2,
+.aiCatalogRecent h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(1.75rem, 4vw, 2.35rem);
+  margin: var(--pliegue-spacing-sm) 0;
+}
+
+.aiCatalogHeader p,
+.aiCatalogRecent > p {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.aiCatalogStatus {
+  margin: 0;
+}
+
+.aiCatalogRecent ul {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.aiCatalogRecent li {
+  align-items: center;
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: flex;
+  gap: var(--pliegue-spacing-sm);
+  justify-content: space-between;
+  padding-top: var(--pliegue-spacing-sm);
+}
+
+.aiCatalogRecent li > div {
+  display: grid;
+  gap: var(--pliegue-spacing-2xs);
+  min-width: 0;
+}
+
+.aiCatalogRecent li strong,
+.aiCatalogRecent li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aiCatalogRecent li span {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  text-transform: uppercase;
+}
+
 .conversation {
   min-height: 440px;
 }
@@ -501,6 +669,136 @@
   display: grid;
   gap: var(--pliegue-spacing-md);
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.aiSettingsPanel {
+  display: grid;
+  gap: var(--pliegue-spacing-xl);
+  margin-bottom: var(--pliegue-spacing-lg);
+  overflow: hidden;
+  position: relative;
+}
+
+.aiSettingsPanel::before {
+  background: var(--pliegue-color-accent-warm);
+  content: "";
+  height: 3px;
+  inset: 0 0 auto;
+  position: absolute;
+}
+
+.aiSettingsIntro {
+  align-items: end;
+  display: grid;
+  gap: var(--pliegue-spacing-xl);
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.35fr);
+}
+
+.aiSettingsIntro h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1;
+  margin: var(--pliegue-spacing-sm) 0;
+}
+
+.aiSettingsIntro p {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 52rem;
+}
+
+.aiPrivacyStamp {
+  border-left: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+  padding-left: var(--pliegue-spacing-lg);
+}
+
+.aiPrivacyStamp span,
+.aiPrivacyStamp small {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+}
+
+.aiPrivacyStamp strong {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1.25rem;
+}
+
+.aiSettingsForm {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.aiSecretField,
+.aiAutoControl,
+.aiSettingsActions {
+  grid-column: 1 / -1;
+}
+
+.aiSecretControl {
+  align-items: center;
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.aiAutoControl {
+  align-items: start;
+  background: var(--pliegue-color-bg-subtle);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-sm);
+  cursor: pointer;
+  display: flex;
+  gap: var(--pliegue-spacing-sm);
+  padding: var(--pliegue-spacing-md);
+}
+
+.aiAutoControl input {
+  accent-color: var(--pliegue-color-action-primary);
+  height: 20px;
+  margin: 2px 0 0;
+  width: 20px;
+}
+
+.aiAutoControl span {
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.aiAutoControl small {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.45;
+}
+
+.aiSettingsActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-md);
+}
+
+.aiSettingsActions span {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.75rem;
+}
+
+.aiProviderNote {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+  padding-top: var(--pliegue-spacing-md);
+}
+
+.aiProviderNote p {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  margin: 0;
 }
 
 .localModeCard {
@@ -637,13 +935,15 @@
 
 @media (max-width: 960px) {
   .metricGrid,
-  .documentGrid {
+  .documentGrid,
+  .catalogMetricGrid {
     grid-template-columns: 1fr;
   }
 
   .continueCard,
   .readerLayout,
-  .aiPanel {
+  .aiPanel,
+  .aiCatalogLayout {
     grid-template-columns: 1fr;
   }
 
@@ -669,6 +969,14 @@
 
   .toolbar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .catalogFilters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .catalogFilterStatus {
+    align-items: flex-start;
   }
 
   .localImportPanel {
@@ -703,8 +1011,30 @@
 @media (max-width: 640px) {
   .settingsGrid,
   .preferenceGrid,
-  .preferenceIntro {
+  .preferenceIntro,
+  .aiSettingsIntro,
+  .aiSettingsForm,
+  .catalogFilters {
     grid-template-columns: 1fr;
+  }
+
+  .aiSecretField,
+  .aiAutoControl,
+  .aiSettingsActions {
+    grid-column: auto;
+  }
+
+  .aiPrivacyStamp {
+    border-left: 0;
+    border-top: 1px solid var(--pliegue-color-border-default);
+    padding-left: 0;
+    padding-top: var(--pliegue-spacing-md);
+  }
+
+  .aiCatalogHeader,
+  .aiSettingsActions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .preferenceSummary {
