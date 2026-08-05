@@ -11,6 +11,7 @@ import {
   setSessionApiKey,
   useAiSessionSecrets,
 } from "../ai/ai-session-secret-store";
+import { checkApiKey } from "../ai/api-key";
 import type { AiProvider } from "../ai/document-catalog";
 import styles from "../(workspace)/app/workspace.module.css";
 
@@ -30,6 +31,10 @@ export function AiSettingsPanel() {
 
   const hostedProvider = draft.provider === "ollama" ? null : draft.provider;
   const selectedApiKey = hostedProvider ? secrets[hostedProvider] : "";
+  // Se avisa al pegar, no al analizar: un texto pegado por error no debe llegar al proveedor.
+  const apiKeyCheck =
+    hostedProvider && selectedApiKey ? checkApiKey(hostedProvider, selectedApiKey) : null;
+  const apiKeyIssue = apiKeyCheck?.error ?? apiKeyCheck?.warning ?? null;
 
   function updateModel(model: string) {
     setDraft((current) => ({
@@ -154,6 +159,11 @@ export function AiSettingsPanel() {
                 Borrar
               </Button>
             </div>
+            {apiKeyIssue ? (
+              <p className={styles.aiSecretIssue} role="alert">
+                {apiKeyIssue}
+              </p>
+            ) : null}
           </Field>
         )}
 
@@ -185,6 +195,8 @@ export function AiSettingsPanel() {
             <option value={1}>1 · conservador</option>
             <option value={2}>2 · recomendado</option>
             <option value={3}>3 · rápido</option>
+            <option value={4}>4 · biblioteca grande</option>
+            <option value={6}>6 · máximo</option>
           </Select>
         </Field>
 

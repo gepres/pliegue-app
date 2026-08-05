@@ -380,12 +380,19 @@
   margin: calc(var(--pliegue-spacing-lg) * -1) 0 var(--pliegue-spacing-lg);
 }
 
+/* La sinopsis del contrato v2 llega hasta 700 caracteres. Se recorta a seis líneas para que
+   las tarjetas de la cuadrícula no queden desiguales; el texto permanece completo en el DOM,
+   así que los lectores de pantalla lo anuncian entero. */
 .catalogSummary {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
   border-left: 2px solid var(--pliegue-color-accent-warm);
   color: var(--pliegue-color-text-secondary);
+  display: -webkit-box;
   font-family: var(--pliegue-font-reading);
   font-size: 0.9375rem;
   line-height: 1.5;
+  overflow: hidden;
   padding-left: var(--pliegue-spacing-sm);
 }
 
@@ -745,6 +752,14 @@
   display: grid;
   gap: var(--pliegue-spacing-sm);
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.aiSecretIssue {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  margin: var(--pliegue-spacing-xs) 0 0;
+  overflow-wrap: anywhere;
 }
 
 .aiAutoControl {

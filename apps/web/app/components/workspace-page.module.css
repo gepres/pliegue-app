@@ -6,6 +6,8 @@
   margin-bottom: clamp(2rem, 5vw, 4rem);
 }
 
+/* El lector usa esta cabecera con el título y la ruta del documento abierto, así que
+   arrastra el mismo riesgo de desbordamiento que la tarjeta, agravado por el tamaño. */
 .pageHeader h1 {
   font-family: var(--pliegue-font-brand);
   font-size: clamp(2.75rem, 7vw, 5.5rem);
@@ -13,6 +15,7 @@
   letter-spacing: -0.025em;
   line-height: 0.95;
   margin: var(--pliegue-spacing-md) 0;
+  overflow-wrap: anywhere;
 }
 
 .pageHeader p {
@@ -20,6 +23,7 @@
   line-height: 1.55;
   margin: 0;
   max-width: 42rem;
+  overflow-wrap: anywhere;
 }
 
 .pageActions {
@@ -63,18 +67,22 @@
   gap: var(--pliegue-spacing-sm);
 }
 
+/* Títulos, rutas y nombres de archivo llegan del disco del usuario: pueden ser una sola
+   palabra larguísima sin espacios, y ni «/» ni «_» son puntos de ruptura en CSS. */
 .documentCard h3 {
   font-family: var(--pliegue-font-brand);
   font-size: 1.5rem;
   font-weight: 600;
   line-height: 1.15;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .documentCard p {
   color: var(--pliegue-color-text-secondary);
   line-height: 1.5;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 720px) {

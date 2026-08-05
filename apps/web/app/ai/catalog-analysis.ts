@@ -2,6 +2,7 @@
 
 import type { LibraryDocument } from "../library/documents";
 import { providerModel, type AiSettings } from "./ai-settings";
+import { checkApiKey } from "./api-key";
 import { getSessionApiKey } from "./ai-session-secret-store";
 import { requestCatalogFromProvider } from "./catalog-provider-client";
 import {
@@ -71,8 +72,14 @@ async function runCatalogAnalysis(
   if (!model) throw new Error("Configura un modelo antes de iniciar el análisis.");
 
   const apiKey = getSessionApiKey(settings.provider);
-  if (settings.provider !== "ollama" && !apiKey) {
-    throw new Error("Añade la API key de esta sesión en Ajustes antes de analizar.");
+  if (settings.provider !== "ollama") {
+    if (!apiKey) {
+      throw new Error("Añade la API key de esta sesión en Ajustes antes de analizar.");
+    }
+    // Se comprueba antes del lote: enviar un valor que no es una credencial expone su
+    // contenido al proveedor y gasta una llamada por documento para nada.
+    const check = checkApiKey(settings.provider, apiKey);
+    if (check.error) throw new Error(`${check.error} Revísala en Ajustes.`);
   }
 
   const storedRecords = await readDocumentCatalogRecords();
@@ -116,7 +123,8 @@ async function runCatalogAnalysis(
       if (!input.excerpt) {
         await saveDocumentCatalogRecord(
           createRecord(document, settings, fingerprint, "needs-content", {
-            error: "Este formato requiere extracción PDF u OCR antes del análisis semántico.",
+            error:
+              "Este archivo no tiene texto local: una imagen o un PDF escaneado requiere OCR antes del análisis semántico.",
           }),
         );
         summary.needsContent += 1;

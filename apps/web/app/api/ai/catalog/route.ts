@@ -12,6 +12,9 @@ interface CatalogRouteRequest {
   provider?: "anthropic" | "openai";
 }
 
+/** Holgura suficiente para la ficha completa con la sinopsis extensa del contrato v2. */
+const catalogMaxOutputTokens = 1_500;
+
 function apiKeyFrom(request: Request) {
   const authorization = request.headers.get("authorization") ?? "";
   return authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
@@ -46,7 +49,7 @@ async function callOpenAi(apiKey: string, model: string, input: CatalogDocumentI
         { content: catalogSystemPrompt, role: "system" },
         { content: createCatalogPrompt(input), role: "user" },
       ],
-      max_output_tokens: 800,
+      max_output_tokens: catalogMaxOutputTokens,
       model,
       store: false,
       text: {
@@ -83,7 +86,7 @@ async function callOpenAi(apiKey: string, model: string, input: CatalogDocumentI
 async function callAnthropic(apiKey: string, model: string, input: CatalogDocumentInput) {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     body: JSON.stringify({
-      max_tokens: 800,
+      max_tokens: catalogMaxOutputTokens,
       messages: [{ content: createCatalogPrompt(input), role: "user" }],
       model,
       output_config: {
@@ -117,6 +120,15 @@ export async function POST(request: Request) {
 
   const apiKey = apiKeyFrom(request);
   if (!apiKey) return Response.json({ error: "Falta la API key de la sesión." }, { status: 401 });
+
+  // Segunda barrera: esta ruta es la que habla con el proveedor, así que es la última
+  // oportunidad de no reenviar algo que no es una credencial.
+  if (/\s/.test(apiKey) || apiKey.length < 20 || apiKey.length > 500) {
+    return Response.json(
+      { error: "La credencial recibida no tiene formato de API key." },
+      { status: 400 },
+    );
+  }
 
   let body: CatalogRouteRequest;
   try {
