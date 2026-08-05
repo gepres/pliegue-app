@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { defaultAiSettings, normalizeOllamaUrl, parseAiSettings } from "./ai-settings";
+import {
+  defaultAiSettings,
+  maxCatalogConcurrency,
+  normalizeOllamaUrl,
+  parseAiSettings,
+} from "./ai-settings";
 
 describe("AI settings", () => {
   it("mantiene valores seguros por defecto", () => {
@@ -17,7 +22,11 @@ describe("AI settings", () => {
         models: {},
         provider: "anthropic",
       }),
-    ).toMatchObject({ concurrency: 3, maxExcerptCharacters: 24_000, provider: "anthropic" });
+    ).toMatchObject({
+      concurrency: maxCatalogConcurrency,
+      maxExcerptCharacters: 24_000,
+      provider: "anthropic",
+    });
   });
 
   it("rechaza protocolos no HTTP para un Ollama remoto", () => {

@@ -35,6 +35,7 @@ import {
 import {
   downloadImportedCopy,
   importLocalFiles,
+  reindexImportedDocuments,
   removeImportedCopy,
   useImportedDocuments,
 } from "../library/local-library-store";
@@ -66,7 +67,7 @@ const catalogStatusLabels = {
   analyzed: "Catálogo IA listo",
   analyzing: "IA analizando",
   error: "Error de catálogo",
-  "needs-content": "Requiere PDF/OCR",
+  "needs-content": "Requiere OCR",
 } as const;
 
 const workTypeLabels: Record<DocumentWorkType, string> = {
@@ -109,12 +110,14 @@ export function LibraryBrowser() {
   const [availability, setAvailability] = useState<AvailabilityState | "all">("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [format, setFormat] = useState<DocumentFormat | "all">("all");
+  const [author, setAuthor] = useState<string | "all">("all");
   const [genre, setGenre] = useState<string | "all">("all");
   const [origin, setOrigin] = useState<DocumentOrigin | "all">("all");
   const [publicationYear, setPublicationYear] = useState<number | "all">("all");
   const [query, setQuery] = useState("");
   const [workType, setWorkType] = useState<DocumentWorkType | "all">("all");
   const [importing, setImporting] = useState(false);
+  const [reindexing, setReindexing] = useState(false);
   const [linkingFiles, setLinkingFiles] = useState(false);
   const [importStatus, setImportStatus] = useState(
     "Vincula un archivo: guardaremos su referencia, metadatos e índice; no el original.",
@@ -145,6 +148,7 @@ export function LibraryBrowser() {
   const favoriteIds = new Set(favorites);
   const facets = catalogFacets(allDocuments);
   const filteredDocuments = filterDocuments(allDocuments, {
+    author,
     availability,
     favoriteIds,
     favoritesOnly,
@@ -219,6 +223,29 @@ export function LibraryBrowser() {
       setImportStatus(describeFileLinkError(error));
     } finally {
       setLinkingFiles(false);
+    }
+  }
+
+  async function handleReindex() {
+    setReindexing(true);
+    setImportStatus("Rehaciendo el índice local de las copias importadas…");
+
+    try {
+      const result = await reindexImportedDocuments();
+
+      if (!result.reviewed) {
+        setImportStatus("El índice local de las copias ya está al día.");
+        return;
+      }
+
+      const failed = result.failed ? ` · ${result.failed} con error` : "";
+      setImportStatus(
+        `${result.indexed} de ${result.reviewed} copia${result.reviewed === 1 ? "" : "s"} con texto disponible${failed}. Ya puedes catalogarlas con IA.`,
+      );
+    } catch {
+      setImportStatus("No fue posible rehacer el índice local.");
+    } finally {
+      setReindexing(false);
     }
   }
 
@@ -341,6 +368,13 @@ export function LibraryBrowser() {
             variant="quiet"
           >
             {importing ? "Importando copia…" : "Importar copia · compatibilidad"}
+          </Button>
+          <Button
+            disabled={reindexing || !importedLibrary.documents.length}
+            onClick={() => void handleReindex()}
+            variant="quiet"
+          >
+            {reindexing ? "Rehaciendo índice…" : "Actualizar índice local"}
           </Button>
           <input
             accept=".pdf,.epub,.docx,.pptx,.xlsx,.txt,.md,.png,.jpg,.jpeg"
@@ -479,6 +513,20 @@ export function LibraryBrowser() {
             {documentWorkTypes.map((item) => (
               <option key={item} value={item}>
                 {workTypeLabels[item]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Autor" labelFor="library-author">
+          <Select
+            id="library-author"
+            onChange={(event) => setAuthor(event.target.value)}
+            value={author}
+          >
+            <option value="all">Todos los autores</option>
+            {facets.authors.map((item) => (
+              <option key={item} value={item}>
+                {item}
               </option>
             ))}
           </Select>

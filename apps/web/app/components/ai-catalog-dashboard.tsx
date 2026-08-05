@@ -19,7 +19,7 @@ const statusLabels = {
   analyzed: "Catalogado",
   analyzing: "Analizando",
   error: "Requiere atención",
-  "needs-content": "Requiere PDF/OCR",
+  "needs-content": "Requiere OCR",
 } as const;
 
 function describeSummary(summary: Awaited<ReturnType<typeof analyzeDocumentCatalogs>>) {
@@ -89,7 +89,7 @@ export function AiCatalogDashboard() {
         <Card className={styles.catalogMetric}>
           <span>Extracción pendiente</span>
           <strong>{needsContent}</strong>
-          <small>PDF e imágenes requieren el siguiente bloque</small>
+          <small>Imágenes y PDF escaneados esperan al OCR</small>
         </Card>
         <Card className={styles.catalogMetric}>
           <span>Requiere atención</span>

@@ -140,8 +140,31 @@ describe("document catalog layer", () => {
 
     expect(result).toHaveLength(1);
     expect(catalogFacets(enriched)).toEqual({
+      authors: ["Ursula K. Le Guin"],
       genres: ["Ensayo"],
       publicationYears: [2004],
     });
+  });
+
+  it("filtra por autor del catálogo ignorando acentos y mayúsculas", () => {
+    const enriched = applyDocumentCatalogs(testDocuments.slice(0, 1), [record]);
+
+    expect(
+      filterDocuments(enriched, { ...baseFilters, author: "ursula k. le guin" }),
+    ).toHaveLength(1);
+    expect(filterDocuments(enriched, { ...baseFilters, author: "Séneca" })).toHaveLength(0);
+  });
+
+  it("no ofrece dos entradas de autor para la misma grafía normalizada", () => {
+    const enriched = applyDocumentCatalogs(testDocuments.slice(0, 2), [
+      record,
+      {
+        ...record,
+        catalog: { ...record.catalog, authors: ["ursula k. le guin", "Séneca"] },
+        documentId: testDocuments[1]!.id,
+      },
+    ]);
+
+    expect(catalogFacets(enriched).authors).toEqual(["Séneca", "Ursula K. Le Guin"]);
   });
 });

@@ -76,12 +76,26 @@ export const documentCatalogJsonSchema = {
   type: "object",
 } as const;
 
+/**
+ * Versión del prompt y del contrato de ficha. Entra en el fingerprint: al subirla, los
+ * documentos ya catalogados se vuelven a analizar en lugar de conservar fichas creadas con
+ * instrucciones antiguas. ADR-0002 exige versionar los prompts aparte del binario.
+ */
+export const catalogPromptVersion = 2;
+export const maxSummaryCharacters = 700;
+
 export const catalogSystemPrompt = [
-  "Eres un catalogador documental preciso.",
-  "Extrae metadatos únicamente cuando estén respaldados por el título, la ruta o el extracto.",
+  "Eres un catalogador bibliográfico preciso.",
+  "Trabajas sobre un extracto del propio documento: úsalo como evidencia principal y apóyate en el título y la ruta solo como pistas secundarias.",
+  "Extrae metadatos únicamente cuando estén respaldados por esa evidencia.",
   "No inventes autores, fecha, género ni idioma. Usa null o una lista vacía cuando no haya evidencia suficiente.",
+  "El año de publicación suele aparecer en la página de créditos o copyright; el autor, en la portada.",
   "Distingue el tipo de obra: libro, ensayo, artículo, informe, tesis, presentación, hoja de cálculo, notas, imagen u otro.",
-  "Devuelve los nombres propios respetando su grafía y una síntesis factual de máximo 280 caracteres.",
+  "Respeta la grafía de los nombres propios.",
+  `En "summary" escribe una sinopsis de qué trata la obra en ${maxSummaryCharacters} caracteres como máximo:`,
+  "tema central, enfoque o tesis, y alcance. Tres o cuatro frases, en el idioma del documento.",
+  "Describe el contenido, no el archivo: nunca menciones el formato, el nombre del fichero ni su ruta.",
+  "Si el extracto no permite saber de qué trata, devuelve null en lugar de una descripción vaga.",
 ].join(" ");
 
 function cleanNullableString(value: unknown, maxLength: number) {
@@ -136,7 +150,7 @@ export function parseDocumentCatalog(value: unknown): DocumentCatalogMetadata {
     genres: cleanStringArray(candidate.genres, 8),
     language: cleanNullableString(candidate.language, 64),
     publicationYear,
-    summary: cleanNullableString(candidate.summary, 280),
+    summary: cleanNullableString(candidate.summary, maxSummaryCharacters),
     topics: cleanStringArray(candidate.topics, 12),
     workType,
   };
@@ -197,5 +211,7 @@ export function createCatalogInputFingerprint(
       ? document.fingerprint
       : `${document.indexedAt ?? ""}:${document.searchText?.length ?? 0}`;
   const excerpt = selectCatalogExcerpt(document.searchText ?? "", maxExcerptCharacters);
-  return `v1:${fnv1a([version, provider, model, excerpt].join("\u241f"))}`;
+  return `v${catalogPromptVersion}:${fnv1a(
+    [version, provider, model, String(catalogPromptVersion), excerpt].join("\u241f"),
+  )}`;
 }

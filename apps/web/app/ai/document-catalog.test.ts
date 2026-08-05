@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import type { LibraryDocument } from "../library/documents";
 import {
+  catalogPromptVersion,
   createCatalogDocumentInput,
   createCatalogInputFingerprint,
+  maxSummaryCharacters,
   parseDocumentCatalog,
   selectCatalogExcerpt,
 } from "./document-catalog";
@@ -52,6 +54,31 @@ describe("document catalog", () => {
       topics: ["Lectura", "Educación"],
       workType: "essay",
     });
+  });
+
+  it("admite una sinopsis extensa y recorta solo lo que exceda el contrato", () => {
+    const sinopsis = `Trata de ${"la vida estoica ".repeat(80)}`;
+    const catalog = parseDocumentCatalog({
+      authors: [],
+      canonicalTitle: null,
+      confidence: 0.8,
+      genres: [],
+      language: null,
+      publicationYear: null,
+      summary: sinopsis,
+      topics: [],
+      workType: "book",
+    });
+
+    expect(catalog.summary).toHaveLength(maxSummaryCharacters);
+    expect(catalog.summary?.startsWith("Trata de")).toBe(true);
+  });
+
+  it("cambia el fingerprint al versionar el prompt para forzar el reanálisis", () => {
+    const fingerprint = createCatalogInputFingerprint(document, "openai", "gpt-test", 12_000);
+
+    expect(fingerprint.startsWith(`v${catalogPromptVersion}:`)).toBe(true);
+    expect(fingerprint).not.toBe("v1:");
   });
 
   it("conserva inicio y cierre al acotar el extracto", () => {

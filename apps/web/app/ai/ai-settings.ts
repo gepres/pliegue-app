@@ -1,5 +1,8 @@
 import { aiProviders, type AiProvider } from "./document-catalog";
 
+/** Peticiones simultáneas al proveedor durante un análisis por lotes. */
+export const maxCatalogConcurrency = 6;
+
 export interface AiSettings {
   autoAnalyzeAfterLink: boolean;
   concurrency: number;
@@ -62,7 +65,7 @@ export function parseAiSettings(value: unknown): AiSettings {
     autoAnalyzeAfterLink: candidate.autoAnalyzeAfterLink === true,
     concurrency:
       typeof candidate.concurrency === "number"
-        ? Math.min(3, Math.max(1, Math.round(candidate.concurrency)))
+        ? Math.min(maxCatalogConcurrency, Math.max(1, Math.round(candidate.concurrency)))
         : defaultAiSettings.concurrency,
     maxExcerptCharacters:
       typeof candidate.maxExcerptCharacters === "number"
