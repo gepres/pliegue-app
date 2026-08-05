@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-import { createLocalContentIndex } from "./local-content-index";
+import { createLocalContentIndex, isCurrentContentIndex } from "./local-content-index";
 import {
   compareFolderDocuments,
   createLinkedFolderDocument,
@@ -371,15 +371,20 @@ async function saveFolderScan(
         if (!document) continue;
         const priorDocument = previousById.get(document.id);
 
+        // El índice se reutiliza solo si el archivo no cambió Y lo produjo el extractor
+        // vigente: al ampliar la extracción, lo indexado con una versión anterior debe
+        // rehacerse aunque el archivo siga idéntico.
         if (
           priorDocument?.fingerprint === document.fingerprint &&
           priorDocument.indexStatus &&
-          priorDocument.indexedAt
+          priorDocument.indexedAt &&
+          isCurrentContentIndex(priorDocument.indexVersion)
         ) {
           indexedDocuments[index] = {
             ...document,
             indexedAt: priorDocument.indexedAt,
             indexStatus: priorDocument.indexStatus,
+            indexVersion: priorDocument.indexVersion,
             searchText: priorDocument.searchText ?? "",
           };
           continue;

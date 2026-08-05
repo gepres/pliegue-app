@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-import { createLocalContentIndex } from "./local-content-index";
+import { createLocalContentIndex, isCurrentContentIndex } from "./local-content-index";
 import {
   createLinkedFileDocument,
   type LinkedFileDocument,
@@ -254,11 +254,15 @@ export async function linkLocalFiles(): Promise<LinkLocalFilesResult> {
         );
         const existing = previous.find((_, index) => matches[index]);
         const fingerprint = `${file.name.toLocaleLowerCase("en")}::${file.size}::${file.lastModified}`;
+        // Mismo criterio que en las carpetas: un índice de una versión anterior del
+        // extractor se rehace aunque el archivo no haya cambiado.
         const index =
-          existing?.fingerprint === fingerprint
+          existing?.fingerprint === fingerprint &&
+          isCurrentContentIndex(existing.indexVersion)
             ? {
                 indexedAt: existing.indexedAt ?? new Date().toISOString(),
                 indexStatus: existing.indexStatus ?? ("pending" as const),
+                indexVersion: existing.indexVersion,
                 searchText: existing.searchText ?? "",
               }
             : await createLocalContentIndex(validation.format, file);

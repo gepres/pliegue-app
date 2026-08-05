@@ -40,6 +40,8 @@ export interface LibraryDocument {
   imported?: boolean;
   indexedAt?: string;
   indexStatus?: DocumentIndexStatus;
+  /** Versión del extractor que produjo el índice; ausente en documentos anteriores a v2. */
+  indexVersion?: number;
   linked?: boolean;
   meta: string;
   origin: DocumentOrigin;
@@ -50,6 +52,7 @@ export interface LibraryDocument {
 }
 
 export interface DocumentFilters {
+  author?: string | "all";
   availability: AvailabilityState | "all";
   favoriteIds: ReadonlySet<string>;
   favoritesOnly: boolean;
@@ -103,6 +106,15 @@ export function filterDocuments(
     ) {
       return false;
     }
+    if (
+      filters.author &&
+      filters.author !== "all" &&
+      !document.catalog?.authors.some(
+        (author) => normalizeSearchText(author) === normalizeSearchText(filters.author as string),
+      )
+    ) {
+      return false;
+    }
     if (filters.favoritesOnly && !filters.favoriteIds.has(document.id)) return false;
     if (!query) return true;
 
@@ -144,11 +156,21 @@ export function applyDocumentCatalogs(
 export function catalogFacets(documents: readonly LibraryDocument[]) {
   const genres = new Set<string>();
   const publicationYears = new Set<number>();
+  // Se agrupa por forma normalizada para que «Séneca» y «Seneca» no abran dos entradas,
+  // pero se ofrece la grafía tal como la devolvió el catálogo.
+  const authorsByKey = new Map<string, string>();
+
   for (const document of documents) {
     document.catalog?.genres.forEach((genre) => genres.add(genre));
+    document.catalog?.authors.forEach((author) => {
+      const key = normalizeSearchText(author);
+      if (key && !authorsByKey.has(key)) authorsByKey.set(key, author);
+    });
     if (document.catalog?.publicationYear) publicationYears.add(document.catalog.publicationYear);
   }
+
   return {
+    authors: [...authorsByKey.values()].sort((left, right) => left.localeCompare(right, "es")),
     genres: [...genres].sort((left, right) => left.localeCompare(right, "es")),
     publicationYears: [...publicationYears].sort((left, right) => right - left),
   };

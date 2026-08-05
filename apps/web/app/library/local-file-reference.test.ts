@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { createLinkedFileDocument } from "./local-file-reference";
+import { contentIndexVersion } from "./local-content-index";
 
 const index = {
   indexedAt: "2026-08-01T00:00:00.000Z",
   indexStatus: "indexed" as const,
+  indexVersion: contentIndexVersion,
   searchText: "contenido derivado",
 };
 
