@@ -4,7 +4,40 @@ import {
   classifyLocalDocumentPreview,
   createLocalDocumentPreview,
   maxTextPreviewBytes,
+  withPreviewMimeType,
 } from "./local-document-preview";
+
+describe("tipo con el que se sirve la previsualización", () => {
+  it("declara el PDF cuando el archivo llega sin tipo", async () => {
+    // El navegador sirve un blob: con el tipo del blob, no con el que pida la etiqueta que lo
+    // muestra. Sin esto, el visor enseña «%PDF-1.4» y los objetos internos como texto.
+    const preview = await createLocalDocumentPreview("pdf", new Blob(["%PDF-1.4"]));
+
+    expect(preview.kind).toBe("pdf");
+    expect((preview as { blob: Blob }).blob.type).toBe("application/pdf");
+  });
+
+  it("declara el tipo de cada imagen admitida", () => {
+    expect(withPreviewMimeType(new Blob(["x"]), "png").type).toBe("image/png");
+    expect(withPreviewMimeType(new Blob(["x"]), "jpg").type).toBe("image/jpeg");
+  });
+
+  it("conserva el blob intacto cuando ya viene bien tipado", () => {
+    const original = new Blob(["%PDF-1.4"], { type: "application/pdf" });
+    expect(withPreviewMimeType(original, "pdf")).toBe(original);
+  });
+
+  it("no toca los formatos que no se entregan directamente al navegador", () => {
+    const original = new Blob(["x"]);
+    expect(withPreviewMimeType(original, "epub")).toBe(original);
+    expect(withPreviewMimeType(original, "txt")).toBe(original);
+  });
+
+  it("corrige un tipo equivocado en lugar de confiar en él", () => {
+    const mal = new Blob(["%PDF-1.4"], { type: "text/plain" });
+    expect(withPreviewMimeType(mal, "pdf").type).toBe("application/pdf");
+  });
+});
 
 describe("previsualización de documentos locales", () => {
   it("clasifica formatos que el navegador puede mostrar de forma segura", () => {
