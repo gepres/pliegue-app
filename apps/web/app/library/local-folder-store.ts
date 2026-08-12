@@ -60,6 +60,23 @@ interface LinkedFoldersSnapshot {
   supported: boolean | null;
 }
 
+/**
+ * Avance de la indexación de una carpeta. Vincular un corpus grande obliga a abrir y extraer
+ * el texto de cada archivo en el hilo del navegador, y sin este dato la interfaz solo puede
+ * ofrecer un botón inmóvil durante varios minutos.
+ */
+export interface FolderIndexProgress {
+  current: string | null;
+  /** Lo mide el store y no la interfaz: el reloj no tiene sitio dentro de un render. */
+  elapsedMs: number;
+  /** Archivos cuyo texto hubo que extraer de nuevo: son los que cuestan tiempo. */
+  extracted: number;
+  processed: number;
+  /** Archivos que conservaron el índice anterior por no haber cambiado. */
+  reused: number;
+  total: number;
+}
+
 export interface FolderSyncResult extends FolderChangeSummary {
   permission: ReadPermissionState;
   relinked: boolean;
@@ -350,6 +367,7 @@ async function readDocumentsForSource(database: IDBDatabase, sourceId: string) {
 async function saveFolderScan(
   source: StoredLinkedFolderSource,
   documents: readonly StoredLinkedFolderDocument[],
+  onProgress?: (progress: FolderIndexProgress) => void,
 ) {
   const database = await openDatabase();
 
@@ -361,7 +379,25 @@ async function saveFolderScan(
     );
     const previousById = new Map(previous.map((document) => [document.id, document]));
     const indexedDocuments: StoredLinkedFolderDocument[] = new Array(documents.length);
+    const startedAt = Date.now();
+    const progress: FolderIndexProgress = {
+      current: null,
+      elapsedMs: 0,
+      extracted: 0,
+      processed: 0,
+      reused: 0,
+      total: documents.length,
+    };
     let nextIndex = 0;
+
+    function publish(document: StoredLinkedFolderDocument, reused: boolean) {
+      progress.processed += 1;
+      progress.current = document.relativePath;
+      progress.elapsedMs = Date.now() - startedAt;
+      if (reused) progress.reused += 1;
+      else progress.extracted += 1;
+      onProgress?.({ ...progress });
+    }
 
     async function indexNextDocument() {
       while (nextIndex < documents.length) {
@@ -387,12 +423,14 @@ async function saveFolderScan(
             indexVersion: priorDocument.indexVersion,
             searchText: priorDocument.searchText ?? "",
           };
+          publish(document, true);
           continue;
         }
 
         const file = await document.handle.getFile();
         const contentIndex = await createLocalContentIndex(document.format, file);
         indexedDocuments[index] = { ...document, ...contentIndex };
+        publish(document, false);
       }
     }
 
@@ -442,7 +480,9 @@ function pickerWindow() {
   return window as DirectoryPickerWindow;
 }
 
-export async function linkLocalFolder(): Promise<FolderSyncResult> {
+export async function linkLocalFolder(
+  onProgress?: (progress: FolderIndexProgress) => void,
+): Promise<FolderSyncResult> {
   const showDirectoryPicker = pickerWindow().showDirectoryPicker;
   if (!showDirectoryPicker) throw new Error("Este navegador no permite vincular carpetas.");
 
@@ -471,7 +511,7 @@ export async function linkLocalFolder(): Promise<FolderSyncResult> {
     name: handle.name,
     permission: "granted",
   };
-  const summary = await saveFolderScan(source, documents);
+  const summary = await saveFolderScan(source, documents, onProgress);
 
   sourceHandles.set(sourceId, handle);
   await loadLinkedFolders();
@@ -540,6 +580,7 @@ export async function readLinkedDocumentFile(documentId: string, sourceId: strin
 export async function scanLinkedFolder(
   sourceId: string,
   requestAccess = false,
+  onProgress?: (progress: FolderIndexProgress) => void,
 ): Promise<FolderSyncResult> {
   const source = snapshot.sources.find((item) => item.id === sourceId);
   const handle = sourceHandles.get(sourceId);
@@ -573,7 +614,7 @@ export async function scanLinkedFolder(
     lastScannedAt: new Date().toISOString(),
     permission,
   };
-  const summary = await saveFolderScan(storedSource, documents);
+  const summary = await saveFolderScan(storedSource, documents, onProgress);
 
   await loadLinkedFolders();
   return {

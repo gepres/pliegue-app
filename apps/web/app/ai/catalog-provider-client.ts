@@ -6,12 +6,21 @@ import {
   createCatalogPrompt,
   documentCatalogJsonSchema,
   parseDocumentCatalog,
+  readCatalogUsage,
   type CatalogDocumentInput,
+  type CatalogUsage,
+  type DocumentCatalogMetadata,
 } from "./document-catalog";
 
 interface CatalogApiResponse {
   catalog?: unknown;
   error?: string;
+  usage?: unknown;
+}
+
+export interface CatalogProviderResult {
+  catalog: DocumentCatalogMetadata;
+  usage: CatalogUsage;
 }
 
 async function readJson(response: Response): Promise<CatalogApiResponse> {
@@ -43,7 +52,7 @@ async function requestHostedProvider(
   });
   const payload = await readJson(response);
   if (!response.ok) throw new Error(payload.error || "El proveedor no pudo analizar el archivo.");
-  return parseDocumentCatalog(payload.catalog);
+  return { catalog: parseDocumentCatalog(payload.catalog), usage: readCatalogUsage(payload) };
 }
 
 async function requestOllama(input: CatalogDocumentInput, settings: AiSettings) {
@@ -77,7 +86,11 @@ async function requestOllama(input: CatalogDocumentInput, settings: AiSettings) 
   if (!response.ok) throw new Error(payload.error || "Ollama rechazó el análisis.");
 
   try {
-    return parseDocumentCatalog(JSON.parse(payload.message?.content ?? ""));
+    return {
+      catalog: parseDocumentCatalog(JSON.parse(payload.message?.content ?? "")),
+      // Ollama publica sus contadores en la raíz de la respuesta, no bajo `usage`.
+      usage: readCatalogUsage(payload),
+    };
   } catch (error) {
     if (error instanceof Error && error.message.includes("catálogo válido")) throw error;
     throw new Error("Ollama no devolvió el catálogo JSON esperado.");
@@ -88,7 +101,7 @@ export function requestCatalogFromProvider(
   input: CatalogDocumentInput,
   settings: AiSettings,
   apiKey: string,
-) {
+): Promise<CatalogProviderResult> {
   return settings.provider === "ollama"
     ? requestOllama(input, settings)
     : requestHostedProvider(input, settings, apiKey);

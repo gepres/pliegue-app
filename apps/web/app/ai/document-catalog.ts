@@ -45,8 +45,54 @@ export interface DocumentCatalogRecord {
 export interface CatalogDocumentInput {
   excerpt: string;
   format: string;
+  /**
+   * Autores ya presentes en el catálogo. Se envían para que el modelo reutilice la grafía
+   * establecida en vez de abrir una entrada paralela; la reconciliación posterior no depende
+   * de que obedezca, pero cuando lo hace el resultado es mejor y no hay que corregirlo.
+   */
+  knownAuthors?: string[];
   path: string | null;
   title: string;
+}
+
+/** Consumo declarado por el proveedor para una llamada. */
+export interface CatalogUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export const emptyCatalogUsage: CatalogUsage = { inputTokens: 0, outputTokens: 0 };
+
+/**
+ * Cada proveedor nombra sus contadores de otra forma y los coloca donde quiere: OpenAI y
+ * Anthropic bajo `usage`, Ollama en la raíz de la respuesta. Se buscan en ambos sitios para no
+ * repetir esta lógica en cada adaptador. Un proveedor que no informe deja el consumo en cero,
+ * que es preferible a estimarlo y presentar un número inventado como si fuera medido.
+ */
+export function readCatalogUsage(source: unknown): CatalogUsage {
+  const root = (source ?? {}) as Record<string, unknown>;
+  const nested = (root.usage ?? {}) as Record<string, unknown>;
+  const read = (...keys: string[]) => {
+    for (const key of keys) {
+      for (const scope of [nested, root]) {
+        const value = scope[key];
+        if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
+      }
+    }
+    return 0;
+  };
+
+  return {
+    inputTokens: read("input_tokens", "prompt_tokens", "prompt_eval_count"),
+    outputTokens: read("output_tokens", "completion_tokens", "eval_count"),
+  };
+}
+
+export function addCatalogUsage(left: CatalogUsage, right: CatalogUsage): CatalogUsage {
+  return {
+    inputTokens: left.inputTokens + right.inputTokens,
+    outputTokens: left.outputTokens + right.outputTokens,
+  };
 }
 
 export const documentCatalogJsonSchema = {
@@ -81,8 +127,15 @@ export const documentCatalogJsonSchema = {
  * documentos ya catalogados se vuelven a analizar en lugar de conservar fichas creadas con
  * instrucciones antiguas. ADR-0002 exige versionar los prompts aparte del binario.
  */
-export const catalogPromptVersion = 2;
+/**
+ * 3 · añade las reglas de atribución y la lista de autores ya conocidos. Las tres primeras
+ * nacen de errores observados al catalogar un corpus real: la editorial de un resumen figuraba
+ * como autora de la obra resumida, y varios ensayos entraban como «libro» sin más.
+ */
+export const catalogPromptVersion = 3;
 export const maxSummaryCharacters = 700;
+/** Más allá de esto la lista de autores conocidos encarece cada llamada sin aportar. */
+export const maxKnownAuthorsInPrompt = 60;
 
 export const catalogSystemPrompt = [
   "Eres un catalogador bibliográfico preciso.",
@@ -91,7 +144,11 @@ export const catalogSystemPrompt = [
   "No inventes autores, fecha, género ni idioma. Usa null o una lista vacía cuando no haya evidencia suficiente.",
   "El año de publicación suele aparecer en la página de créditos o copyright; el autor, en la portada.",
   "Distingue el tipo de obra: libro, ensayo, artículo, informe, tesis, presentación, hoja de cálculo, notas, imagen u otro.",
+  "Usa \"essay\" cuando la obra argumenta una tesis propia aunque se publique como libro, y \"notes\" para resúmenes, apuntes y material de apoyo.",
+  "En \"authors\" va quien escribió la obra. Nunca pongas la editorial, el traductor, el prologuista, el compilador digital ni el servicio que distribuye el archivo.",
+  "Si el documento es un resumen, una sinopsis comercial o una guía sobre otra obra, el autor es el de la obra original y el tipo es \"notes\"; menciona en la sinopsis que se trata de un resumen y quién lo elabora.",
   "Respeta la grafía de los nombres propios.",
+  "Si se te ofrece una lista de autores ya presentes en el catálogo y el autor de este documento es uno de ellos, devuelve exactamente esa grafía, aunque la portada la abrevie o la escriba de otro modo.",
   `En "summary" escribe una sinopsis de qué trata la obra en ${maxSummaryCharacters} caracteres como máximo:`,
   "tema central, enfoque o tesis, y alcance. Tres o cuatro frases, en el idioma del documento.",
   "Describe el contenido, no el archivo: nunca menciones el formato, el nombre del fichero ni su ruta.",
@@ -168,10 +225,14 @@ export function selectCatalogExcerpt(value: string, maxCharacters: number) {
 export function createCatalogDocumentInput(
   document: LibraryDocument,
   maxExcerptCharacters: number,
+  knownAuthors: readonly string[] = [],
 ): CatalogDocumentInput {
   return {
     excerpt: selectCatalogExcerpt(document.searchText ?? "", maxExcerptCharacters),
     format: document.format,
+    ...(knownAuthors.length
+      ? { knownAuthors: knownAuthors.slice(0, maxKnownAuthorsInPrompt) }
+      : {}),
     path:
       document.reference.kind === "local-folder" ? document.reference.relativePath : null,
     title: document.title,
@@ -179,15 +240,20 @@ export function createCatalogDocumentInput(
 }
 
 export function createCatalogPrompt(input: CatalogDocumentInput) {
+  const known = input.knownAuthors?.length
+    ? `Autores ya presentes en el catálogo: ${input.knownAuthors.join("; ")}`
+    : "";
+
   return [
     `Título observado: ${input.title}`,
     `Formato: ${input.format}`,
     input.path ? `Ruta relativa: ${input.path}` : "",
+    known,
     "",
     "Extracto local:",
     input.excerpt,
   ]
-    .filter((part, index) => Boolean(part) || index === 3)
+    .filter((part, index) => Boolean(part) || index === 4)
     .join("\n");
 }
 

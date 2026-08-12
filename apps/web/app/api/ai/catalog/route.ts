@@ -2,7 +2,9 @@ import {
   catalogSystemPrompt,
   createCatalogPrompt,
   documentCatalogJsonSchema,
+  maxKnownAuthorsInPrompt,
   parseDocumentCatalog,
+  readCatalogUsage,
   type CatalogDocumentInput,
 } from "../../../ai/document-catalog";
 
@@ -20,6 +22,15 @@ function apiKeyFrom(request: Request) {
   return authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
 }
 
+function validKnownAuthors(authors: CatalogDocumentInput["knownAuthors"]) {
+  if (authors === undefined) return true;
+  return (
+    Array.isArray(authors) &&
+    authors.length <= maxKnownAuthorsInPrompt &&
+    authors.every((author) => typeof author === "string" && author.length <= 120)
+  );
+}
+
 function validInput(input: CatalogDocumentInput | undefined) {
   return Boolean(
     input &&
@@ -28,11 +39,13 @@ function validInput(input: CatalogDocumentInput | undefined) {
       typeof input.format === "string" &&
       input.format.length <= 24 &&
       (input.path === null || (typeof input.path === "string" && input.path.length <= 1000)) &&
+      validKnownAuthors(input.knownAuthors) &&
       typeof input.excerpt === "string" &&
       input.excerpt.length > 0 &&
       input.excerpt.length <= 24_100,
   );
 }
+
 
 function providerMessage(payload: unknown) {
   if (!payload || typeof payload !== "object") return "El proveedor rechazó la solicitud.";
@@ -80,7 +93,7 @@ async function callOpenAi(apiKey: string, model: string, input: CatalogDocumentI
       ?.flatMap((item) => item.content ?? [])
       .find((item) => item.type === "output_text")?.text;
   if (!text) throw new Error("OpenAI no devolvió contenido catalogable.");
-  return parseDocumentCatalog(JSON.parse(text));
+  return { catalog: parseDocumentCatalog(JSON.parse(text)), usage: readCatalogUsage(payload) };
 }
 
 async function callAnthropic(apiKey: string, model: string, input: CatalogDocumentInput) {
@@ -109,7 +122,7 @@ async function callAnthropic(apiKey: string, model: string, input: CatalogDocume
   if (!response.ok) throw new Error(providerMessage(payload));
   const text = payload.content?.find((item) => item.type === "text")?.text;
   if (!text) throw new Error("Anthropic no devolvió contenido catalogable.");
-  return parseDocumentCatalog(JSON.parse(text));
+  return { catalog: parseDocumentCatalog(JSON.parse(text)), usage: readCatalogUsage(payload) };
 }
 
 export async function POST(request: Request) {
@@ -146,11 +159,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const catalog =
+    const { catalog, usage } =
       body.provider === "openai"
         ? await callOpenAi(apiKey, model, body.input!)
         : await callAnthropic(apiKey, model, body.input!);
-    return Response.json({ catalog });
+    return Response.json({ catalog, usage });
   } catch (error) {
     const message = error instanceof Error ? error.message : "El proveedor no respondió.";
     const timeout = error instanceof DOMException && error.name === "TimeoutError";
