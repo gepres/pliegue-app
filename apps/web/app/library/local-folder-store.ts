@@ -178,14 +178,37 @@ async function queryReadPermission(handle: FileSystemDirectoryHandle) {
   }
 }
 
-async function requestReadPermission(handle: FileSystemDirectoryHandle) {
+/**
+ * Cuánto se espera a que el usuario conteste al diálogo del navegador antes de darlo por no
+ * mostrado. Chrome no lo dibuja si la pestaña está oculta y deja la promesa pendiente sin
+ * error ni resolución: sin este límite la interfaz se queda en «Solicitando…» para siempre.
+ */
+export const permissionRequestTimeoutMs = 20_000;
+
+/** «unanswered» no es un permiso: es que no se pudo llegar a preguntar. */
+export type PermissionRequestOutcome = ReadPermissionState | "unanswered";
+
+async function requestReadPermission(
+  handle: FileSystemDirectoryHandle,
+): Promise<PermissionRequestOutcome> {
   const requestPermission = permissionHandle(handle).requestPermission;
   if (!requestPermission) return queryReadPermission(handle);
 
+  const unanswered = Symbol("unanswered");
+
   try {
-    return await requestPermission.call(handle, { mode: "read" });
-  } catch {
-    return "denied" as const;
+    const outcome = await Promise.race([
+      requestPermission.call(handle, { mode: "read" }),
+      new Promise<typeof unanswered>((resolve) => {
+        window.setTimeout(() => resolve(unanswered), permissionRequestTimeoutMs);
+      }),
+    ]);
+    return outcome === unanswered ? "unanswered" : outcome;
+  } catch (error) {
+    // Sin activación de usuario el navegador rechaza en vez de preguntar. Tratarlo como una
+    // denegación sería mentir: nadie ha dicho que no, simplemente no se llegó a preguntar.
+    if (error instanceof DOMException && error.name === "SecurityError") return "unanswered";
+    return "denied";
   }
 }
 
@@ -541,14 +564,17 @@ function updatePermissionSnapshot(sourceId: string, permission: ReadPermissionSt
   });
 }
 
-export async function requestLinkedFolderReadPermission(sourceId: string) {
+export async function requestLinkedFolderReadPermission(
+  sourceId: string,
+): Promise<PermissionRequestOutcome> {
   const handle = sourceHandles.get(sourceId);
   if (!handle) throw new Error("La carpeta vinculada ya no está disponible.");
 
   // Keep this as the first awaited operation so the browser preserves user activation.
-  const permission = await requestReadPermission(handle);
-  updatePermissionSnapshot(sourceId, permission);
-  return permission;
+  const outcome = await requestReadPermission(handle);
+  // Si no se llegó a preguntar, el estado guardado no cambia: seguimos sin saber la respuesta.
+  if (outcome !== "unanswered") updatePermissionSnapshot(sourceId, outcome);
+  return outcome;
 }
 
 export async function readLinkedDocumentFile(documentId: string, sourceId: string) {
@@ -586,9 +612,11 @@ export async function scanLinkedFolder(
   const handle = sourceHandles.get(sourceId);
   if (!source || !handle) throw new Error("La carpeta vinculada ya no está disponible.");
 
-  const permission = requestAccess
+  const outcome = requestAccess
     ? await requestReadPermission(handle)
     : await queryReadPermission(handle);
+  // Que no se haya podido preguntar deja el permiso donde estaba: pendiente, no denegado.
+  const permission: ReadPermissionState = outcome === "unanswered" ? "prompt" : outcome;
   updatePermissionSnapshot(sourceId, permission);
 
   if (permission !== "granted") {

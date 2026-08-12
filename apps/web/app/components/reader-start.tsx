@@ -9,6 +9,7 @@ import { useLinkedFiles } from "../library/local-file-reference-store";
 import {
   requestLinkedFolderReadPermission,
   useLinkedFolders,
+  type PermissionRequestOutcome,
 } from "../library/local-folder-store";
 import { useImportedDocuments } from "../library/local-library-store";
 import styles from "../(workspace)/app/workspace.module.css";
@@ -39,12 +40,23 @@ export function ReaderStart() {
     try {
       // Se piden todas de una vez: la primera conserva la activación del usuario y las
       // siguientes suelen resolverse sin volver a preguntar.
+      const outcomes: PermissionRequestOutcome[] = [];
       for (const source of blockedSources) {
-        await requestLinkedFolderReadPermission(source.id);
+        outcomes.push(await requestLinkedFolderReadPermission(source.id));
+      }
+
+      if (outcomes.includes("unanswered")) {
+        setPermissionError(
+          "El navegador no llegó a mostrar la ventana de permiso. Suele pasar cuando la pestaña no está en primer plano o cuando queda otra ventana de Pliegue con la petición abierta: deja visible esta pestaña, cierra las demás y vuelve a intentarlo.",
+        );
+      } else if (outcomes.includes("denied")) {
+        setPermissionError(
+          "El acceso quedó denegado. Puedes volver a concederlo desde el icono de permisos del navegador o revinculando la carpeta en la Biblioteca.",
+        );
       }
     } catch {
       setPermissionError(
-        "El navegador no concedió el acceso. Vuelve a intentarlo o revincula la carpeta desde la Biblioteca.",
+        "La carpeta ya no está disponible en este dispositivo. Vuelve a vincularla desde la Biblioteca.",
       );
     } finally {
       setRequesting(false);

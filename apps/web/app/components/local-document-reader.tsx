@@ -21,6 +21,7 @@ import {
   readLinkedDocumentFile,
   requestLinkedFolderReadPermission,
   useLinkedFolders,
+  type PermissionRequestOutcome,
 } from "../library/local-folder-store";
 import type { ImportedDocument } from "../library/local-file-metadata";
 import {
@@ -385,19 +386,22 @@ function PermissionPanel({
   onRequestPermission,
   sourceName,
 }: {
-  onRequestPermission: () => Promise<"denied" | "granted" | "prompt">;
+  onRequestPermission: () => Promise<PermissionRequestOutcome>;
   sourceName: string;
 }) {
-  const [requestState, setRequestState] = useState<"idle" | "requesting" | "denied" | "error">(
-    "idle",
-  );
+  const [requestState, setRequestState] = useState<
+    "denied" | "error" | "idle" | "requesting" | "unanswered"
+  >("idle");
 
   async function requestAccess() {
     setRequestState("requesting");
 
     try {
-      const permission = await onRequestPermission();
-      if (permission !== "granted") setRequestState("denied");
+      const outcome = await onRequestPermission();
+      // El botón vuelve siempre a su estado normal: quedarse en «Solicitando…» sin decir nada
+      // es lo que hacía parecer que el lector estaba colgado.
+      if (outcome === "granted") setRequestState("idle");
+      else setRequestState(outcome === "unanswered" ? "unanswered" : "denied");
     } catch {
       setRequestState("error");
     }
@@ -425,9 +429,11 @@ function PermissionPanel({
       <p aria-live="polite" className={styles.permissionStatus} role="status">
         {requestState === "denied"
           ? "El permiso no fue concedido. Puedes intentarlo de nuevo cuando quieras."
-          : requestState === "error"
-            ? "No fue posible recuperar el acceso a esta carpeta."
-            : "El permiso solo se usa para leer los archivos que elegiste."}
+          : requestState === "unanswered"
+            ? "El navegador no llegó a mostrar la ventana de permiso. Ocurre cuando esta pestaña no está en primer plano o cuando otra ventana de Pliegue tiene la petición abierta: déjala visible, cierra las demás y vuelve a intentarlo."
+            : requestState === "error"
+              ? "No fue posible recuperar el acceso a esta carpeta."
+              : "El permiso solo se usa para leer los archivos que elegiste."}
       </p>
     </Card>
   );
@@ -635,7 +641,7 @@ function LocalReaderShell({
 }: {
   document: LocalDocument;
   permissionRequired?: boolean;
-  requestPermission?: (() => Promise<"denied" | "granted" | "prompt">) | undefined;
+  requestPermission?: (() => Promise<PermissionRequestOutcome>) | undefined;
   resumeRequested: boolean;
   sourceName?: string | undefined;
 }) {
