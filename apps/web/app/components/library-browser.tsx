@@ -16,6 +16,8 @@ import {
   removeDocumentCatalogRecord,
   useDocumentCatalogs,
 } from "../ai/document-catalog-store";
+import { applyImportedCatalogs } from "../library/catalog-import";
+import { useImportedCatalogs } from "../library/imported-catalog-store";
 import {
   applyDocumentCatalogs,
   availabilityStates,
@@ -41,6 +43,7 @@ import {
 } from "../library/local-library-store";
 import { useLinkedFolders } from "../library/local-folder-store";
 import { clearReadingProgress } from "../library/reading-progress-store";
+import { CatalogImportPanel } from "./catalog-import-panel";
 import { DocumentCard } from "./workspace-page";
 import { LocalSourcesPanel } from "./local-sources-panel";
 import styles from "../(workspace)/app/workspace.module.css";
@@ -128,6 +131,7 @@ export function LibraryBrowser() {
   const linkedFiles = useLinkedFiles();
   const linkedFolders = useLinkedFolders();
   const catalogs = useDocumentCatalogs();
+  const importedCatalogs = useImportedCatalogs();
   const aiSettings = useAiSettings();
   const aiSecrets = useAiSessionSecrets();
   const [catalogMessage, setCatalogMessage] = useState(
@@ -141,9 +145,15 @@ export function LibraryBrowser() {
     ],
     [importedLibrary.documents, linkedFiles.documents, linkedFolders.documents],
   );
+  // El orden importa: la ficha importada se aplica después para que prevalezca sobre la que
+  // dedujo el modelo, que es lo que espera quien acaba de corregirla a mano.
   const allDocuments = useMemo(
-    () => applyDocumentCatalogs(baseDocuments, catalogs.records),
-    [baseDocuments, catalogs.records],
+    () =>
+      applyImportedCatalogs(
+        applyDocumentCatalogs(baseDocuments, catalogs.records),
+        importedCatalogs.records,
+      ),
+    [baseDocuments, catalogs.records, importedCatalogs.records],
   );
   const favoriteIds = new Set(favorites);
   const facets = catalogFacets(allDocuments);
@@ -409,6 +419,8 @@ export function LibraryBrowser() {
       </Card>
 
       <LocalSourcesPanel />
+
+      <CatalogImportPanel documents={allDocuments} />
 
       <Card
         aria-labelledby="drive-reference-title"

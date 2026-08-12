@@ -22,6 +22,8 @@ export type DocumentOrigin = "drive" | "local";
 export type DocumentFormat = (typeof documentFormats)[number];
 export type AvailabilityState = (typeof availabilityStates)[number];
 export type DocumentIndexStatus = "error" | "indexed" | "metadata-only" | "pending";
+/** Quién produjo la ficha: el análisis de un proveedor o un archivo importado a mano. */
+export type CatalogSource = "ai" | "import";
 
 export type DocumentReference =
   | { kind: "google-drive"; driveId?: string; fileId: string }
@@ -34,6 +36,7 @@ export interface LibraryDocument {
   availability: AvailabilityState;
   catalog?: DocumentCatalogMetadata;
   catalogError?: string;
+  catalogSource?: CatalogSource;
   catalogStatus?: CatalogAnalysisStatus;
   format: DocumentFormat;
   id: string;
@@ -148,6 +151,7 @@ export function applyDocumentCatalogs(
       ...document,
       ...(record.catalog ? { catalog: record.catalog } : {}),
       ...(record.error ? { catalogError: record.error } : {}),
+      catalogSource: "ai",
       catalogStatus: record.status,
     };
   });
