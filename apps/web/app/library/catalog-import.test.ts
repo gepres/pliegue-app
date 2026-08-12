@@ -233,6 +233,29 @@ describe("emparejamiento con la biblioteca", () => {
     ).toBe("fingerprint:meditaciones.pdf::2048::1700000000000");
   });
 
+  it("empareja un archivo cuyo nombre trae espacios dobles", () => {
+    // La lectura de la ficha colapsa los espacios, así que la clave debe hacerlo también:
+    // de lo contrario «Morey, Miguel -  Foucault.pdf» nunca reencuentra su documento.
+    const conEspacioDoble = {
+      ...folderDocument,
+      reference: {
+        kind: "local-folder" as const,
+        relativePath: "coleccion/27. Morey, Miguel -  Foucault.pdf",
+        sourceId: "source-1",
+      },
+    };
+    const parsed = parseCatalogImportFile({
+      entries: [{ fileName: "27. Morey, Miguel -  Foucault.pdf", title: "Foucault" }],
+      pliegueCatalog: 1,
+    });
+    const [applied] = applyImportedCatalogs(
+      [conEspacioDoble],
+      createImportedCatalogRecords(parsed),
+    );
+
+    expect(applied?.catalog?.canonicalTitle).toBe("Foucault");
+  });
+
   it("expone la ruta relativa de un documento en carpeta vinculada", () => {
     expect(documentMatchKeys(folderDocument)).toContain("path:ensayos/lectura.epub");
   });

@@ -264,10 +264,17 @@ function resolveWorkType(raw: unknown, dialect: CatalogImportDialect): DocumentW
   return "other";
 }
 
+/**
+ * Los espacios se colapsan aquí porque `readString` ya lo hizo al leer la ficha: un archivo
+ * llamado «Morey, Miguel -  Foucault.pdf», con dos espacios, llegaría con uno solo y no
+ * volvería a encontrar su documento. Los acentos se retiran por el mismo motivo: la forma de
+ * normalización Unicode del sistema de archivos no tiene por qué coincidir con la del JSON.
+ */
 function normalizeMatchText(value: string) {
   return value
     .normalize("NFD")
     .replaceAll(/[\u0300-\u036f]/g, "")
+    .replaceAll(/\s+/g, " ")
     .toLocaleLowerCase("en")
     .trim();
 }
