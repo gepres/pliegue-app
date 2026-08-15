@@ -27,7 +27,9 @@ import {
   type AvailabilityState,
   type DocumentFormat,
   type DocumentOrigin,
+  type LibraryDocument,
 } from "../library/documents";
+import { hasStaleIndex } from "../library/stale-index";
 import { toggleFavorite, useFavorites } from "../library/favorite-store";
 import {
   linkLocalFiles,
@@ -46,6 +48,7 @@ import { clearReadingProgress } from "../library/reading-progress-store";
 import { CatalogImportPanel } from "./catalog-import-panel";
 import { DocumentCard } from "./workspace-page";
 import { LocalSourcesPanel } from "./local-sources-panel";
+import { StaleIndexNotice } from "./stale-index-notice";
 import styles from "../(workspace)/app/workspace.module.css";
 
 const availabilityLabels: Record<AvailabilityState, string> = {
@@ -72,6 +75,17 @@ const catalogStatusLabels = {
   error: "Error de catálogo",
   "needs-content": "Requiere OCR",
 } as const;
+
+/**
+ * «Requiere OCR» y «Índice desactualizado» se veían igual y llevan a sitios distintos: el
+ * primero espera al OCR de 03.5 y el segundo se arregla reindexando en un minuto.
+ */
+function describeCatalogStatus(document: LibraryDocument) {
+  if (document.catalogStatus === "needs-content" && hasStaleIndex(document)) {
+    return "Índice desactualizado";
+  }
+  return document.catalogStatus ? catalogStatusLabels[document.catalogStatus] : null;
+}
 
 const workTypeLabels: Record<DocumentWorkType, string> = {
   article: "Artículo",
@@ -399,6 +413,7 @@ export function LibraryBrowser() {
             {linkedFiles.documents.length} referencias · {importedLibrary.documents.length} copias
           </span>
         </div>
+        <StaleIndexNotice documents={allDocuments} />
         {linkedFiles.supported === false ? (
           <div className={styles.capabilityNote} role="note">
             <strong>La vinculación persistente no está disponible en esta ventana.</strong>
@@ -643,8 +658,8 @@ export function LibraryBrowser() {
                 <div className={styles.documentMeta}>
                   <Tag>{availabilityLabels[document.availability]}</Tag>
                   {document.indexStatus ? <Tag>{indexLabels[document.indexStatus]}</Tag> : null}
-                  {document.catalogStatus ? (
-                    <Tag>{catalogStatusLabels[document.catalogStatus]}</Tag>
+                  {describeCatalogStatus(document) ? (
+                    <Tag>{describeCatalogStatus(document)}</Tag>
                   ) : null}
                   <div className={styles.documentActions}>
                     <Button

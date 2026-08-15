@@ -21,6 +21,8 @@ import { useImportedCatalogs } from "../library/imported-catalog-store";
 import { useLinkedFiles } from "../library/local-file-reference-store";
 import { useLinkedFolders } from "../library/local-folder-store";
 import { useImportedDocuments } from "../library/local-library-store";
+import { hasStaleIndex } from "../library/stale-index";
+import { StaleIndexNotice } from "./stale-index-notice";
 import styles from "../(workspace)/app/workspace.module.css";
 
 const statusLabels = {
@@ -104,8 +106,12 @@ export function AiCatalogDashboard() {
   );
   const analyzed = documents.filter((document) => document.catalogStatus === "analyzed").length;
   const fromImport = documents.filter((document) => document.catalogSource === "import").length;
+  // Un índice de la versión anterior deja el documento sin texto y el análisis lo marca
+  // «needs-content», igual que un escaneo. Contarlos juntos presentaba como trabajo de OCR
+  // algo que se resuelve reindexando, y costó varias rondas de diagnóstico averiguarlo.
+  const staleIndex = documents.filter(hasStaleIndex).length;
   const needsContent = documents.filter(
-    (document) => document.catalogStatus === "needs-content",
+    (document) => document.catalogStatus === "needs-content" && !hasStaleIndex(document),
   ).length;
   const errors = documents.filter((document) => document.catalogStatus === "error").length;
   const eligible = documents.filter((document) => Boolean(document.searchText?.trim())).length;
@@ -176,7 +182,10 @@ export function AiCatalogDashboard() {
         <Card className={styles.catalogMetric}>
           <span>Extracción pendiente</span>
           <strong>{needsContent}</strong>
-          <small>Imágenes y PDF escaneados esperan al OCR</small>
+          <small>
+            Imágenes y PDF escaneados esperan al OCR
+            {staleIndex ? ` · ${staleIndex} solo necesitan reindexarse` : ""}
+          </small>
         </Card>
         <Card className={styles.catalogMetric}>
           <span>Requiere atención</span>
@@ -267,6 +276,8 @@ export function AiCatalogDashboard() {
             </div>
           ) : null}
 
+          <StaleIndexNotice documents={documents} />
+
           {!ready ? (
             <div className={styles.capabilityNote} role="note">
               <strong>Falta la credencial de esta sesión.</strong>
@@ -294,7 +305,11 @@ export function AiCatalogDashboard() {
                         <strong>{record.catalog?.canonicalTitle ?? document?.title ?? "Documento desvinculado"}</strong>
                         <span>{record.provider} · {record.model}</span>
                       </div>
-                      <Tag>{statusLabels[record.status]}</Tag>
+                      <Tag>
+                        {record.status === "needs-content" && document && hasStaleIndex(document)
+                          ? "Índice desactualizado"
+                          : statusLabels[record.status]}
+                      </Tag>
                     </li>
                   );
                 })}
