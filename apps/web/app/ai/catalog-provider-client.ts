@@ -11,6 +11,7 @@ import {
   type CatalogUsage,
   type DocumentCatalogMetadata,
 } from "./document-catalog";
+import { classifyProviderFailure } from "./provider-error";
 
 interface CatalogApiResponse {
   catalog?: unknown;
@@ -83,7 +84,13 @@ async function requestOllama(input: CatalogDocumentInput, settings: AiSettings) 
   const payload = (await readJson(response)) as CatalogApiResponse & {
     message?: { content?: string };
   };
-  if (!response.ok) throw new Error(payload.error || "Ollama rechazó el análisis.");
+  // Ollama se consulta desde el navegador, así que aquí no hay ruta de servidor que traduzca
+  // el fallo: el modelo sin descargar es el caso frecuente y merece decirse con esas palabras.
+  if (!response.ok) {
+    throw new Error(
+      classifyProviderFailure("ollama", response.status, payload, settings.models.ollama).message,
+    );
+  }
 
   try {
     return {

@@ -14,12 +14,29 @@ export interface AiSettings {
   schemaVersion: 1;
 }
 
+/**
+ * Modelos de partida, verificados contra la documentación de cada proveedor el 14 de agosto
+ * de 2026. Catalogar es una tarea de mucha entrada y poca deliberación —un extracto por
+ * documento, una ficha de vuelta—, así que en cada proveedor se elige su gama de trabajo
+ * y no la más capaz.
+ *
+ * - `gpt-5.6-luna` es el modelo que OpenAI destina a volumen alto y coste contenido.
+ * - `claude-sonnet-5` sustituye a `claude-sonnet-4-6`, que seguía activo pero era de la
+ *   generación anterior.
+ * - `qwen3:8b` está en la biblioteca de Ollama y admite salida estructurada por esquema, que
+ *   es lo que exige el contrato de ficha. Ojo: eso vale para la instalación local; Ollama
+ *   Cloud todavía no la admite.
+ *
+ * Al revisarlos, confirma el identificador en la documentación vigente del proveedor —cambian
+ * al publicar generaciones nuevas— y recuerda que un identificador retirado falla en la primera
+ * llamada; `provider-error.ts` se encarga de que ese fallo no se confunda con una clave inválida.
+ */
 export const defaultAiSettings: AiSettings = {
   autoAnalyzeAfterLink: false,
   concurrency: 2,
   maxExcerptCharacters: 12_000,
   models: {
-    anthropic: "claude-sonnet-4-6",
+    anthropic: "claude-sonnet-5",
     ollama: "qwen3:8b",
     openai: "gpt-5.6-luna",
   },

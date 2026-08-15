@@ -5,8 +5,10 @@ import {
   maxKnownAuthorsInPrompt,
   parseDocumentCatalog,
   readCatalogUsage,
+  type AiProvider,
   type CatalogDocumentInput,
 } from "../../../ai/document-catalog";
+import { classifyProviderFailure, type ProviderFailure } from "../../../ai/provider-error";
 
 interface CatalogRouteRequest {
   input?: CatalogDocumentInput;
@@ -47,12 +49,26 @@ function validInput(input: CatalogDocumentInput | undefined) {
 }
 
 
-function providerMessage(payload: unknown) {
-  if (!payload || typeof payload !== "object") return "El proveedor rechazó la solicitud.";
-  const error = (payload as { error?: { message?: unknown } }).error;
-  return typeof error?.message === "string"
-    ? error.message.slice(0, 280)
-    : "El proveedor rechazó la solicitud.";
+/** Conserva la causa hasta el `catch` de la ruta, que es donde se elige el código de salida. */
+class ProviderFailureError extends Error {
+  readonly status: number;
+
+  constructor(failure: ProviderFailure) {
+    super(failure.message);
+    this.name = "ProviderFailureError";
+    this.status = failure.status;
+  }
+}
+
+function providerFailure(
+  provider: AiProvider,
+  response: Response,
+  payload: unknown,
+  model: string,
+) {
+  return new ProviderFailureError(
+    classifyProviderFailure(provider, response.status, payload, model),
+  );
 }
 
 async function callOpenAi(apiKey: string, model: string, input: CatalogDocumentInput) {
@@ -86,7 +102,7 @@ async function callOpenAi(apiKey: string, model: string, input: CatalogDocumentI
     output?: Array<{ content?: Array<{ text?: string; type?: string }> }>;
     output_text?: string;
   };
-  if (!response.ok) throw new Error(providerMessage(payload));
+  if (!response.ok) throw providerFailure("openai", response, payload, model);
   const text =
     payload.output_text ??
     payload.output
@@ -119,7 +135,7 @@ async function callAnthropic(apiKey: string, model: string, input: CatalogDocume
     content?: Array<{ text?: string; type?: string }>;
     error?: { message?: string };
   };
-  if (!response.ok) throw new Error(providerMessage(payload));
+  if (!response.ok) throw providerFailure("anthropic", response, payload, model);
   const text = payload.content?.find((item) => item.type === "text")?.text;
   if (!text) throw new Error("Anthropic no devolvió contenido catalogable.");
   return { catalog: parseDocumentCatalog(JSON.parse(text)), usage: readCatalogUsage(payload) };
@@ -165,6 +181,9 @@ export async function POST(request: Request) {
         : await callAnthropic(apiKey, model, body.input!);
     return Response.json({ catalog, usage });
   } catch (error) {
+    if (error instanceof ProviderFailureError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
     const message = error instanceof Error ? error.message : "El proveedor no respondió.";
     const timeout = error instanceof DOMException && error.name === "TimeoutError";
     return Response.json({ error: timeout ? "El proveedor agotó el tiempo de espera." : message }, {
