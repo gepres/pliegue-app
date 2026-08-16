@@ -10,7 +10,7 @@ import {
   readerCountsItsOwnPages,
   type LocalDocumentPreview,
 } from "../library/local-document-preview";
-import type { StructuredDocumentBlock } from "../library/structured-document-extractor";
+import { ExtractedBlocks } from "./extracted-blocks";
 import type { LinkedFileDocument } from "../library/local-file-reference";
 import {
   readLinkedFile,
@@ -65,41 +65,6 @@ function isLinkedFileDocument(document: LocalDocument): document is LinkedFileDo
 
 function isImportedDocument(document: LocalDocument): document is ImportedDocument {
   return document.reference.kind === "local-copy";
-}
-
-function ExtractedBlock({
-  block,
-  sectionTitle,
-}: {
-  block: StructuredDocumentBlock;
-  sectionTitle: string;
-}) {
-  if (block.kind === "heading") {
-    return block.level <= 2 ? <h3>{block.text}</h3> : <h4>{block.text}</h4>;
-  }
-
-  if (block.kind === "paragraph") return <p>{block.text}</p>;
-
-  return (
-    <div
-      aria-label={`Tabla extraída de ${sectionTitle}`}
-      className={styles.extractedTableViewport}
-      role="region"
-      tabIndex={0}
-    >
-      <table>
-        <tbody>
-          {block.rows.map((row, rowIndex) => (
-            <tr key={`row-${rowIndex}`}>
-              {row.map((cell, cellIndex) => (
-                <td key={`cell-${rowIndex}-${cellIndex}`}>{cell || "—"}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
 }
 
 function ImagePreview({
@@ -180,15 +145,7 @@ function StructuredPreview({
                 <span>{section.label}</span>
                 <h2 id={headingId}>{section.title}</h2>
               </header>
-              <div className={styles.extractedBlocks}>
-                {section.blocks.map((block, index) => (
-                  <ExtractedBlock
-                    block={block}
-                    key={`${section.id}-${block.kind}-${index}`}
-                    sectionTitle={section.title}
-                  />
-                ))}
-              </div>
+              <ExtractedBlocks blocks={section.blocks} sectionTitle={section.title} />
             </section>
           );
         })}

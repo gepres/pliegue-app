@@ -117,6 +117,85 @@
   width: 100%;
 }
 
+/* ---- Modo lectura --------------------------------------------------------- */
+
+.modeSwitch {
+  display: flex;
+  gap: var(--pliegue-spacing-2xs);
+  margin-left: var(--pliegue-spacing-xs);
+}
+
+.modeHint {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.reading {
+  background: var(--pliegue-color-bg-surface);
+  display: block;
+  margin: 0 auto;
+  max-width: 62rem;
+  padding: 0 clamp(0rem, 3vw, 2rem);
+}
+
+/**
+ * Cada página se pinta solo cuando se acerca. `content-visibility` da esa virtualización
+ * sin necesidad de conocer su alto de antemano, que en texto recompuesto no se sabe hasta
+ * haberlo maquetado.
+ */
+.readingPage {
+  contain-intrinsic-size: auto 640px;
+  content-visibility: auto;
+}
+
+.readingPageMark {
+  align-items: baseline;
+  border-top: 1px solid var(--pliegue-color-border-default);
+  color: var(--pliegue-color-text-secondary);
+  display: flex;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  gap: var(--pliegue-spacing-md);
+  justify-content: space-between;
+  letter-spacing: 0.07em;
+  margin: 0 auto;
+  max-width: 66ch;
+  padding-top: var(--pliegue-spacing-md);
+  text-transform: uppercase;
+}
+
+.readingPage:first-child .readingPageMark {
+  border-top: 0;
+}
+
+.readingEmpty {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  margin: 0 auto;
+  max-width: 66ch;
+  padding: var(--pliegue-spacing-lg) 0 var(--pliegue-spacing-xl);
+}
+
+.readingFoot {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  margin: 0 auto;
+  max-width: 66ch;
+  padding: var(--pliegue-spacing-lg) 0 var(--pliegue-spacing-xl);
+  text-align: center;
+}
+
+.readingFoot p {
+  margin: 0;
+}
+
 .pageNumber {
   bottom: calc(var(--pliegue-spacing-xs) * -1);
   color: var(--pliegue-color-text-secondary);

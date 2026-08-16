@@ -19,13 +19,47 @@ import {
   type PdfPagePlacement,
   type PdfPageSize,
 } from "../library/pdf-page-layout";
+import { reflowPage, toReflowItems } from "../library/pdf-reflow";
 import { describePdfFailure, openPdfDocument } from "../library/pdf-runtime";
+import type { StructuredDocumentBlock } from "../library/structured-document-extractor";
+import { ExtractedBlocks } from "./extracted-blocks";
 import styles from "./pdf-reader.module.css";
 
 type PdfDocument = Awaited<ReturnType<typeof openPdfDocument>>["document"];
 
 /** Páginas cuyo tamaño se pide de una vez al abrir; evita miles de promesas simultáneas. */
 const sizeBatch = 16;
+
+/** Páginas que se recomponen de una tanda en el modo lectura. */
+const reflowBatch = 8;
+
+export type PdfViewMode = "original" | "reading";
+
+interface ReflowedPage {
+  blocks: StructuredDocumentBlock[];
+  columns: number;
+  number: number;
+}
+
+/** Recompone una página: el ancho sale del propio documento, no de la pantalla. */
+async function reflowDocumentPage(
+  document: PdfDocument,
+  number: number,
+): Promise<ReflowedPage> {
+  const page = await document.getPage(number);
+
+  try {
+    const viewport = page.getViewport({ scale: 1 });
+    const content = await page.getTextContent();
+    const { blocks, columns } = reflowPage(
+      toReflowItems(content.items as Parameters<typeof toReflowItems>[0]),
+      viewport.width,
+    );
+    return { blocks, columns, number };
+  } finally {
+    page.cleanup();
+  }
+}
 
 type ReaderState =
   | { message: string; status: "error" }
@@ -199,6 +233,158 @@ function PdfPage({
   );
 }
 
+/**
+ * Modo lectura: el texto del documento recompuesto en el frame editorial del producto.
+ *
+ * Las páginas se recomponen por tandas a medida que se llega a ellas. Hacerlas todas al
+ * abrir bloquearía el hilo de la interfaz durante segundos en un documento de doscientas
+ * páginas, y quien entra aquí quiere empezar a leer, no esperar a que termine el archivo.
+ */
+function PdfReadingView({
+  document: pdfDocument,
+  initialPage,
+  onPageChange,
+  pageCount,
+  title,
+}: {
+  document: PdfDocument;
+  initialPage: number;
+  onPageChange: (page: number) => void;
+  pageCount: number;
+  title: string;
+}) {
+  const [pages, setPages] = useState<ReflowedPage[]>([]);
+  const [target, setTarget] = useState(() =>
+    Math.min(pageCount, Math.max(reflowBatch, initialPage)),
+  );
+  const [failure, setFailure] = useState<string | null>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadedRef = useRef(0);
+  const jumpedRef = useRef(false);
+
+  const complete = pages.length >= pageCount;
+
+  // ---- Recomposición por tandas --------------------------------------------
+  useEffect(() => {
+    if (loadedRef.current >= target || loadedRef.current >= pageCount) return;
+    let cancelled = false;
+
+    async function loadMore() {
+      const from = loadedRef.current + 1;
+      const to = Math.min(pageCount, target);
+      const batch: ReflowedPage[] = [];
+
+      for (let number = from; number <= to; number += 1) {
+        const reflowed = await reflowDocumentPage(pdfDocument, number);
+        if (cancelled) return;
+        batch.push(reflowed);
+      }
+
+      loadedRef.current = to;
+      setPages((current) => [...current, ...batch]);
+    }
+
+    loadMore().catch((error: unknown) => {
+      if (cancelled) return;
+      setFailure(error instanceof Error ? error.message : describePdfFailure(error));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pageCount, pdfDocument, target]);
+
+  // ---- Pedir más al acercarse al final -------------------------------------
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || complete) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setTarget((current) => Math.min(pageCount, current + reflowBatch));
+        }
+      },
+      { rootMargin: "600px" },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [complete, pageCount, pages.length]);
+
+  // ---- Qué página se está leyendo ------------------------------------------
+  useEffect(() => {
+    const container = sentinelRef.current?.parentElement;
+    if (!container) return;
+
+    const sections = [...container.querySelectorAll<HTMLElement>("[data-page]")];
+    if (sections.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // La sección que más superficie ocupa manda, igual que en el modo original.
+        const best = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+        const page = Number(best?.target.getAttribute("data-page"));
+        if (Number.isFinite(page) && page > 0) onPageChange(page);
+      },
+      { threshold: [0, 0.25, 0.5, 0.75] },
+    );
+
+    for (const section of sections) observer.observe(section);
+    return () => observer.disconnect();
+  }, [onPageChange, pages.length]);
+
+  // ---- Llegar a la página con la que se entró ------------------------------
+  useEffect(() => {
+    if (jumpedRef.current || initialPage <= 1 || pages.length < initialPage) return;
+    jumpedRef.current = true;
+    const container = sentinelRef.current?.parentElement;
+    container
+      ?.querySelector(`[data-page="${initialPage}"]`)
+      ?.scrollIntoView({ behavior: "auto", block: "start" });
+  }, [initialPage, pages.length]);
+
+  return (
+    <article className={styles.reading}>
+      {pages.map((page) => (
+        <section
+          aria-label={`Página ${page.number} de ${title}`}
+          className={styles.readingPage}
+          data-page={page.number}
+          key={page.number}
+        >
+          <header className={styles.readingPageMark}>
+            <span>Página {page.number}</span>
+            {page.columns > 1 ? <span>Dos columnas</span> : null}
+          </header>
+          {page.blocks.length > 0 ? (
+            <ExtractedBlocks blocks={page.blocks} sectionTitle={`página ${page.number}`} />
+          ) : (
+            <p className={styles.readingEmpty}>
+              Esta página no tiene capa de texto: es una imagen a la espera del OCR. En
+              «Original» se ve tal cual está en el documento.
+            </p>
+          )}
+        </section>
+      ))}
+
+      <div className={styles.readingFoot} ref={sentinelRef}>
+        {failure ? (
+          <p role="alert">{failure}</p>
+        ) : complete ? (
+          <p>Fin del documento · {pageCount} páginas</p>
+        ) : (
+          <p role="status">
+            Recomponiendo el texto… {pages.length} de {pageCount} páginas
+          </p>
+        )}
+      </div>
+    </article>
+  );
+}
+
 export function PdfReader({
   blob,
   initialPercent = 0,
@@ -214,6 +400,10 @@ export function PdfReader({
   const [manualScale, setManualScale] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [range, setRange] = useState({ first: 0, last: 0 });
+  const [mode, setMode] = useState<PdfViewMode>("original");
+  // Página con la que entra el otro modo: se fija al cambiar y no se recalcula después,
+  // porque cada modo lleva su propia cuenta mientras se lee.
+  const [entryPage, setEntryPage] = useState(1);
 
   const scrollerRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -223,6 +413,8 @@ export function PdfReader({
   // en llegar, y sin esto tres pulsaciones seguidas de «siguiente» acabarían las tres en la
   // página dos.
   const requestedPageRef = useRef(1);
+  // El modo lectura no tiene disposición de páginas de la que sacar el total.
+  const pageCountRef = useRef(0);
 
   const sizes = state.status === "ready" ? state.sizes : null;
 
@@ -298,10 +490,16 @@ export function PdfReader({
   const pageCount = placements.length;
   const columnHeight = useMemo(() => totalHeight(placements), [placements]);
 
+  useEffect(() => {
+    pageCountRef.current = pageCount;
+  }, [pageCount]);
+
   // ---- Desplazamiento: qué se ve y por dónde va la lectura -----------------
   const syncWithScroll = useCallback(() => {
     const scroller = scrollerRef.current;
-    if (!scroller || placements.length === 0) return;
+    // En modo lectura la cuenta la lleva la vista recompuesta: sus secciones no guardan
+    // relación con la disposición de páginas dibujadas.
+    if (!scroller || placements.length === 0 || mode === "reading") return;
 
     const { clientHeight, scrollTop } = scroller;
     setRange(visiblePageRange(placements, scrollTop, clientHeight));
@@ -315,7 +513,7 @@ export function PdfReader({
       lastReportedRef.current = percent;
       onProgressChange?.(percent);
     }
-  }, [onProgressChange, placements]);
+  }, [mode, onProgressChange, placements]);
 
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -355,19 +553,54 @@ export function PdfReader({
       // Quien ha pedido menos movimiento no debería recibir una página deslizándose: el
       // salto es instantáneo, igual que hace el resto de la interfaz.
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const applied = reducedMotion ? "auto" : behavior;
       requestedPageRef.current = target;
-      scroller.scrollTo({
-        behavior: reducedMotion ? "auto" : behavior,
-        top: scrollTopForPage(placements, target),
-      });
+
+      if (mode === "reading") {
+        // La vista recompuesta crece a medida que se lee: si esa página todavía no está
+        // hecha no hay nada a lo que saltar, y la nota del pie dice por dónde va.
+        scroller
+          .querySelector(`[data-page="${target}"]`)
+          ?.scrollIntoView({ behavior: applied, block: "start" });
+        return;
+      }
+
+      scroller.scrollTo({ behavior: applied, top: scrollTopForPage(placements, target) });
     },
-    [placements],
+    [mode, placements],
   );
 
   /** Avanza o retrocede desde la última página pedida, no desde la que se ve. */
   const stepPage = useCallback(
     (delta: number) => goToPage(requestedPageRef.current + delta),
     [goToPage],
+  );
+
+  /** Cambia de modo sin perder el sitio: el otro abre por la página que se estaba leyendo. */
+  const switchMode = useCallback(
+    (next: PdfViewMode) => {
+      setEntryPage(currentPage);
+      setMode(next);
+      if (next === "original") {
+        // El desplazamiento se aplica cuando la columna ya está montada.
+        window.requestAnimationFrame(() => goToPage(currentPage, "auto"));
+      }
+    },
+    [currentPage, goToPage],
+  );
+
+  /** El modo lectura cuenta sus páginas por su cuenta; el avance se guarda igual. */
+  const reportReadingPage = useCallback(
+    (page: number) => {
+      setCurrentPage(page);
+      requestedPageRef.current = page;
+      const percent = pageProgressPercent(page, pageCountRef.current);
+      if (percent !== lastReportedRef.current) {
+        lastReportedRef.current = percent;
+        onProgressChange?.(percent);
+      }
+    },
+    [onProgressChange],
   );
 
   // ---- Aviso de documento listo -------------------------------------------
@@ -479,34 +712,66 @@ export function PdfReader({
         </div>
 
         <div className={styles.group}>
-          <Button
-            aria-label="Reducir"
-            disabled={!sizes}
-            onClick={() => setManualScale((current) => nextZoomStep(current ?? fitScale, "out"))}
-            size="sm"
-            variant="quiet"
-          >
-            −
-          </Button>
-          <span className={styles.zoomStatus}>{zoomPercent} %</span>
-          <Button
-            aria-label="Ampliar"
-            disabled={!sizes}
-            onClick={() => setManualScale((current) => nextZoomStep(current ?? fitScale, "in"))}
-            size="sm"
-            variant="quiet"
-          >
-            +
-          </Button>
-          <Button
-            aria-pressed={usingFit}
-            disabled={!sizes || usingFit}
-            onClick={() => setManualScale(null)}
-            size="sm"
-            variant={usingFit ? "secondary" : "quiet"}
-          >
-            Ajustar ancho
-          </Button>
+          {mode === "original" ? (
+            <>
+              <Button
+                aria-label="Reducir"
+                disabled={!sizes}
+                onClick={() =>
+                  setManualScale((current) => nextZoomStep(current ?? fitScale, "out"))
+                }
+                size="sm"
+                variant="quiet"
+              >
+                −
+              </Button>
+              <span className={styles.zoomStatus}>{zoomPercent} %</span>
+              <Button
+                aria-label="Ampliar"
+                disabled={!sizes}
+                onClick={() =>
+                  setManualScale((current) => nextZoomStep(current ?? fitScale, "in"))
+                }
+                size="sm"
+                variant="quiet"
+              >
+                +
+              </Button>
+              <Button
+                aria-pressed={usingFit}
+                disabled={!sizes || usingFit}
+                onClick={() => setManualScale(null)}
+                size="sm"
+                variant={usingFit ? "secondary" : "quiet"}
+              >
+                Ajustar ancho
+              </Button>
+            </>
+          ) : (
+            <span className={styles.modeHint}>Texto recompuesto</span>
+          )}
+
+          {/* Dos maneras de leer el mismo documento: fiel a la página o fiel al texto. */}
+          <div className={styles.modeSwitch} role="group" aria-label="Forma de leer">
+            <Button
+              aria-pressed={mode === "original"}
+              disabled={!sizes}
+              onClick={() => switchMode("original")}
+              size="sm"
+              variant={mode === "original" ? "secondary" : "quiet"}
+            >
+              Original
+            </Button>
+            <Button
+              aria-pressed={mode === "reading"}
+              disabled={!sizes}
+              onClick={() => switchMode("reading")}
+              size="sm"
+              variant={mode === "reading" ? "secondary" : "quiet"}
+            >
+              Lectura
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -523,6 +788,15 @@ export function PdfReader({
             <p className={styles.loading} role="status">
               Preparando el documento en este dispositivo…
             </p>
+          ) : mode === "reading" ? (
+            <PdfReadingView
+              document={state.document}
+              initialPage={entryPage}
+              key={`reading-${entryPage}`}
+              onPageChange={reportReadingPage}
+              pageCount={pageCount}
+              title={title}
+            />
           ) : (
             <div className={styles.column} style={{ height: `${columnHeight}px` }}>
               {placements.map((placement, index) => (
