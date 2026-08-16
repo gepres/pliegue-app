@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "pdfjs-assets": "node scripts/copy-pdfjs-assets.mjs",
+    "dev": "pnpm pdfjs-assets && next dev",
+    "build": "pnpm pdfjs-assets && next build",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "test": "vitest run"

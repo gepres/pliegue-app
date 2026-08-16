@@ -8,7 +8,10 @@ export const maxTextPreviewBytes = 1024 * 1024;
 
 export type LocalDocumentPreview =
   | { content: string; kind: "text"; truncated: boolean }
-  | { blob: Blob; kind: "image" | "pdf" }
+  // Imagen y PDF llegan igual —un blob ya tipado— pero se muestran con piezas distintas:
+  // separar las variantes es lo que permite tratarlas por separado sin comprobaciones sueltas.
+  | { blob: Blob; kind: "image" }
+  | { blob: Blob; kind: "pdf" }
   | {
       format: StructuredDocumentFormat;
       kind: "structured";
@@ -42,6 +45,18 @@ export function withPreviewMimeType(blob: Blob, format: DocumentFormat) {
   const expected = previewMimeTypes[format];
   if (!expected || blob.type === expected) return blob;
   return new Blob([blob], { type: expected });
+}
+
+/**
+ * Formatos que se muestran en un visor con desplazamiento propio y que, por tanto, informan
+ * ellos mismos de por dónde va la lectura.
+ *
+ * Se decide por el formato y no por si ya ha llegado un aviso: durante los primeros
+ * instantes no ha llegado ninguno, y en ese hueco la medición por desplazamiento de la
+ * ventana llegaba a guardar la mitad de un documento que aún estaba en su primera página.
+ */
+export function readerCountsItsOwnPages(format: DocumentFormat) {
+  return format === "pdf";
 }
 
 export function classifyLocalDocumentPreview(format: DocumentFormat) {

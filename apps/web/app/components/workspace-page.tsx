@@ -1,23 +1,30 @@
 import type { ReactNode } from "react";
 
-import { Card, Tag } from "@pliegue/ui";
+import { Card, Tag, cx } from "@pliegue/ui";
 
 import styles from "./workspace-page.module.css";
 
 export function PageHeader({
   actions,
+  compact = false,
   description,
   eyebrow,
   title,
 }: {
   actions?: ReactNode;
+  /**
+   * Cede el protagonismo a lo que hay debajo. Pensado para el lector: ahí el título es el
+   * nombre de un archivo del disco —a menudo largo y sin espacios— y a tamaño de portada
+   * empujaba el documento fuera de la pantalla antes de haber leído una línea.
+   */
+  compact?: boolean;
   description: string;
   eyebrow: string;
   title: string;
 }) {
   return (
-    <header className={styles.pageHeader}>
-      <div>
+    <header className={cx(styles.pageHeader, compact && styles.pageHeaderCompact)}>
+      <div className={styles.pageHeading}>
         <Tag>{eyebrow}</Tag>
         <h1>{title}</h1>
         <p>{description}</p>

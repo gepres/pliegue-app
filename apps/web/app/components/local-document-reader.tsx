@@ -7,6 +7,7 @@ import { Button, Card, Tag, buttonClassName } from "@pliegue/ui";
 
 import {
   createLocalDocumentPreview,
+  readerCountsItsOwnPages,
   type LocalDocumentPreview,
 } from "../library/local-document-preview";
 import type { StructuredDocumentBlock } from "../library/structured-document-extractor";
@@ -36,6 +37,7 @@ import {
   resolveLocalReaderDocument,
   type LocalReaderDocument,
 } from "../library/local-reader-state";
+import { PdfReader } from "./pdf-reader";
 import { PageHeader } from "./workspace-page";
 import styles from "./local-document-reader.module.css";
 
@@ -100,63 +102,39 @@ function ExtractedBlock({
   );
 }
 
-function BinaryPreview({
+function ImagePreview({
   document,
   preview,
 }: {
   document: LocalDocument;
-  preview: Extract<LocalDocumentPreview, { blob: Blob }>;
+  preview: Extract<LocalDocumentPreview, { kind: "image" }>;
 }) {
   const objectRef = useRef<HTMLObjectElement>(null);
-  const openLinkRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
     const objectUrl = URL.createObjectURL(preview.blob);
     const objectElement = objectRef.current;
-    const openLink = openLinkRef.current;
     if (objectElement) objectElement.data = objectUrl;
-    if (openLink) openLink.href = objectUrl;
 
     return () => {
       objectElement?.removeAttribute("data");
-      openLink?.removeAttribute("href");
       URL.revokeObjectURL(objectUrl);
     };
   }, [preview.blob]);
 
-  if (preview.kind === "image") {
-    return (
-      <figure className={styles.imagePreview}>
-        <div className={styles.imageFrame}>
-          <object
-            aria-label={`Vista previa de ${document.title}`}
-            ref={objectRef}
-            type={preview.blob.type || `image/${document.format}`}
-          >
-            La imagen no pudo mostrarse en este navegador.
-          </object>
-        </div>
-        <figcaption>Imagen original · Ajustada al área de lectura</figcaption>
-      </figure>
-    );
-  }
-
   return (
-    <div className={styles.pdfPreview}>
-      <div className={styles.previewCaption}>
-        <span>PDF original</span>
-        <a ref={openLinkRef} rel="noreferrer" target="_blank">
-          Abrir en otra pestaña
-        </a>
+    <figure className={styles.imagePreview}>
+      <div className={styles.imageFrame}>
+        <object
+          aria-label={`Vista previa de ${document.title}`}
+          ref={objectRef}
+          type={preview.blob.type || `image/${document.format}`}
+        >
+          La imagen no pudo mostrarse en este navegador.
+        </object>
       </div>
-      <object
-        aria-label={`Documento PDF: ${document.title}`}
-        ref={objectRef}
-        type="application/pdf"
-      >
-        <p>El navegador no pudo mostrar el PDF. Usa “Abrir en otra pestaña”.</p>
-      </object>
-    </div>
+      <figcaption>Imagen original · Ajustada al área de lectura</figcaption>
+    </figure>
   );
 }
 
@@ -221,10 +199,18 @@ function StructuredPreview({
 
 function PreviewCanvas({
   document,
+  initialPercent,
+  onProgressChange,
   onReady,
+  restartSignal,
+  resumeRequested,
 }: {
   document: LocalDocument;
+  initialPercent: number;
+  onProgressChange: (percent: number) => void;
   onReady: () => void;
+  restartSignal: number;
+  resumeRequested: boolean;
 }) {
   const documentId = document.id;
   const format = document.format;
@@ -354,8 +340,21 @@ function PreviewCanvas({
     );
   }
 
-  if (preview.kind === "image" || preview.kind === "pdf") {
-    return <BinaryPreview document={document} preview={preview} />;
+  if (preview.kind === "pdf") {
+    return (
+      <PdfReader
+        blob={preview.blob}
+        initialPercent={initialPercent}
+        onProgressChange={onProgressChange}
+        restartSignal={restartSignal}
+        resumeRequested={resumeRequested}
+        title={document.title}
+      />
+    );
+  }
+
+  if (preview.kind === "image") {
+    return <ImagePreview document={document} preview={preview} />;
   }
 
   if (preview.kind === "structured") return <StructuredPreview preview={preview} />;
@@ -448,6 +447,7 @@ function ReaderDetails({
   onRestart: () => void;
   progressPercent: number;
 }) {
+  const countsPages = readerCountsItsOwnPages(document.format);
   const sourceLabel =
     document.reference.kind === "local-file"
       ? "Archivo original"
@@ -459,67 +459,83 @@ function ReaderDetails({
       ? "Blob en IndexedDB"
       : "Handle seguro en IndexedDB";
 
+  const availabilityLabel =
+    document.reference.kind === "local-copy"
+      ? "Copia offline"
+      : document.availability === "available"
+        ? "Disponible"
+        : "Permiso requerido";
+
   return (
     <aside className={styles.documentDetails}>
-      <Card>
-        <Tag>Progreso local</Tag>
-        <h2>{progressPercent} % leído</h2>
-        <div
-          aria-label={`Progreso de lectura: ${progressPercent} por ciento`}
-          aria-valuemax={100}
-          aria-valuemin={0}
-          aria-valuenow={progressPercent}
-          className={styles.readingProgressBar}
-          role="progressbar"
-        >
+      {/* Un solo panel con secciones separadas por reglas, en lugar de tres tarjetas
+          apiladas: al leer, el documento es lo que manda y esto es su ficha, no tres
+          bloques compitiendo por atención. */}
+      <Card className={styles.detailsPanel}>
+        <section className={styles.detailsSection}>
+          <div className={styles.progressHead}>
+            <span className={styles.detailsLabel}>Progreso local</span>
+            <strong className={styles.progressValue}>{progressPercent} %</strong>
+          </div>
           <div
-            className={styles.readingProgressValue}
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
-        <p>Se actualiza al desplazarte y se comparte entre pestañas de este navegador.</p>
-        {progressPercent > 0 ? (
-          <Button onClick={onRestart} size="sm" variant="quiet">
-            Empezar desde el inicio
-          </Button>
-        ) : null}
-      </Card>
-      <Card>
-        <Tag>{sourceLabel}</Tag>
-        <h2>Sobre este archivo</h2>
-        <dl>
-          <div>
-            <dt>Formato</dt>
-            <dd>{document.format.toUpperCase()}</dd>
+            aria-label={`Progreso de lectura: ${progressPercent} por ciento`}
+            aria-valuemax={100}
+            aria-valuemin={0}
+            aria-valuenow={progressPercent}
+            className={styles.readingProgressBar}
+            role="progressbar"
+          >
+            <div
+              className={styles.readingProgressValue}
+              style={{ width: `${progressPercent}%` }}
+            />
           </div>
-          <div>
-            <dt>Origen</dt>
-            <dd>{storageLabel}</dd>
-          </div>
-          <div>
-            <dt>Disponibilidad</dt>
-            <dd>
-              {document.reference.kind === "local-copy"
-                ? "Copia disponible offline"
-                : document.availability === "available"
-                  ? "Disponible"
-                  : "Permiso requerido"}
-            </dd>
-          </div>
-          <div>
-            <dt>Índice local</dt>
-            <dd>
-              {document.indexStatus
-                ? readerIndexLabels[document.indexStatus]
-                : "Estado desconocido"}
-            </dd>
-          </div>
-        </dl>
-      </Card>
-      <Card>
-        <h2>Privacidad por diseño</h2>
-        <p>
-          Esta vista se prepara dentro del navegador. El documento no sale de tu dispositivo.
+          <p className={styles.detailsNote}>
+            {countsPages
+              ? "Cuenta las páginas que dejas atrás."
+              : "Se actualiza al desplazarte."}
+          </p>
+          {progressPercent > 0 ? (
+            <Button
+              className={styles.restartButton}
+              onClick={onRestart}
+              size="sm"
+              variant="quiet"
+            >
+              Volver al inicio
+            </Button>
+          ) : null}
+        </section>
+
+        <section className={styles.detailsSection}>
+          <span className={styles.detailsLabel}>{sourceLabel}</span>
+          <dl className={styles.detailsList}>
+            <div>
+              <dt>Formato</dt>
+              <dd>{document.format.toUpperCase()}</dd>
+            </div>
+            <div>
+              <dt>Disponibilidad</dt>
+              <dd>{availabilityLabel}</dd>
+            </div>
+            <div>
+              <dt>Índice</dt>
+              <dd>
+                {document.indexStatus
+                  ? readerIndexLabels[document.indexStatus]
+                  : "Desconocido"}
+              </dd>
+            </div>
+            <div>
+              <dt>Origen</dt>
+              <dd>{storageLabel}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <p className={styles.privacyNote}>
+          <Tag>Local-only</Tag>
+          El documento se abre dentro del navegador y no sale de tu dispositivo.
         </p>
       </Card>
     </aside>
@@ -533,16 +549,27 @@ function scrollToReadingPosition(root: HTMLElement, percent: number, behavior: S
   window.scrollTo({ behavior, top: Math.max(0, target) });
 }
 
+/**
+ * Avance de lectura del documento abierto.
+ *
+ * Hay dos formas de medirlo y no son intercambiables. Para el texto y los formatos que
+ * Pliegue compone —donde el documento *es* el alto de la página— basta con seguir el
+ * desplazamiento de la ventana. Un visor que se desplaza por dentro, como el de PDF, queda
+ * fuera de esa cuenta: por eso reporta él su posición en `reportedPercent`, y aquí solo se
+ * guarda. Medir su scroll desde fuera era lo que producía «78 % leído» en la página 1 de 49.
+ */
 function useDocumentProgress(
   document: LocalDocument,
   contentReady: boolean,
   resumeRequested: boolean,
   rootRef: React.RefObject<HTMLElement | null>,
+  reportedPercent: number | null,
 ) {
   const { format, id, origin, title } = document;
   const progress = useReadingProgress(document.id);
   const lastPersistedRef = useRef(progress?.percent ?? 0);
   const hasResumedRef = useRef(false);
+  const selfReported = readerCountsItsOwnPages(format);
 
   useEffect(() => {
     lastPersistedRef.current = progress?.percent ?? 0;
@@ -553,7 +580,14 @@ function useDocumentProgress(
   }, [format, id, origin, title]);
 
   useEffect(() => {
-    if (!contentReady) return;
+    if (reportedPercent === null) return;
+    if (reportedPercent <= lastPersistedRef.current) return;
+    lastPersistedRef.current = reportedPercent;
+    saveReadingProgress({ format, id, origin, title }, reportedPercent);
+  }, [format, id, origin, reportedPercent, title]);
+
+  useEffect(() => {
+    if (!contentReady || selfReported) return;
     let animationFrame = 0;
 
     function measureProgress() {
@@ -592,10 +626,13 @@ function useDocumentProgress(
       window.removeEventListener("scroll", scheduleMeasurement);
       window.removeEventListener("resize", scheduleMeasurement);
     };
-  }, [contentReady, document, rootRef]);
+  }, [contentReady, document, rootRef, selfReported]);
 
   useEffect(() => {
+    // Un visor que se desplaza por dentro retoma su propia posición: mover la ventana desde
+    // fuera solo desplazaría la página de la aplicación, dejando el documento en la primera.
     if (
+      selfReported ||
       !contentReady ||
       !resumeRequested ||
       hasResumedRef.current ||
@@ -619,15 +656,15 @@ function useDocumentProgress(
       window.cancelAnimationFrame(firstFrame);
       if (secondFrame) window.cancelAnimationFrame(secondFrame);
     };
-  }, [contentReady, progress, resumeRequested, rootRef]);
+  }, [contentReady, progress, resumeRequested, rootRef, selfReported]);
 
   const restart = useCallback(() => {
     const root = rootRef.current;
     saveReadingProgress(document, 0, { allowRegression: true });
     lastPersistedRef.current = 0;
     hasResumedRef.current = false;
-    if (root) scrollToReadingPosition(root, 0, "smooth");
-  }, [document, rootRef]);
+    if (!selfReported && root) scrollToReadingPosition(root, 0, "smooth");
+  }, [document, rootRef, selfReported]);
 
   return { progressPercent: progress?.percent ?? 0, restart };
 }
@@ -646,6 +683,10 @@ function LocalReaderShell({
   sourceName?: string | undefined;
 }) {
   const [contentReady, setContentReady] = useState(false);
+  // El visor de PDF cuenta las páginas él mismo; el resto de formatos se miden por
+  // desplazamiento. `null` es lo que distingue un caso del otro.
+  const [reportedPercent, setReportedPercent] = useState<number | null>(null);
+  const [restartSignal, setRestartSignal] = useState(0);
   const previewRef = useRef<HTMLElement>(null);
   const markContentReady = useCallback(() => setContentReady(true), []);
   const { progressPercent, restart } = useDocumentProgress(
@@ -653,19 +694,27 @@ function LocalReaderShell({
     contentReady,
     resumeRequested,
     previewRef,
+    reportedPercent,
   );
+
+  const restartReading = useCallback(() => {
+    restart();
+    setReportedPercent(null);
+    setRestartSignal((signal) => signal + 1);
+  }, [restart]);
 
   return (
     <>
       <PageHeader
         actions={
           <Link
-            className={buttonClassName({ size: "md", variant: "secondary" })}
+            className={buttonClassName({ size: "sm", variant: "secondary" })}
             href="/app/biblioteca"
           >
             ← Biblioteca
           </Link>
         }
+        compact
         description={document.meta}
         eyebrow={`${document.format.toUpperCase()} · Local-only`}
         title={document.title}
@@ -678,12 +727,19 @@ function LocalReaderShell({
               sourceName={sourceName ?? "el origen"}
             />
           ) : (
-            <PreviewCanvas document={document} onReady={markContentReady} />
+            <PreviewCanvas
+              document={document}
+              initialPercent={progressPercent}
+              onProgressChange={setReportedPercent}
+              onReady={markContentReady}
+              restartSignal={restartSignal}
+              resumeRequested={resumeRequested}
+            />
           )}
         </main>
         <ReaderDetails
           document={document}
-          onRestart={restart}
+          onRestart={restartReading}
           progressPercent={progressPercent}
         />
       </div>

@@ -62,6 +62,94 @@ a {
   color: var(--pliegue-ink-950);
 }
 
+/**
+ * Capa de texto de pdf.js.
+ *
+ * Son los estilos que la librería exige para colocar sobre el dibujo un span transparente
+ * por cada fragmento de texto: de ahí salen la selección, el copiado y lo que lee un lector
+ * de pantalla. Van aquí y no en un módulo CSS porque los nombres —`markedContent`,
+ * `endOfContent`— los genera la propia librería y no pueden pasar por el renombrado.
+ *
+ * Copiados de `pdfjs-dist/web/pdf_viewer.css`, que trae además el visor completo, sus
+ * diálogos y las capas XFA: seis mil líneas para usar sesenta. Al subir de versión conviene
+ * volver a comparar este bloque con el original. Las variables de escala las fija
+ * `pdf-reader.module.css` en el contenedor de cada página.
+ */
+.textLayer {
+  --min-font-size: 1;
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+
+  caret-color: CanvasText;
+  color-scheme: only light;
+  forced-color-adjust: none;
+  inset: 0;
+  letter-spacing: normal;
+  line-height: 1;
+  opacity: 1;
+  overflow: clip;
+  position: absolute;
+  text-align: initial;
+  text-size-adjust: none;
+  transform-origin: 0 0;
+  word-spacing: normal;
+  z-index: 0;
+}
+
+.textLayer span,
+.textLayer br {
+  color: transparent;
+  cursor: text;
+  position: absolute;
+  transform-origin: 0% 0%;
+  user-select: text;
+  white-space: pre;
+}
+
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --rotate: 0deg;
+  --scale-x: 1;
+
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+  z-index: 1;
+}
+
+.textLayer .markedContent {
+  display: contents;
+}
+
+.textLayer span[role="img"] {
+  cursor: default;
+  user-select: none;
+}
+
+/* El texto es transparente, así que la selección solo se ve por su fondo. */
+.textLayer ::selection {
+  background: color-mix(in srgb, var(--pliegue-color-accent-warm) 45%, transparent);
+  color: transparent;
+}
+
+.textLayer br::selection {
+  background: transparent;
+}
+
+/* Recoge la selección que se arrastra más allá de la última línea de la página. */
+.textLayer .endOfContent {
+  cursor: default;
+  display: block;
+  inset: 100% 0 0;
+  position: absolute;
+  user-select: none;
+  z-index: 0;
+}
+
+.textLayer.selecting .endOfContent {
+  top: 0;
+}
+
 .skip-link {
   background: var(--pliegue-color-bg-surface);
   border-radius: var(--pliegue-radius-sm);

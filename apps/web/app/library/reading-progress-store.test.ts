@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  migrateProgressEntries,
   reconcileReadingProgress,
   type ReadingProgressRecord,
 } from "./reading-progress-store";
+import type { DocumentFormat } from "./documents";
 
 function progress(
   percent: number,
   updatedAt = "2026-08-01T12:00:00.000Z",
+  format: DocumentFormat = "epub",
 ): ReadingProgressRecord {
   return {
-    documentId: "document-1",
-    format: "epub",
+    documentId: `document-${format}`,
+    format,
     origin: "local",
     percent,
     title: "Documento real",
@@ -58,5 +61,36 @@ describe("reconcileReadingProgress", () => {
         true,
       ).percent,
     ).toBe(0);
+  });
+});
+
+describe("migración del avance guardado", () => {
+  const stored = [
+    progress(100, "2026-08-01T12:00:00.000Z", "pdf"),
+    progress(65, "2026-08-01T12:00:00.000Z", "epub"),
+    progress(30, "2026-08-01T12:00:00.000Z", "docx"),
+  ];
+
+  it("descarta el avance de los PDF medido antes de contar páginas", () => {
+    // El caso real: un PDF de 49 páginas marcado como leído entero sin pasar de la primera,
+    // porque se medía el desplazamiento de la página de la aplicación y no el del documento.
+    const migrated = migrateProgressEntries(stored, 1);
+
+    expect(migrated.map((entry) => entry.percent)).toEqual([0, 65, 30]);
+    // El resto de campos se conservan: no se pierde el documento, solo su cifra falsa.
+    expect(migrated[0]?.title).toBe("Documento real");
+    expect(migrated[0]?.updatedAt).toBe("2026-08-01T12:00:00.000Z");
+  });
+
+  it("deja intacto lo ya guardado con el visor que cuenta páginas", () => {
+    const migrated = migrateProgressEntries(stored, 2);
+
+    expect(migrated.map((entry) => entry.percent)).toEqual([100, 65, 30]);
+  });
+
+  it("no muta el arreglo recibido", () => {
+    migrateProgressEntries(stored, 1);
+
+    expect(stored[0]?.percent).toBe(100);
   });
 });

@@ -3,6 +3,16 @@
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
   min-height: 100vh;
+  transition: grid-template-columns var(--pliegue-motion-base) ease;
+}
+
+/**
+ * Plegada, la navegación no desaparece: se reduce a un carril con los códigos de sección.
+ * Esconderla del todo devolvería sesenta píxeles más y a cambio dejaría al lector sin forma
+ * de salir del documento salvo el botón de volver.
+ */
+.shellCollapsed {
+  grid-template-columns: 68px minmax(0, 1fr);
 }
 
 .sidebar {
@@ -11,9 +21,58 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  overflow: hidden;
   padding: var(--pliegue-spacing-lg);
   position: sticky;
   top: 0;
+}
+
+.shellCollapsed .sidebar {
+  align-items: center;
+  padding: var(--pliegue-spacing-lg) var(--pliegue-spacing-xs);
+}
+
+.shellCollapsed .brandName,
+.shellCollapsed .areaText,
+.shellCollapsed .navigationLabel,
+.shellCollapsed .sidebarNote {
+  display: none;
+}
+
+.shellCollapsed .areaIdentity {
+  border: 0;
+  margin: var(--pliegue-spacing-lg) 0;
+  padding: 0;
+}
+
+.shellCollapsed .desktopNavigation {
+  align-self: stretch;
+}
+
+.shellCollapsed .navigationLink {
+  gap: 0;
+  justify-content: center;
+  padding: 0;
+}
+
+.shellCollapsed .sidebarFooter {
+  align-self: stretch;
+  text-align: center;
+}
+
+.navigationToggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-family: var(--pliegue-font-data);
+}
+
+/* El control y la ruta viajan juntos por la izquierda: separarlos con `space-between`
+   empujaba la ruta al centro de la barra, lejos de la sección que nombra. */
+.topbarStart {
+  align-items: center;
+  display: flex;
+  gap: var(--pliegue-spacing-sm);
+  min-width: 0;
 }
 
 .brand,
@@ -188,17 +247,34 @@
   padding: clamp(2rem, 5vw, 4rem) clamp(1rem, 4vw, 3rem) 5rem;
 }
 
+/**
+ * Sin tope de ancho ni margen superior de portada: es lo que hace que plegar la navegación
+ * se traduzca en documento y no en márgenes más anchos. Con el tope de 1280 px, esconder la
+ * barra devolvía ciento ochenta píxeles al fondo de la página en vez de a la página leída.
+ */
+.contentWide {
+  max-width: none;
+  padding-bottom: 3rem;
+  padding-top: clamp(1.25rem, 2.5vw, 2rem);
+}
+
 .mobileNavigation {
   display: none;
 }
 
 @media (max-width: 800px) {
-  .shell {
+  .shell,
+  .shellCollapsed {
     display: block;
     padding-bottom: 76px;
   }
 
   .sidebar {
+    display: none;
+  }
+
+  /* Sin barra lateral que plegar, el control sobra: la navegación vive abajo. */
+  .navigationToggle {
     display: none;
   }
 
@@ -210,7 +286,7 @@
     display: inline-flex;
   }
 
-  .breadcrumb {
+  .topbarStart {
     margin-right: auto;
   }
 
@@ -251,7 +327,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .navigationLink {
+  .navigationLink,
+  .shell {
     transition: none;
   }
 }

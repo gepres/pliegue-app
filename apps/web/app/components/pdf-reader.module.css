@@ -1,0 +1,139 @@
+.reader {
+  background-color: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  box-shadow: var(--pliegue-elevation-paper);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.toolbar {
+  align-items: center;
+  background: var(--pliegue-color-bg-subtle);
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm) var(--pliegue-spacing-lg);
+  justify-content: space-between;
+  padding: var(--pliegue-spacing-xs) var(--pliegue-spacing-md);
+}
+
+.group {
+  align-items: center;
+  display: flex;
+  gap: var(--pliegue-spacing-2xs);
+}
+
+.pageStatus,
+.zoomStatus {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  min-width: 4.5rem;
+  text-align: center;
+}
+
+.pageStatus strong {
+  color: var(--pliegue-color-text-primary);
+  font-weight: 500;
+}
+
+.zoomStatus {
+  min-width: 3.75rem;
+}
+
+.frame {
+  min-height: 0;
+  min-width: 0;
+}
+
+.scroller {
+  background: var(--pliegue-color-bg-subtle);
+  height: min(78vh, 960px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  position: relative;
+}
+
+.scroller:focus-visible {
+  outline: 3px solid var(--pliegue-color-accent-warm);
+  outline-offset: -3px;
+}
+
+.loading,
+.failure {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  margin: 0;
+  padding: clamp(2rem, 8vw, 5rem);
+  text-align: center;
+}
+
+.failure {
+  color: var(--pliegue-color-status-danger);
+}
+
+/**
+ * La columna reserva de golpe el alto de todas las páginas y cada una se coloca en su sitio
+ * de forma absoluta. Así la barra de desplazamiento mide el documento completo desde el
+ * primer momento, aunque solo haya tres páginas dibujadas: sin eso, la posición saltaría
+ * cada vez que apareciera una página nueva.
+ */
+.column {
+  margin: 0 auto;
+  position: relative;
+  width: 100%;
+}
+
+.page {
+  --user-unit: 1;
+  --total-scale-factor: calc(var(--scale-factor) * var(--user-unit));
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+
+  background: var(--pliegue-color-bg-surface);
+  box-shadow: var(--pliegue-elevation-paper);
+  direction: ltr;
+  left: 50%;
+  overflow: visible;
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+/* Mientras no hay dibujo, la página es un hueco de papel: nunca un salto en blanco. */
+.page[data-drawn="false"] {
+  background-image: linear-gradient(
+    var(--pliegue-color-bg-subtle),
+    var(--pliegue-color-bg-subtle)
+  );
+}
+
+.canvas {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.pageNumber {
+  bottom: calc(var(--pliegue-spacing-xs) * -1);
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  opacity: 0.55;
+  position: absolute;
+  right: 0;
+  transform: translateY(100%);
+}
+
+@media (max-width: 640px) {
+  .toolbar {
+    justify-content: center;
+  }
+
+  .scroller {
+    height: 70vh;
+  }
+}
