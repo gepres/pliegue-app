@@ -1,4 +1,14 @@
+/* ==========================================================================
+   Botón
+   Píldora de marca en tres alturas. El primario tiene algo de relieve (brillo arriba y
+   una sombra teñida de su propio color) y se hunde al pulsarlo. Los demás se apoyan en
+   el papel con una sombra mínima o ninguna.
+   ========================================================================== */
+
 .pliegue-button {
+  --pliegue-button-height: 44px;
+  --pliegue-button-padding: 20px;
+
   align-items: center;
   border: 1px solid transparent;
   border-radius: var(--pliegue-radius-full);
@@ -9,40 +19,113 @@
   font-weight: 600;
   gap: var(--pliegue-spacing-xs);
   justify-content: center;
-  letter-spacing: 0.01em;
-  min-height: 44px;
+  letter-spacing: 0.005em;
+  line-height: 1.2;
+  min-height: var(--pliegue-button-height);
+  padding: 0 var(--pliegue-button-padding);
+  position: relative;
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
   transition:
-    background-color var(--pliegue-motion-fast) ease,
-    border-color var(--pliegue-motion-fast) ease,
-    color var(--pliegue-motion-fast) ease,
-    transform var(--pliegue-motion-fast) ease;
+    background-color var(--pliegue-motion-fast) var(--pliegue-ease-standard),
+    border-color var(--pliegue-motion-fast) var(--pliegue-ease-standard),
+    box-shadow var(--pliegue-motion-fast) var(--pliegue-ease-standard),
+    color var(--pliegue-motion-fast) var(--pliegue-ease-standard),
+    transform var(--pliegue-motion-fast) var(--pliegue-ease-standard);
+  user-select: none;
+  white-space: nowrap;
 }
 
-.pliegue-button--md {
-  padding: 0.75rem 1.25rem;
+.pliegue-button > svg {
+  flex: none;
+}
+
+/* Ajuste óptico: un icono delante pesa menos que una letra, así que ese lado se estrecha. */
+.pliegue-button:has(> svg:first-child) {
+  padding-inline-start: calc(var(--pliegue-button-padding) - 4px);
 }
 
 .pliegue-button--sm {
-  min-height: 40px;
-  padding: 0.5rem 1rem;
+  --pliegue-button-height: 36px;
+  --pliegue-button-padding: 14px;
+
+  font-size: 0.8125rem;
+  gap: 6px;
+}
+
+.pliegue-button--lg {
+  --pliegue-button-height: 52px;
+  --pliegue-button-padding: 28px;
+
+  font-size: 0.9375rem;
+}
+
+/* Con el dedo, el botón pequeño conserva un objetivo cómodo aunque se vea compacto. */
+@media (pointer: coarse) {
+  .pliegue-button--sm {
+    --pliegue-button-height: 40px;
+  }
 }
 
 .pliegue-button--primary {
-  background: var(--pliegue-color-action-primary);
+  background-color: var(--pliegue-color-action-primary);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--pliegue-white-1000) 12%, transparent),
+    transparent 60%
+  );
+  border-color: color-mix(in srgb, var(--pliegue-color-action-primary) 82%, var(--pliegue-ink-950));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--pliegue-white-1000) 18%, transparent),
+    0 1px 2px color-mix(in srgb, var(--pliegue-ink-950) 18%, transparent),
+    0 6px 16px -8px color-mix(in srgb, var(--pliegue-color-action-primary) 80%, transparent);
   color: var(--pliegue-color-text-on-action);
 }
 
 .pliegue-button--secondary {
-  background: var(--pliegue-color-bg-surface);
+  background-color: var(--pliegue-color-bg-surface);
   border-color: var(--pliegue-color-border-default);
+  box-shadow: var(--pliegue-elevation-raised);
   color: var(--pliegue-color-text-primary);
 }
 
 .pliegue-button--quiet {
-  background: transparent;
+  background-color: transparent;
   color: var(--pliegue-color-text-secondary);
+}
+
+.pliegue-button--danger {
+  background-color: transparent;
+  color: var(--pliegue-color-status-danger);
+}
+
+@media (hover: hover) {
+  /* El hover se acerca a la tinta del tema: oscurece en claro y aclara en oscuro. */
+  .pliegue-button--primary:hover:not(:disabled) {
+    background-color: color-mix(
+      in srgb,
+      var(--pliegue-color-action-primary) 88%,
+      var(--pliegue-color-text-primary)
+    );
+  }
+
+  .pliegue-button--secondary:hover:not(:disabled) {
+    background-color: color-mix(
+      in srgb,
+      var(--pliegue-color-bg-surface) 94%,
+      var(--pliegue-color-text-primary)
+    );
+    border-color: var(--pliegue-color-border-control);
+  }
+
+  .pliegue-button--quiet:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--pliegue-color-text-primary) 7%, transparent);
+    color: var(--pliegue-color-text-primary);
+  }
+
+  .pliegue-button--danger:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--pliegue-color-status-danger) 10%, transparent);
+  }
 }
 
 /* Respuesta de app al pulsar —se hunde un poco— en lugar del salto hacia arriba de una
@@ -51,26 +134,40 @@
   transform: scale(0.97);
 }
 
-@media (hover: hover) {
-  .pliegue-button--primary:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--pliegue-color-action-primary) 88%, black);
-  }
-
-  .pliegue-button--secondary:hover:not(:disabled),
-  .pliegue-button--quiet:hover:not(:disabled) {
-    background: var(--pliegue-color-bg-subtle);
-  }
+.pliegue-button--primary:active:not(:disabled) {
+  box-shadow:
+    inset 0 1px 3px color-mix(in srgb, var(--pliegue-ink-950) 28%, transparent),
+    0 1px 1px color-mix(in srgb, var(--pliegue-ink-950) 12%, transparent);
 }
 
+.pliegue-button--secondary:active:not(:disabled) {
+  box-shadow: none;
+}
+
+/* Desactivado se ve plano en lugar de transparente: con opacidad, el fondo de la página
+   se colaba a través del botón y parecía roto más que inactivo. */
 .pliegue-button:disabled {
+  background-color: color-mix(in srgb, var(--pliegue-color-text-primary) 7%, transparent);
+  background-image: none;
+  border-color: transparent;
+  box-shadow: none;
+  color: color-mix(in srgb, var(--pliegue-color-text-primary) 42%, transparent);
   cursor: not-allowed;
-  opacity: 0.52;
+}
+
+.pliegue-button--quiet:disabled,
+.pliegue-button--danger:disabled {
+  background-color: transparent;
 }
 
 .pliegue-button:focus-visible {
-  outline: 3px solid var(--pliegue-color-accent-warm);
-  outline-offset: 3px;
+  outline: 2px solid var(--pliegue-color-focus-ring);
+  outline-offset: 2px;
 }
+
+/* ==========================================================================
+   Tarjeta y etiqueta
+   ========================================================================== */
 
 .pliegue-card {
   border: 1px solid var(--pliegue-color-border-default);
@@ -104,15 +201,21 @@
   text-transform: uppercase;
 }
 
+/* ==========================================================================
+   Campo: etiqueta, control y ayuda
+   ========================================================================== */
+
 .pliegue-field {
   display: grid;
-  gap: var(--pliegue-spacing-xs);
+  gap: 6px;
 }
 
+/* UI/Label de Figma: Inter Medium, 13 px. */
 .pliegue-field__label {
   color: var(--pliegue-color-text-primary);
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 500;
+  letter-spacing: 0.005em;
 }
 
 .pliegue-field__description {
@@ -122,48 +225,355 @@
   margin: 0;
 }
 
+/* ==========================================================================
+   Entrada de texto y selector
+   Un hueco en el papel: fondo de campo, borde que llega a 3:1, sombra interior mínima.
+   Al enfocar, el borde toma el ocre del foco y lo rodea un halo suave del mismo color.
+   ========================================================================== */
+
 .pliegue-input,
 .pliegue-select {
-  background-color: var(--pliegue-color-bg-surface);
-  border: 1px solid var(--pliegue-color-border-default);
-  border-radius: var(--pliegue-radius-sm);
+  appearance: none;
+  background-color: var(--pliegue-color-bg-field);
+  border: 1px solid var(--pliegue-color-border-control);
+  border-radius: var(--pliegue-radius-md);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--pliegue-ink-950) 6%, transparent);
   color: var(--pliegue-color-text-primary);
+  /* 16 px como mínimo: por debajo, Safari en iOS amplía la página al enfocar el campo. */
+  font-size: 1rem;
+  line-height: 1.25;
   min-height: 44px;
+  padding: 0 14px;
+  transition:
+    background-color var(--pliegue-motion-fast) var(--pliegue-ease-standard),
+    border-color var(--pliegue-motion-fast) var(--pliegue-ease-standard),
+    box-shadow var(--pliegue-motion-fast) var(--pliegue-ease-standard);
   width: 100%;
 }
 
-.pliegue-input {
-  padding: 0 var(--pliegue-spacing-sm);
-}
-
 .pliegue-input::placeholder {
-  color: var(--pliegue-color-text-secondary);
-  opacity: 0.72;
+  /* Tinta al 64 %: 4,7:1 sobre blanco, legible sin competir con el texto escrito. */
+  color: color-mix(in srgb, var(--pliegue-color-text-primary) 64%, transparent);
+  opacity: 1;
 }
 
-.pliegue-select {
-  appearance: none;
-  background:
-    linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 17px) 50% / 5px 5px no-repeat,
-    linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 12px) 50% / 5px 5px no-repeat,
-    var(--pliegue-color-bg-surface);
-  padding: 0 2.5rem 0 var(--pliegue-spacing-sm);
+@media (hover: hover) {
+  .pliegue-input:hover:not(:disabled, :focus, :is([aria-invalid="true"], :user-invalid)),
+  .pliegue-select:hover:not(:disabled, :focus, [aria-invalid="true"]) {
+    border-color: var(--pliegue-color-border-strong);
+  }
+}
+
+/* Autocompletado: Chrome pinta el campo de azul con un fondo que no se puede sustituir,
+   así que se tapa con una sombra interior del tono del papel. */
+.pliegue-input:is(:autofill, :-webkit-autofill) {
+  -webkit-text-fill-color: var(--pliegue-color-text-primary);
+  box-shadow: inset 0 0 0 100px
+    color-mix(in srgb, var(--pliegue-color-accent-warm) 9%, var(--pliegue-color-bg-field));
 }
 
 .pliegue-input:focus-visible,
 .pliegue-select:focus-visible {
-  outline: 3px solid var(--pliegue-color-accent-warm);
-  outline-offset: 2px;
+  border-color: var(--pliegue-color-focus-ring);
+  box-shadow:
+    0 0 0 1px var(--pliegue-color-focus-ring),
+    0 0 0 5px color-mix(in srgb, var(--pliegue-color-focus-ring) 20%, transparent);
+  outline: none;
+}
+
+.pliegue-input:is(:autofill, :-webkit-autofill):focus-visible {
+  box-shadow:
+    inset 0 0 0 100px
+      color-mix(in srgb, var(--pliegue-color-accent-warm) 9%, var(--pliegue-color-bg-field)),
+    0 0 0 1px var(--pliegue-color-focus-ring),
+    0 0 0 5px color-mix(in srgb, var(--pliegue-color-focus-ring) 20%, transparent);
+}
+
+/* Error: el que marca la app con `aria-invalid` y el que detecta el navegador cuando la
+   persona ya ha escrito algo que no vale (`:user-invalid`, nunca antes de tocar el campo). */
+.pliegue-input:is([aria-invalid="true"], :user-invalid),
+.pliegue-select[aria-invalid="true"] {
+  border-color: var(--pliegue-color-status-danger);
+}
+
+.pliegue-input:is([aria-invalid="true"], :user-invalid):focus-visible,
+.pliegue-select[aria-invalid="true"]:focus-visible {
+  box-shadow:
+    0 0 0 1px var(--pliegue-color-status-danger),
+    0 0 0 5px color-mix(in srgb, var(--pliegue-color-status-danger) 18%, transparent);
 }
 
 .pliegue-input:disabled,
 .pliegue-select:disabled {
+  background-color: color-mix(in srgb, var(--pliegue-color-bg-subtle) 70%, var(--pliegue-color-bg-field));
+  border-color: color-mix(in srgb, var(--pliegue-color-border-control) 45%, transparent);
+  box-shadow: none;
+  color: color-mix(in srgb, var(--pliegue-color-text-primary) 50%, transparent);
   cursor: not-allowed;
-  opacity: 0.56;
+}
+
+/* La «×» de borrar la búsqueda: el aspa de la app en el color del texto, no el azul del sistema. */
+.pliegue-input[type="search"]::-webkit-search-cancel-button {
+  appearance: none;
+  background-color: currentColor;
+  cursor: pointer;
+  height: 16px;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6 6 18'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  opacity: 0.55;
+  width: 16px;
+}
+
+.pliegue-input:read-only:not(:disabled) {
+  background-color: color-mix(in srgb, var(--pliegue-color-bg-subtle) 45%, var(--pliegue-color-bg-field));
+}
+
+/* Selector nativo: la flecha es un dibujo en tono neutro que se lee en los dos temas. */
+.pliegue-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238c8274' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9.5 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 18px 18px;
+  cursor: pointer;
+  padding-right: 42px;
+  text-overflow: ellipsis;
+}
+
+/*
+ * Selector personalizable (`appearance: base-select`, Chrome 135 en adelante). La lista
+ * desplegable deja de ser la del sistema operativo y se dibuja con los tokens: papel,
+ * esquinas, sombra de capa y marca de la opción elegida. Donde no existe, se queda el
+ * selector nativo de arriba.
+ */
+@supports (appearance: base-select) {
+  .pliegue-select,
+  .pliegue-select::picker(select) {
+    appearance: base-select;
+  }
+
+  /*
+   * En este modo el texto elegido vive dentro del propio control y no admite puntos
+   * suspensivos: si no cabe, empujaba la flecha fuera. Por eso va en una sola línea y la
+   * flecha se superpone al final con un degradado del color del campo, de modo que lo que
+   * sobra se desvanece bajo ella. `--pliegue-select-bg` mantiene fondo y degradado iguales
+   * también cuando el campo está desactivado.
+   */
+  .pliegue-select {
+    --pliegue-select-bg: var(--pliegue-color-bg-field);
+
+    align-items: center;
+    background-color: var(--pliegue-select-bg);
+    background-image: none;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+    white-space: nowrap;
+  }
+
+  .pliegue-select:disabled {
+    --pliegue-select-bg: color-mix(in srgb, var(--pliegue-color-bg-subtle) 70%, var(--pliegue-color-bg-field));
+  }
+
+  .pliegue-select::picker-icon {
+    background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238c8274' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9.5 6 6 6-6'/%3E%3C/svg%3E")
+        right 12px center / 18px 18px no-repeat,
+      linear-gradient(to right, transparent, var(--pliegue-select-bg) 38%);
+    border-radius: 0 var(--pliegue-radius-md) var(--pliegue-radius-md) 0;
+    bottom: 0;
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 44px;
+  }
+
+  .pliegue-select:open {
+    border-color: var(--pliegue-color-focus-ring);
+  }
+
+  /* Abierto, la flecha apunta hacia arriba: hacia donde se cierra. */
+  .pliegue-select:open::picker-icon {
+    background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238c8274' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 14.5 6-6 6 6'/%3E%3C/svg%3E")
+        right 12px center / 18px 18px no-repeat,
+      linear-gradient(to right, transparent, var(--pliegue-select-bg) 38%);
+  }
+
+  .pliegue-select::picker(select) {
+    background-color: var(--pliegue-color-bg-surface);
+    border: 1px solid var(--pliegue-color-border-default);
+    border-radius: var(--pliegue-radius-md);
+    box-shadow: var(--pliegue-elevation-overlay);
+    color: var(--pliegue-color-text-primary);
+    margin-block: 6px;
+    max-block-size: min(60vh, 22rem);
+    opacity: 0;
+    overflow-y: auto;
+    padding: 4px;
+    scrollbar-color: color-mix(in srgb, var(--pliegue-color-text-primary) 28%, transparent) transparent;
+    scrollbar-width: thin;
+    /* Abajo siempre que quepa; Chrome elige por defecto el lado con más sitio y la lista
+       acababa tapando la etiqueta del campo. */
+    position-try-order: normal;
+    transition:
+      opacity var(--pliegue-motion-fast) ease,
+      translate var(--pliegue-motion-fast) var(--pliegue-ease-standard),
+      display var(--pliegue-motion-fast) allow-discrete,
+      overlay var(--pliegue-motion-fast) allow-discrete;
+    translate: 0 -4px;
+  }
+
+  /* `:open` va en el select y no detrás de `::picker()`: el analizador de CSS de Next no
+     admite pseudoclases después de un pseudoelemento, y el efecto es el mismo. */
+  .pliegue-select:open::picker(select) {
+    opacity: 1;
+    translate: 0 0;
+  }
+
+  @starting-style {
+    .pliegue-select:open::picker(select) {
+      opacity: 0;
+      translate: 0 -4px;
+    }
+  }
+
+  .pliegue-select option {
+    align-items: center;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    font-size: 0.9375rem;
+    gap: var(--pliegue-spacing-sm);
+    min-height: 40px;
+    padding: 0 10px;
+  }
+
+  .pliegue-select option:hover,
+  .pliegue-select option:focus-visible {
+    background-color: color-mix(in srgb, var(--pliegue-color-text-primary) 7%, transparent);
+  }
+
+  /* Con teclado, la opción en curso lleva el anillo de foco y no solo un tinte. */
+  .pliegue-select option:focus-visible {
+    outline: 2px solid var(--pliegue-color-focus-ring);
+    outline-offset: -2px;
+  }
+
+  .pliegue-select option:checked {
+    font-weight: 600;
+  }
+
+  .pliegue-select option:disabled {
+    color: color-mix(in srgb, var(--pliegue-color-text-primary) 42%, transparent);
+    cursor: not-allowed;
+  }
+
+  .pliegue-select option::checkmark {
+    color: var(--pliegue-color-action-primary);
+    margin-inline-start: auto;
+    order: 1;
+  }
+}
+
+/* ==========================================================================
+   Interruptor
+   ========================================================================== */
+
+.pliegue-switch {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: var(--pliegue-spacing-md);
+  justify-content: space-between;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pliegue-switch__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pliegue-switch__label {
+  color: var(--pliegue-color-text-primary);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.pliegue-switch__description {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.pliegue-switch__control {
+  appearance: none;
+  background-color: color-mix(in srgb, var(--pliegue-color-text-primary) 16%, var(--pliegue-color-bg-field));
+  border: 1px solid var(--pliegue-color-border-control);
+  border-radius: var(--pliegue-radius-full);
+  cursor: pointer;
+  flex: none;
+  height: 26px;
+  margin: 0;
+  position: relative;
+  transition:
+    background-color var(--pliegue-motion-base) var(--pliegue-ease-standard),
+    border-color var(--pliegue-motion-base) var(--pliegue-ease-standard);
+  width: 44px;
+}
+
+.pliegue-switch__control::before {
+  background-color: var(--pliegue-white-1000);
+  border-radius: 50%;
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--pliegue-ink-950) 30%, transparent),
+    0 2px 6px -1px color-mix(in srgb, var(--pliegue-ink-950) 20%, transparent);
+  content: "";
+  height: 20px;
+  left: 2px;
+  position: absolute;
+  top: 2px;
+  transition: transform var(--pliegue-motion-base) var(--pliegue-ease-standard);
+  width: 20px;
+}
+
+.pliegue-switch__control:checked {
+  background-color: var(--pliegue-color-action-primary);
+  border-color: var(--pliegue-color-action-primary);
+}
+
+.pliegue-switch__control:checked::before {
+  transform: translateX(18px);
+}
+
+.pliegue-switch__control:focus-visible {
+  outline: 2px solid var(--pliegue-color-focus-ring);
+  outline-offset: 2px;
+}
+
+.pliegue-switch:has(.pliegue-switch__control:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.pliegue-switch__control:disabled {
+  cursor: not-allowed;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pliegue-button {
+  .pliegue-button,
+  .pliegue-input,
+  .pliegue-select,
+  .pliegue-switch__control,
+  .pliegue-switch__control::before {
     transition: none;
+  }
+
+  @supports (appearance: base-select) {
+    .pliegue-select::picker(select) {
+      transition: none;
+    }
   }
 }

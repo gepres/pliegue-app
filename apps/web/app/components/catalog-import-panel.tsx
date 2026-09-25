@@ -187,7 +187,7 @@ export function CatalogImportPanel({ documents }: { documents: readonly LibraryD
           {busy ? "Leyendo archivo…" : "Importar índice JSON"}
         </Button>
         {importedCatalogs.records.length ? (
-          <Button disabled={busy} onClick={() => void handleClear()} variant="quiet">
+          <Button disabled={busy} onClick={() => void handleClear()} variant="danger">
             Descartar importadas
           </Button>
         ) : null}

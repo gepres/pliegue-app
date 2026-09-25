@@ -69,7 +69,7 @@
 }
 
 .stepper button:focus-visible {
-  outline: 2px solid var(--pliegue-color-accent-warm);
+  outline: 2px solid var(--pliegue-color-focus-ring);
 }
 
 .stepper output {
@@ -120,7 +120,7 @@
 }
 
 .profileChip:focus-visible {
-  outline: 2px solid var(--pliegue-color-accent-warm);
+  outline: 2px solid var(--pliegue-color-focus-ring);
 }
 
 .appearanceMore {
@@ -191,7 +191,7 @@
 }
 
 .outlineItem:focus-visible {
-  outline: 2px solid var(--pliegue-color-accent-warm);
+  outline: 2px solid var(--pliegue-color-focus-ring);
   outline-offset: -2px;
 }
 
@@ -302,7 +302,7 @@
 }
 
 .panelAction:focus-visible {
-  outline: 3px solid var(--pliegue-color-accent-warm);
+  outline: 3px solid var(--pliegue-color-focus-ring);
 }
 
 .shortcuts {

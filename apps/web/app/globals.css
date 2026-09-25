@@ -62,6 +62,12 @@ select {
   font: inherit;
 }
 
+/* Casillas, radios y barras nativas toman el verde de la marca en lugar del azul del
+   sistema, también las que no pasan por @pliegue/ui. */
+:root {
+  accent-color: var(--pliegue-color-action-primary);
+}
+
 /* Comportamiento de app: sin destello gris al tocar ni rebote que arrastre la página
    entera por detrás de las barras fijas. */
 html {

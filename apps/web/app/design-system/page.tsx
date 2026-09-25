@@ -3,9 +3,10 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 
-import { primitiveColors, semanticTokens, spacingTokens } from "@pliegue/tokens";
-import { Button, Card, Field, Input, Select, Tag, buttonClassName } from "@pliegue/ui";
+import { elevationTokens, primitiveColors, semanticTokens, spacingTokens } from "@pliegue/tokens";
+import { Button, Card, Field, Input, Select, Switch, Tag, buttonClassName } from "@pliegue/ui";
 
+import { Icon } from "../components/app-ui/icons";
 import { ThemeToggle } from "../components/theme-toggle";
 import styles from "./page.module.css";
 
@@ -342,6 +343,25 @@ export default function DesignSystemPage() {
         </Card>
       </section>
 
+      <section aria-labelledby="elevation-title" className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <span>Profundidad</span>
+          <h2 id="elevation-title">Elevación</h2>
+        </div>
+        <div className={styles.elevationGrid}>
+          {elevationTokens.map((token) => (
+            <div
+              className={styles.elevationSample}
+              key={token.name}
+              style={{ boxShadow: `var(--pliegue-elevation-${token.name})` }}
+            >
+              <code>elevation/{token.name}</code>
+              <small>{token.use}</small>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section aria-labelledby="component-title" className={styles.section}>
         <div className={styles.sectionHeader}>
           <span>Componentes</span>
@@ -351,21 +371,48 @@ export default function DesignSystemPage() {
         <Card className={styles.componentDemo}>
           <div>
             <h3>Button</h3>
-            <p>Acciones con objetivo táctil, foco visible y variantes semánticas.</p>
+            <p>
+              Píldora en tres alturas: 36, 44 y 52 px (el pequeño sube a 40 con el dedo). El
+              primario tiene relieve y se hunde al pulsarlo; «danger» avisa sin fondo sólido.
+            </p>
           </div>
-          <div className={styles.componentRow}>
-            <Button>Primario</Button>
-            <Button variant="secondary">Secundario</Button>
-            <Button variant="quiet">Discreto</Button>
-            <Button disabled>Desactivado</Button>
+          <div className={styles.componentMatrix}>
+            <div className={styles.componentRow}>
+              <Button>Primario</Button>
+              <Button variant="secondary">Secundario</Button>
+              <Button variant="quiet">Discreto</Button>
+              <Button variant="danger">Borrar</Button>
+            </div>
+            <div className={styles.componentRow}>
+              <Button size="sm" variant="secondary">
+                Pequeño
+              </Button>
+              <Button variant="secondary">Mediano</Button>
+              <Button size="lg">Grande</Button>
+            </div>
+            <div className={styles.componentRow}>
+              <Button variant="secondary">
+                <Icon name="folder" size={18} />
+                Con icono
+              </Button>
+              <Button>
+                <Icon name="plus" size={18} />
+                Añadir
+              </Button>
+              <Button disabled>Desactivado</Button>
+              <Button disabled variant="secondary">
+                Desactivado
+              </Button>
+            </div>
           </div>
         </Card>
         <Card className={styles.componentDemo}>
           <div>
-            <h3>Field + Select</h3>
+            <h3>Input + Select</h3>
             <p>
-              Etiqueta, ayuda y control nativo asociados. Conserva 44 px de objetivo
-              táctil, foco visible y contraste semántico en Light/Dark.
+              Borde a 3:1 sobre blanco y papel, foco en ocre con halo, error por
+              aria-invalid o :user-invalid y letra de 16 px para que iOS no amplíe la página.
+              En Chrome, la lista del select se dibuja con los tokens.
             </p>
           </div>
           <div className={styles.fieldDemo}>
@@ -383,6 +430,45 @@ export default function DesignSystemPage() {
                 <option value="accessible">Accesible</option>
               </Select>
             </Field>
+            <Field
+              description="Debe empezar por http o https."
+              label="URL de Ollama"
+              labelFor="catalog-invalid-url"
+            >
+              <Input aria-invalid="true" defaultValue="localhost:11434" id="catalog-invalid-url" />
+            </Field>
+            <div className={styles.fieldPair}>
+              <Field label="Desactivado" labelFor="catalog-disabled-input">
+                <Input defaultValue="Sin proveedor" disabled id="catalog-disabled-input" />
+              </Field>
+              <Field label="Idioma" labelFor="catalog-disabled-select">
+                <Select defaultValue="es" disabled id="catalog-disabled-select">
+                  <option value="es">Español</option>
+                </Select>
+              </Field>
+            </div>
+          </div>
+        </Card>
+        <Card className={styles.componentDemo}>
+          <div>
+            <h3>Switch</h3>
+            <p>
+              Checkbox nativo con role=&quot;switch&quot;: conserva teclado, formulario y el
+              estado que anuncia el lector de pantalla. Toda la fila es pulsable.
+            </p>
+          </div>
+          <div className={styles.fieldDemo}>
+            <Switch
+              defaultChecked
+              description="Procesa los archivos nuevos en cuanto se vinculan."
+              label="Analizar al vincular"
+            />
+            <Switch label="Guardar una copia sin conexión" />
+            <Switch
+              description="Disponible cuando exista la cuenta sincronizada."
+              disabled
+              label="Sincronizar preferencias"
+            />
           </div>
         </Card>
         <Card className={styles.componentDemo}>

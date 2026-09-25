@@ -1,7 +1,12 @@
 import { cx } from "./utils";
 
-export type ButtonVariant = "primary" | "secondary" | "quiet";
-export type ButtonSize = "sm" | "md";
+/**
+ * `danger` es una acción destructiva discreta —borrar una clave, descartar lo importado—:
+ * texto en el color de peligro sin fondo sólido, para que avise sin gritar en una fila de
+ * acciones corrientes.
+ */
+export type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
+export type ButtonSize = "sm" | "md" | "lg";
 
 interface ButtonStyleOptions {
   className?: string | undefined;

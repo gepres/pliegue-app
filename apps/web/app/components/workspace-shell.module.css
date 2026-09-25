@@ -65,7 +65,7 @@
 .brand:focus-visible,
 .mobileBrand:focus-visible,
 .navigationLink:focus-visible {
-  outline: 3px solid var(--pliegue-color-accent-warm);
+  outline: 3px solid var(--pliegue-color-focus-ring);
   outline-offset: 2px;
 }
 

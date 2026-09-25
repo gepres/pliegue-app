@@ -442,7 +442,7 @@ export function LibraryBrowser() {
         <div className={libraryStyles.headerActions}>
           <button
             aria-label="Fuentes"
-            className={libraryStyles.sourcesButton}
+            className={cx(buttonClassName({ variant: "secondary" }), libraryStyles.sourcesButton)}
             onClick={() => setSourcesOpen(true)}
             type="button"
           >
@@ -453,7 +453,7 @@ export function LibraryBrowser() {
             kind="menu"
             title="Añadir a la Biblioteca"
             trigger={(props) => (
-              <button {...props} className={libraryStyles.addButton} type="button">
+              <button {...props} className={buttonClassName()} type="button">
                 <Icon name="plus" size={18} />
                 <span>Añadir</span>
               </button>
@@ -565,7 +565,7 @@ export function LibraryBrowser() {
               aria-label={
                 activeFilters.length ? `Filtros, ${activeFilters.length} activos` : "Filtros"
               }
-              className={libraryStyles.filterButton}
+              className={cx(buttonClassName({ variant: "secondary" }), libraryStyles.filterButton)}
               type="button"
             >
               <Icon name="filter" size={18} />

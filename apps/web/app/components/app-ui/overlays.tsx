@@ -19,6 +19,23 @@ import styles from "./app-ui.module.css";
 const focusableSelector =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/**
+ * ¿La tecla sale de la lista abierta de un `<select>`? Con el selector personalizable de
+ * @pliegue/ui esa lista se dibuja dentro de la página, así que su Escape llega hasta aquí:
+ * debe cerrar la lista, no el panel o la hoja que la contiene.
+ */
+function comesFromOpenPicker(target: EventTarget | null) {
+  const select = target instanceof Element ? target.closest("select") : null;
+  if (!select) return false;
+  try {
+    return select.matches(":open");
+  } catch {
+    // Sin `:open` no hay selector personalizable: la lista es la del sistema y sus teclas
+    // no llegan a la página.
+    return false;
+  }
+}
+
 /* ---- Popover --------------------------------------------------------------- */
 
 export interface PopoverTriggerProps {
@@ -132,6 +149,7 @@ export function Popover({
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {
+      if (comesFromOpenPicker(event.target)) return;
       event.stopPropagation();
       close();
       return;
@@ -271,7 +289,11 @@ export function Sheet({
     });
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !event.defaultPrevented) {
+      if (
+        event.key === "Escape" &&
+        !event.defaultPrevented &&
+        !comesFromOpenPicker(event.target)
+      ) {
         event.preventDefault();
         onClose();
       }

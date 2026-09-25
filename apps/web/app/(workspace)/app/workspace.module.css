@@ -313,7 +313,7 @@
 }
 
 .favoriteFilter:focus-within {
-  outline: 3px solid var(--pliegue-color-accent-warm);
+  outline: 3px solid var(--pliegue-color-focus-ring);
   outline-offset: 2px;
 }
 
@@ -762,32 +762,12 @@
   overflow-wrap: anywhere;
 }
 
+/* El interruptor viene de @pliegue/ui; aquí solo se le da el marco de fila de ajustes. */
 .aiAutoControl {
-  align-items: start;
   background: var(--pliegue-color-bg-subtle);
   border: 1px solid var(--pliegue-color-border-default);
-  border-radius: var(--pliegue-radius-sm);
-  cursor: pointer;
-  display: flex;
-  gap: var(--pliegue-spacing-sm);
+  border-radius: var(--pliegue-radius-md);
   padding: var(--pliegue-spacing-md);
-}
-
-.aiAutoControl input {
-  accent-color: var(--pliegue-color-action-primary);
-  height: 20px;
-  margin: 2px 0 0;
-  width: 20px;
-}
-
-.aiAutoControl span {
-  display: grid;
-  gap: var(--pliegue-spacing-xs);
-}
-
-.aiAutoControl small {
-  color: var(--pliegue-color-text-secondary);
-  line-height: 1.45;
 }
 
 .aiSettingsActions {

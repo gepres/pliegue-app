@@ -36,61 +36,8 @@
   gap: var(--pliegue-spacing-xs);
 }
 
-.sourcesButton,
-.addButton,
-.filterButton {
-  align-items: center;
-  border: 1px solid var(--pliegue-color-border-default);
-  border-radius: var(--pliegue-radius-full);
-  cursor: pointer;
-  display: inline-flex;
-  font-size: 0.875rem;
-  font-weight: 600;
-  gap: 6px;
-  min-height: 40px;
-  padding: 0 16px 0 12px;
-  transition:
-    background-color var(--pliegue-motion-fast) ease,
-    transform var(--pliegue-motion-fast) ease;
-  white-space: nowrap;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.sourcesButton,
-.filterButton {
-  background: var(--pliegue-color-bg-surface);
-  color: var(--pliegue-color-text-primary);
-}
-
-.addButton {
-  background: var(--pliegue-color-action-primary);
-  border-color: var(--pliegue-color-action-primary);
-  color: var(--pliegue-color-text-on-action);
-}
-
-.sourcesButton:active,
-.addButton:active,
-.filterButton:active {
-  transform: scale(0.96);
-}
-
-.sourcesButton:focus-visible,
-.addButton:focus-visible,
-.filterButton:focus-visible {
-  outline: 3px solid var(--pliegue-color-accent-warm);
-  outline-offset: 2px;
-}
-
-@media (hover: hover) {
-  .sourcesButton:hover,
-  .filterButton:hover {
-    background: var(--pliegue-color-bg-subtle);
-  }
-
-  .addButton:hover {
-    background: color-mix(in srgb, var(--pliegue-color-action-primary) 88%, black);
-  }
-}
+/* Fuentes, Añadir y Filtros son botones de @pliegue/ui. Estas clases solo los convierten
+   en botones de icono en el teléfono (ver «Móvil», al final). */
 
 /* ---- Barra de búsqueda ---------------------------------------------------- */
 
@@ -101,11 +48,14 @@
   margin-bottom: var(--pliegue-spacing-sm);
 }
 
+/* Cápsula de búsqueda: la misma piel que `.pliegue-input` (fondo, borde, foco) con la
+   lupa dentro y en forma de píldora, como los botones que la acompañan en la barra. */
 .search {
   align-items: center;
-  background: var(--pliegue-color-bg-surface);
-  border: 1px solid var(--pliegue-color-border-default);
+  background: var(--pliegue-color-bg-field);
+  border: 1px solid var(--pliegue-color-border-control);
   border-radius: var(--pliegue-radius-full);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--pliegue-ink-950) 6%, transparent);
   color: var(--pliegue-color-text-secondary);
   display: flex;
   flex: 1 1 auto;
@@ -113,11 +63,22 @@
   min-height: 44px;
   min-width: 0;
   padding: 0 16px;
+  transition:
+    border-color var(--pliegue-motion-fast) var(--pliegue-ease-standard),
+    box-shadow var(--pliegue-motion-fast) var(--pliegue-ease-standard);
+}
+
+@media (hover: hover) {
+  .search:hover:not(:focus-within) {
+    border-color: var(--pliegue-color-border-strong);
+  }
 }
 
 .search:focus-within {
-  border-color: var(--pliegue-color-action-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pliegue-color-action-primary) 18%, transparent);
+  border-color: var(--pliegue-color-focus-ring);
+  box-shadow:
+    0 0 0 1px var(--pliegue-color-focus-ring),
+    0 0 0 5px color-mix(in srgb, var(--pliegue-color-focus-ring) 20%, transparent);
 }
 
 .search input {
@@ -125,15 +86,16 @@
   border: 0;
   color: var(--pliegue-color-text-primary);
   flex: 1 1 auto;
-  font-size: 0.9375rem;
+  /* 16 px: por debajo, Safari en iOS amplía la página al enfocar. */
+  font-size: 1rem;
   min-height: 42px;
   min-width: 0;
   outline: none;
 }
 
 .search input::placeholder {
-  color: var(--pliegue-color-text-secondary);
-  opacity: 0.7;
+  color: color-mix(in srgb, var(--pliegue-color-text-primary) 64%, transparent);
+  opacity: 1;
 }
 
 .filterCount {
@@ -200,7 +162,7 @@
 }
 
 .textButton:focus-visible {
-  outline: 2px solid var(--pliegue-color-accent-warm);
+  outline: 2px solid var(--pliegue-color-focus-ring);
 }
 
 /* ---- Chips ---------------------------------------------------------------- */
@@ -243,7 +205,7 @@
 }
 
 .chip:focus-visible {
-  outline: 2px solid var(--pliegue-color-accent-warm);
+  outline: 2px solid var(--pliegue-color-focus-ring);
 }
 
 .resultCount {
@@ -427,7 +389,7 @@
 
 .tileTitle a:focus-visible {
   border-radius: 3px;
-  outline: 2px solid var(--pliegue-color-accent-warm);
+  outline: 2px solid var(--pliegue-color-focus-ring);
 }
 
 .tileAuthor {
@@ -681,7 +643,7 @@
   .filterButton {
     justify-content: center;
     padding: 0;
-    width: 40px;
+    width: var(--pliegue-button-height, 44px);
   }
 
   .filterButton {

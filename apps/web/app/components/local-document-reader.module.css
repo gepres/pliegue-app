@@ -81,7 +81,7 @@
 }
 
 .appBarBack:focus-visible {
-  outline: 3px solid var(--pliegue-color-accent-warm);
+  outline: 3px solid var(--pliegue-color-focus-ring);
 }
 
 .appBarTitle {
@@ -219,7 +219,7 @@
 }
 
 .textScrubber:focus-visible {
-  outline: 3px solid var(--pliegue-color-accent-warm);
+  outline: 3px solid var(--pliegue-color-focus-ring);
   outline-offset: 6px;
 }
 

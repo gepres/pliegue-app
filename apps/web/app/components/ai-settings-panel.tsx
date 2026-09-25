@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Button, Card, Field, Input, Select, Tag } from "@pliegue/ui";
+import { Button, Card, Field, Input, Select, Switch, Tag } from "@pliegue/ui";
 
 import { defaultAiSettings, type AiSettings } from "../ai/ai-settings";
 import { saveAiSettings, useAiSettings } from "../ai/ai-settings-store";
@@ -154,7 +154,7 @@ export function AiSettingsPanel() {
                 disabled={!selectedApiKey}
                 onClick={() => clearSessionApiKey(hostedProvider!)}
                 type="button"
-                variant="quiet"
+                variant="danger"
               >
                 Borrar
               </Button>
@@ -200,24 +200,18 @@ export function AiSettingsPanel() {
           </Select>
         </Field>
 
-        <label className={styles.aiAutoControl}>
-          <input
-            checked={draft.autoAnalyzeAfterLink}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                autoAnalyzeAfterLink: event.target.checked,
-              }))
-            }
-            type="checkbox"
-          />
-          <span>
-            <strong>Analizar después de vincular o detectar cambios</strong>
-            <small>
-              Solo procesa archivos con texto local disponible y omite versiones ya catalogadas.
-            </small>
-          </span>
-        </label>
+        <Switch
+          checked={draft.autoAnalyzeAfterLink}
+          className={styles.aiAutoControl}
+          description="Solo procesa archivos con texto local disponible y omite versiones ya catalogadas."
+          label="Analizar después de vincular o detectar cambios"
+          onChange={(event) =>
+            setDraft((current) => ({
+              ...current,
+              autoAnalyzeAfterLink: event.target.checked,
+            }))
+          }
+        />
 
         <div className={styles.aiSettingsActions}>
           <Button type="submit">Guardar ajustes de IA</Button>
