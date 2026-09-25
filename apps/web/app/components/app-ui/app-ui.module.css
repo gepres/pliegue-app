@@ -80,17 +80,28 @@
   top: 2px;
 }
 
-/* Rótulo emergente: solo con puntero fino, donde existe el «pasar por encima». */
+/*
+ * Rótulo emergente: solo con puntero fino, donde existe el «pasar por encima», y también
+ * al llegar con el teclado.
+ *
+ * En reposo no genera caja (`display: none`). Antes se escondía con `opacity: 0` y seguía
+ * ocupando sitio: los rótulos de los botones pegados al borde derecho ensanchaban la página
+ * y aparecía un scroll horizontal que descuadraba la app (02.7). Donde hay posicionamiento
+ * por ancla, además se coloca fijo respecto a su botón y cambia de lado si no cabe, así que
+ * tampoco desborda mientras se ve.
+ */
 @media (hover: hover) and (pointer: fine) {
   .iconButton[data-tooltip]::after {
     background: var(--pliegue-color-text-primary);
     border-radius: var(--pliegue-radius-sm);
     color: var(--pliegue-color-bg-canvas);
     content: attr(data-tooltip);
+    display: none;
     font-family: var(--pliegue-font-ui);
     font-size: 0.6875rem;
     font-weight: 500;
     left: 50%;
+    line-height: 1.3;
     opacity: 0;
     padding: 4px 8px;
     pointer-events: none;
@@ -99,19 +110,65 @@
     transform: translate(-50%, -2px);
     transition:
       opacity var(--pliegue-motion-fast) ease,
-      transform var(--pliegue-motion-fast) ease;
+      transform var(--pliegue-motion-fast) ease,
+      display var(--pliegue-motion-fast) allow-discrete;
     white-space: nowrap;
     z-index: 80;
   }
 
-  .iconButton[data-tooltip]:hover::after {
+  .iconButton[data-tooltip]:is(:hover, :focus-visible)::after {
+    display: block;
     opacity: 1;
     transform: translate(-50%, 0);
     transition-delay: 450ms;
   }
 
-  .iconButton[aria-expanded="true"]::after {
+  @starting-style {
+    .iconButton[data-tooltip]:is(:hover, :focus-visible)::after {
+      opacity: 0;
+      transform: translate(-50%, -2px);
+    }
+  }
+
+  @supports (anchor-scope: --pliegue-anchor) {
+    /* Cada botón es ancla solo de su propio rótulo: `anchor-scope` evita que todos
+       compartan el nombre y se anclen al último botón de la página. */
+    .iconButton[data-tooltip] {
+      anchor-name: --pliegue-icon-button;
+      anchor-scope: --pliegue-icon-button;
+    }
+
+    .iconButton[data-tooltip]::after {
+      left: auto;
+      margin-top: 6px;
+      position: fixed;
+      position-anchor: --pliegue-icon-button;
+      position-area: block-end;
+      position-try-fallbacks:
+        block-end span-inline-start,
+        block-end span-inline-end,
+        flip-block;
+      top: auto;
+      transform: translateY(-2px);
+    }
+
+    .iconButton[data-tooltip]:is(:hover, :focus-visible)::after {
+      transform: none;
+    }
+
+    @starting-style {
+      .iconButton[data-tooltip]:is(:hover, :focus-visible)::after {
+        transform: translateY(-2px);
+      }
+    }
+  }
+
+  /* Al pulsar, o con su menú abierto, el rótulo sobra. Misma especificidad que la regla de
+     hover y declarada después, para que gane. */
+  .iconButton[data-tooltip]:active::after,
+  .iconButton[data-tooltip][aria-expanded="true"]::after {
     display: none;
+    transition: none;
   }
 }
 
