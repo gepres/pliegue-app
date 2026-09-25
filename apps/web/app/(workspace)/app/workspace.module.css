@@ -124,7 +124,8 @@
   grid-column: 1 / -1;
 }
 
-.localImportPanel > .capabilityNote {
+.localImportPanel > .capabilityNote,
+.localImportPanel > details {
   grid-column: 1 / -1;
 }
 
@@ -313,7 +314,7 @@
 }
 
 .favoriteFilter:focus-within {
-  outline: 3px solid var(--pliegue-color-accent-warm);
+  outline: 3px solid var(--pliegue-color-focus-ring);
   outline-offset: 2px;
 }
 
@@ -380,12 +381,19 @@
   margin: calc(var(--pliegue-spacing-lg) * -1) 0 var(--pliegue-spacing-lg);
 }
 
+/* La sinopsis del contrato v2 llega hasta 700 caracteres. Se recorta a seis líneas para que
+   las tarjetas de la cuadrícula no queden desiguales; el texto permanece completo en el DOM,
+   así que los lectores de pantalla lo anuncian entero. */
 .catalogSummary {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
   border-left: 2px solid var(--pliegue-color-accent-warm);
   color: var(--pliegue-color-text-secondary);
+  display: -webkit-box;
   font-family: var(--pliegue-font-reading);
   font-size: 0.9375rem;
   line-height: 1.5;
+  overflow: hidden;
   padding-left: var(--pliegue-spacing-sm);
 }
 
@@ -564,9 +572,17 @@
 }
 
 .aiCatalogQueue,
+/* La tarjeta se estira hasta la altura de su vecina: el contenido va arriba en vez de
+   repartir ese sobrante entre sus filas, que agrandaba la píldora y separaba el título. */
 .aiCatalogRecent {
+  align-content: start;
   display: grid;
   gap: var(--pliegue-spacing-lg);
+}
+
+/* En una rejilla la píldora se estiraba de lado a lado, como una barra. */
+.aiCatalogRecent > :global(.pliegue-tag) {
+  justify-self: start;
 }
 
 .aiCatalogHeader {
@@ -744,35 +760,33 @@
   align-items: center;
   display: grid;
   gap: var(--pliegue-spacing-sm);
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
+/* La clave se enmascara con CSS y no con `type="password"`, para que el gestor de contraseñas
+   no la rellene ni la guarde (ver ai-settings-panel.tsx). El texto de ayuda se sigue leyendo. */
+.aiSecretMasked {
+  -webkit-text-security: disc;
+}
+
+.aiSecretMasked::placeholder {
+  -webkit-text-security: none;
+}
+
+.aiSecretIssue {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  margin: var(--pliegue-spacing-xs) 0 0;
+  overflow-wrap: anywhere;
+}
+
+/* El interruptor viene de @pliegue/ui; aquí solo se le da el marco de fila de ajustes. */
 .aiAutoControl {
-  align-items: start;
   background: var(--pliegue-color-bg-subtle);
   border: 1px solid var(--pliegue-color-border-default);
-  border-radius: var(--pliegue-radius-sm);
-  cursor: pointer;
-  display: flex;
-  gap: var(--pliegue-spacing-sm);
+  border-radius: var(--pliegue-radius-md);
   padding: var(--pliegue-spacing-md);
-}
-
-.aiAutoControl input {
-  accent-color: var(--pliegue-color-action-primary);
-  height: 20px;
-  margin: 2px 0 0;
-  width: 20px;
-}
-
-.aiAutoControl span {
-  display: grid;
-  gap: var(--pliegue-spacing-xs);
-}
-
-.aiAutoControl small {
-  color: var(--pliegue-color-text-secondary);
-  line-height: 1.45;
 }
 
 .aiSettingsActions {
@@ -934,10 +948,14 @@
 }
 
 @media (max-width: 960px) {
-  .metricGrid,
-  .documentGrid,
-  .catalogMetricGrid {
+  .documentGrid {
     grid-template-columns: 1fr;
+  }
+
+  /* En la tablet las cifras siguen una junto a otra (las tres de Inicio caben; las cuatro de
+     IA van de dos en dos): apiladas, cuatro tarjetas llenaban una pantalla entera. */
+  .catalogMetricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .continueCard,
@@ -995,11 +1013,13 @@
     grid-column: auto;
   }
 
+  /* A la izquierda al pasar a una columna, pero centrados en su fila: con `flex-start`,
+     el «0 carpetas · 0 archivos» quedaba pegado arriba, junto al botón. */
   .localImportActions,
   .driveReferenceActions,
   .linkedFolderActions,
   .folderSourceControls {
-    align-items: flex-start;
+    align-items: center;
     justify-content: flex-start;
   }
 
@@ -1016,6 +1036,41 @@
   .aiSettingsForm,
   .catalogFilters {
     grid-template-columns: 1fr;
+  }
+
+  .metricGrid,
+  .catalogMetricGrid {
+    gap: var(--pliegue-spacing-sm);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* En el teléfono cada cifra es una fila: el número a la izquierda y, a su lado, qué
+     cuenta y su detalle. Igual que `.metricCard` en workspace-page.module.css. */
+  .catalogMetric {
+    align-items: center;
+    column-gap: var(--pliegue-spacing-md);
+    grid-template-areas:
+      "value label"
+      "value detail";
+    grid-template-columns: minmax(3rem, auto) minmax(0, 1fr);
+    padding: var(--pliegue-spacing-md);
+    row-gap: 2px;
+  }
+
+  .catalogMetric span {
+    align-self: end;
+    grid-area: label;
+  }
+
+  .catalogMetric strong {
+    font-size: 2.25rem;
+    grid-area: value;
+    text-align: center;
+  }
+
+  .catalogMetric small {
+    align-self: start;
+    grid-area: detail;
   }
 
   .aiSecretField,
@@ -1077,4 +1132,78 @@
   .folderSourceControls > * {
     width: 100%;
   }
+}
+
+/* ---- Paneles de fuentes dentro de la hoja de la Biblioteca ------------------
+   Los mismos componentes que antes eran tarjetas a todo el ancho viven ahora dentro
+   de un desplegable con su propio título: aquí pierden el marco, la etiqueta y el
+   titular repetidos, y se apilan en una sola columna. */
+
+.sourcesBody .localImportPanel,
+.sourcesBody .linkedFolderPanel {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+}
+
+.sourcesBody .localImportPanel > div:first-child > :global(.pliegue-tag),
+.sourcesBody .localImportPanel > div:first-child > h2,
+.sourcesBody .linkedFolderHeader > div:first-child > :global(.pliegue-tag),
+.sourcesBody .linkedFolderHeader > div:first-child > h2 {
+  display: none;
+}
+
+.sourcesBody .localImportPanel p,
+.sourcesBody .linkedFolderPanel p {
+  font-size: 0.8125rem;
+}
+
+.sourcesBody .linkedFolderHeader {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sourcesBody .linkedFolderActions,
+.sourcesBody .folderSourceControls {
+  justify-content: flex-start;
+}
+
+.sourcesBody .folderSourceItem {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Referencia de campos del índice JSON: nombre en código y su explicación debajo. */
+.fieldReference {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  margin: 0;
+}
+
+.fieldReference > div {
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: 4px;
+  padding-bottom: var(--pliegue-spacing-sm);
+}
+
+.fieldReference dt {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.fieldReference code {
+  font-family: var(--pliegue-font-data);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.fieldReference dd {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin: 0;
 }

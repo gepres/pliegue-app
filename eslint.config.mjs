@@ -11,5 +11,8 @@ export default defineConfig([
     "**/coverage/**",
     "**/.turbo/**",
     "**/next-env.d.ts",
+    // Copia literal de pdfjs-dist que produce scripts/copy-pdfjs-assets.mjs: es código de
+    // terceros ya empaquetado, y revisarlo aquí solo genera avisos que nadie puede atender.
+    "apps/web/public/pdfjs/**",
   ]),
 ]);

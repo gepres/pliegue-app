@@ -26,6 +26,17 @@ export const semanticTokens = [
   "border/default",
   "icon/default",
   "status/danger",
+  "bg/field",
+  "border/control",
+  "border/strong",
+  "focus/ring",
+] as const;
+
+export const elevationTokens = [
+  { name: "paper", use: "Tarjetas apoyadas en el lienzo" },
+  { name: "raised", use: "Controles que se pueden pulsar" },
+  { name: "overlay", use: "Menús, hojas y listas desplegables" },
+  { name: "focus", use: "Elemento destacado sobre el resto" },
 ] as const;
 
 export const spacingTokens = [

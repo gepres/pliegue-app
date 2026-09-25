@@ -1,0 +1,123 @@
+/* Panel «Traducir»: idiomas, avance de la traducción y lo que se está preparando. */
+
+.panel {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.languages {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 380px) {
+  .languages {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.progress {
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.progressHead {
+  align-items: baseline;
+  display: flex;
+  gap: var(--pliegue-spacing-sm);
+  justify-content: space-between;
+}
+
+.progressHead strong {
+  font-size: 0.9375rem;
+}
+
+.progressHead span {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar {
+  background: color-mix(in srgb, var(--pliegue-color-text-primary) 10%, transparent);
+  border-radius: var(--pliegue-radius-full);
+  height: 6px;
+  overflow: hidden;
+}
+
+.bar span {
+  background: var(--pliegue-color-action-primary);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transform-origin: left;
+  transition: transform var(--pliegue-motion-base) var(--pliegue-ease-standard);
+}
+
+.status,
+.hint,
+.rights,
+.notice {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.notice {
+  background: var(--pliegue-color-bg-subtle);
+  border-radius: var(--pliegue-radius-sm);
+  color: var(--pliegue-color-text-primary);
+  padding: var(--pliegue-spacing-sm);
+}
+
+.rights {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  font-size: 0.75rem;
+  padding-top: var(--pliegue-spacing-sm);
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.confirm {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  font-size: 0.8125rem;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.bar[data-indeterminate="true"] span {
+  animation: translationBarRun 1.3s ease-in-out infinite;
+  width: 35%;
+}
+
+@keyframes translationBarRun {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(290%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar span {
+    transition: none;
+  }
+
+  .bar[data-indeterminate="true"] span {
+    animation: none;
+    opacity: 0.5;
+    width: 100%;
+  }
+}

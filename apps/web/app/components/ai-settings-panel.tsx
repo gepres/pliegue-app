@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
-import { Button, Card, Field, Input, Select, Tag } from "@pliegue/ui";
+import { Button, Card, Field, Input, Select, Switch, Tag } from "@pliegue/ui";
 
 import { defaultAiSettings, type AiSettings } from "../ai/ai-settings";
 import { saveAiSettings, useAiSettings } from "../ai/ai-settings-store";
@@ -11,8 +11,10 @@ import {
   setSessionApiKey,
   useAiSessionSecrets,
 } from "../ai/ai-session-secret-store";
+import { checkApiKey, normalizeApiKey } from "../ai/api-key";
 import type { AiProvider } from "../ai/document-catalog";
 import styles from "../(workspace)/app/workspace.module.css";
+import { IconButton } from "./app-ui/controls";
 
 const providerLabels: Record<AiProvider, string> = {
   anthropic: "Anthropic · Claude",
@@ -20,16 +22,59 @@ const providerLabels: Record<AiProvider, string> = {
   openai: "OpenAI",
 };
 
+const removedList = new Intl.ListFormat("es", { type: "conjunction" });
+
+function subscribeToNothing() {
+  return () => {};
+}
+
+/**
+ * El campo de la clave no es de contraseña. El gestor del navegador tomaba «Modelo» + clave por
+ * un inicio de sesión: de vez en cuando lo rellenaba con lo guardado para este origen —a veces
+ * un texto que no era una clave, y entonces «esto no parece una API key»— y al pulsar «Guardar»
+ * ofrecía guardarla como contraseña. Se enmascara con CSS; donde eso no existe, vuelve a ser de
+ * contraseña, pero «nueva», que los navegadores no rellenan.
+ */
+function useTextMask() {
+  return useSyncExternalStore(
+    subscribeToNothing,
+    () => CSS.supports("-webkit-text-security", "disc"),
+    () => true,
+  );
+}
+
 export function AiSettingsPanel() {
   const settings = useAiSettings();
   const secrets = useAiSessionSecrets();
+  const textMask = useTextMask();
   const [draft, setDraft] = useState<AiSettings>(settings);
+  const [revealKey, setRevealKey] = useState(false);
+  const [keyNote, setKeyNote] = useState<string | null>(null);
   const [status, setStatus] = useState(
     "El análisis automático está apagado hasta que lo actives expresamente.",
   );
 
   const hostedProvider = draft.provider === "ollama" ? null : draft.provider;
   const selectedApiKey = hostedProvider ? secrets[hostedProvider] : "";
+  // Se avisa al pegar, no al analizar: un texto pegado por error no debe llegar al proveedor.
+  const apiKeyCheck =
+    hostedProvider && selectedApiKey ? checkApiKey(hostedProvider, selectedApiKey) : null;
+  // Enmascarada no se ve qué se pegó: el ojo lo enseña.
+  const apiKeyIssue = apiKeyCheck?.error
+    ? `${apiKeyCheck.error} Con el ojo puedes ver qué se pegó.`
+    : (apiKeyCheck?.warning ?? null);
+
+  function changeApiKey(provider: "anthropic" | "openai", value: string) {
+    const { key, removed } = normalizeApiKey(value);
+    setSessionApiKey(provider, key);
+    setKeyNote(removed.length ? `Se quitó ${removedList.format(removed)}: queda solo la clave.` : null);
+  }
+
+  function clearApiKey(provider: "anthropic" | "openai") {
+    clearSessionApiKey(provider);
+    setKeyNote(null);
+    setRevealKey(false);
+  }
 
   function updateModel(model: string) {
     setDraft((current) => ({
@@ -71,12 +116,14 @@ export function AiSettingsPanel() {
         <Field label="Proveedor principal" labelFor="ai-provider">
           <Select
             id="ai-provider"
-            onChange={(event) =>
+            onChange={(event) => {
               setDraft((current) => ({
                 ...current,
                 provider: event.target.value as AiProvider,
-              }))
-            }
+              }));
+              setKeyNote(null);
+              setRevealKey(false);
+            }}
             value={draft.provider}
           >
             {Object.entries(providerLabels).map(([provider, label]) => (
@@ -89,9 +136,12 @@ export function AiSettingsPanel() {
 
         <Field label="Modelo" labelFor="ai-model">
           <Input
+            autoComplete="off"
             id="ai-model"
+            name="pliegue-ai-model"
             onChange={(event) => updateModel(event.target.value)}
             placeholder="Identificador del modelo"
+            spellCheck={false}
             value={draft.models[draft.provider]}
           />
         </Field>
@@ -137,23 +187,48 @@ export function AiSettingsPanel() {
           >
             <div className={styles.aiSecretControl}>
               <Input
-                autoComplete="off"
+                autoCapitalize="none"
+                autoComplete={textMask ? "off" : "new-password"}
+                autoCorrect="off"
+                className={textMask && !revealKey ? styles.aiSecretMasked : undefined}
+                data-1p-ignore=""
+                data-bwignore=""
+                data-form-type="other"
+                data-lpignore="true"
                 id="ai-api-key"
-                onChange={(event) => setSessionApiKey(hostedProvider!, event.target.value)}
+                name="pliegue-ai-session-key"
+                onChange={(event) => changeApiKey(hostedProvider!, event.target.value)}
                 placeholder="Pega una clave para esta sesión"
                 spellCheck={false}
-                type="password"
+                type={textMask || revealKey ? "text" : "password"}
                 value={selectedApiKey}
+              />
+              <IconButton
+                aria-controls="ai-api-key"
+                aria-pressed={revealKey}
+                disabled={!selectedApiKey}
+                icon={revealKey ? "eyeOff" : "eye"}
+                label={revealKey ? "Ocultar la clave" : "Mostrar la clave"}
+                onClick={() => setRevealKey((current) => !current)}
               />
               <Button
                 disabled={!selectedApiKey}
-                onClick={() => clearSessionApiKey(hostedProvider!)}
+                onClick={() => clearApiKey(hostedProvider!)}
                 type="button"
-                variant="quiet"
+                variant="danger"
               >
                 Borrar
               </Button>
             </div>
+            {apiKeyIssue ? (
+              <p className={styles.aiSecretIssue} role="alert">
+                {apiKeyIssue}
+              </p>
+            ) : keyNote ? (
+              <p className={styles.aiSecretIssue} role="status">
+                {keyNote}
+              </p>
+            ) : null}
           </Field>
         )}
 
@@ -185,27 +260,23 @@ export function AiSettingsPanel() {
             <option value={1}>1 · conservador</option>
             <option value={2}>2 · recomendado</option>
             <option value={3}>3 · rápido</option>
+            <option value={4}>4 · biblioteca grande</option>
+            <option value={6}>6 · máximo</option>
           </Select>
         </Field>
 
-        <label className={styles.aiAutoControl}>
-          <input
-            checked={draft.autoAnalyzeAfterLink}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                autoAnalyzeAfterLink: event.target.checked,
-              }))
-            }
-            type="checkbox"
-          />
-          <span>
-            <strong>Analizar después de vincular o detectar cambios</strong>
-            <small>
-              Solo procesa archivos con texto local disponible y omite versiones ya catalogadas.
-            </small>
-          </span>
-        </label>
+        <Switch
+          checked={draft.autoAnalyzeAfterLink}
+          className={styles.aiAutoControl}
+          description="Solo procesa archivos con texto local disponible y omite versiones ya catalogadas."
+          label="Analizar después de vincular o detectar cambios"
+          onChange={(event) =>
+            setDraft((current) => ({
+              ...current,
+              autoAnalyzeAfterLink: event.target.checked,
+            }))
+          }
+        />
 
         <div className={styles.aiSettingsActions}>
           <Button type="submit">Guardar ajustes de IA</Button>

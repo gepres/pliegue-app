@@ -3,23 +3,59 @@
   display: flex;
   gap: var(--pliegue-spacing-xl);
   justify-content: space-between;
-  margin-bottom: clamp(2rem, 5vw, 4rem);
+  margin-bottom: var(--pliegue-spacing-lg);
 }
 
+/* El lector usa esta cabecera con el título y la ruta del documento abierto, así que
+   arrastra el mismo riesgo de desbordamiento que la tarjeta, agravado por el tamaño. */
 .pageHeader h1 {
   font-family: var(--pliegue-font-brand);
-  font-size: clamp(2.75rem, 7vw, 5.5rem);
+  /* Título grande de app, no titular de portada: ubica sin empujar el contenido fuera
+     de la primera pantalla. */
+  font-size: clamp(2rem, 4vw, 2.75rem);
   font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 0.95;
-  margin: var(--pliegue-spacing-md) 0;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin: var(--pliegue-spacing-xs) 0 var(--pliegue-spacing-xs);
+  overflow-wrap: anywhere;
 }
 
 .pageHeader p {
   color: var(--pliegue-color-text-secondary);
-  line-height: 1.55;
+  font-size: 0.875rem;
+  line-height: 1.5;
   margin: 0;
   max-width: 42rem;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Variante compacta ---------------------------------------------------- */
+
+.pageHeaderCompact {
+  align-items: center;
+  gap: var(--pliegue-spacing-lg);
+  margin-bottom: var(--pliegue-spacing-lg);
+}
+
+.pageHeaderCompact .pageHeading {
+  min-width: 0;
+}
+
+.pageHeaderCompact h1 {
+  font-size: clamp(1.375rem, 2.4vw, 1.875rem);
+  letter-spacing: -0.012em;
+  line-height: 1.15;
+  margin: var(--pliegue-spacing-2xs) 0 var(--pliegue-spacing-2xs);
+}
+
+/* La ruta del archivo baja a texto de datos: informa cuando se busca, y deja de competir
+   con el título cuando no. */
+.pageHeaderCompact p {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
 }
 
 .pageActions {
@@ -63,18 +99,22 @@
   gap: var(--pliegue-spacing-sm);
 }
 
+/* Títulos, rutas y nombres de archivo llegan del disco del usuario: pueden ser una sola
+   palabra larguísima sin espacios, y ni «/» ni «_» son puntos de ruptura en CSS. */
 .documentCard h3 {
   font-family: var(--pliegue-font-brand);
   font-size: 1.5rem;
   font-weight: 600;
   line-height: 1.15;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .documentCard p {
   color: var(--pliegue-color-text-secondary);
   line-height: 1.5;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 720px) {
@@ -85,5 +125,42 @@
 
   .pageActions {
     justify-content: flex-start;
+  }
+
+  .pageHeaderCompact {
+    gap: var(--pliegue-spacing-sm);
+  }
+}
+
+/* En el teléfono cada cifra es una fila: el número a la izquierda y, a su lado, qué cuenta y
+   su detalle. Como tarjetas de 170 px, las tres de Inicio llenaban la primera pantalla. */
+@media (max-width: 640px) {
+  .metricCard {
+    align-items: center;
+    column-gap: var(--pliegue-spacing-md);
+    display: grid;
+    grid-template-areas:
+      "value label"
+      "value detail";
+    grid-template-columns: minmax(3rem, auto) minmax(0, 1fr);
+    min-height: 0;
+    padding: var(--pliegue-spacing-md);
+    row-gap: 2px;
+  }
+
+  .metricCard > span {
+    align-self: end;
+    grid-area: label;
+  }
+
+  .metricCard strong {
+    font-size: 2.25rem;
+    grid-area: value;
+    text-align: center;
+  }
+
+  .metricCard small {
+    align-self: start;
+    grid-area: detail;
   }
 }

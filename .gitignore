@@ -11,6 +11,9 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 
+# Copia derivada de pdfjs-dist; la genera scripts/copy-pdfjs-assets.mjs
+apps/web/public/pdfjs/
+
 # Local AI/tooling bundles
 .agents/
 .claude/

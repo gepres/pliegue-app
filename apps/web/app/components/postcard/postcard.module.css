@@ -1,0 +1,420 @@
+/* ==========================================================================
+   Editor de postales
+   Vista previa a la izquierda (arriba en móvil) y controles a la derecha, con las
+   acciones de compartir siempre a la vista al pie.
+   ========================================================================== */
+
+.dialog {
+  background: var(--pliegue-color-bg-surface);
+  border: 0;
+  border-radius: 22px;
+  box-shadow: var(--pliegue-elevation-overlay);
+  color: var(--pliegue-color-text-primary);
+  height: min(880px, calc(100dvh - 32px));
+  max-height: none;
+  max-width: none;
+  overflow: hidden;
+  padding: 0;
+  width: min(1200px, calc(100vw - 32px));
+}
+
+.dialog::backdrop {
+  backdrop-filter: blur(6px);
+  background: rgb(18 16 13 / 55%);
+}
+
+.dialog[open] {
+  animation: postcard-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes postcard-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(340px, 0.7fr);
+  height: 100%;
+}
+
+/* ---- Vista previa ------------------------------------------------------------------ */
+
+.stage {
+  align-items: center;
+  background:
+    radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--pliegue-color-bg-canvas) 70%, transparent), transparent 60%),
+    var(--pliegue-color-bg-subtle);
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  /* Una sola fila del alto disponible: sin ella, la fila crecía hasta el alto natural del
+     lienzo (1920 px en una historia) y la postal desbordaba el diálogo. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  justify-items: center;
+  min-height: 0;
+  min-width: 0;
+  padding: clamp(16px, 3vw, 40px);
+  position: relative;
+}
+
+.canvas {
+  border-radius: 14px;
+  box-shadow:
+    0 2px 6px rgb(0 0 0 / 8%),
+    0 24px 60px -18px rgb(0 0 0 / 35%);
+  height: auto;
+  max-height: 100%;
+  max-width: 100%;
+  touch-action: none;
+  width: auto;
+}
+
+.stage[data-pannable="true"] .canvas {
+  cursor: grab;
+}
+
+.stage[data-pannable="true"] .canvas:active {
+  cursor: grabbing;
+}
+
+.stageHint {
+  bottom: 14px;
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  letter-spacing: 0.05em;
+  margin: 0;
+  position: absolute;
+  text-transform: uppercase;
+}
+
+/* ---- Controles ---------------------------------------------------------------------- */
+
+.controls {
+  border-left: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+}
+
+.header {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  display: flex;
+  gap: var(--pliegue-spacing-sm);
+  justify-content: space-between;
+  padding: 18px 16px 14px 22px;
+}
+
+.header h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.625rem;
+  font-weight: 600;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.header p {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  margin: 4px 0 0;
+}
+
+.body {
+  align-content: start;
+  display: grid;
+  gap: 26px;
+  grid-template-columns: minmax(0, 1fr);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 22px 24px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.group {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.group h3 {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.row {
+  align-items: end;
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.templates {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.template {
+  background: transparent;
+  border: 0;
+  border-radius: 14px;
+  color: var(--pliegue-color-text-secondary);
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  font-size: 0.75rem;
+  gap: 6px;
+  padding: 4px;
+  text-align: center;
+}
+
+.templateSwatch {
+  align-items: center;
+  aspect-ratio: 4 / 3;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 8%);
+  display: flex;
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.5rem;
+  font-weight: 600;
+  gap: 1px;
+  justify-content: center;
+  transition:
+    box-shadow var(--pliegue-motion-base) ease,
+    transform var(--pliegue-motion-base) ease;
+}
+
+.template[aria-checked="true"] {
+  color: var(--pliegue-color-text-primary);
+  font-weight: 600;
+}
+
+.template[aria-checked="true"] .templateSwatch {
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 8%),
+    0 0 0 2px var(--pliegue-color-bg-surface),
+    0 0 0 4px var(--pliegue-color-action-primary);
+}
+
+@media (hover: hover) {
+  .template:hover .templateSwatch {
+    transform: translateY(-2px);
+  }
+}
+
+.template:focus-visible {
+  outline: 3px solid var(--pliegue-color-focus-ring);
+  outline-offset: 2px;
+}
+
+.quote {
+  font-family: var(--pliegue-font-reading);
+  line-height: 1.5;
+  min-height: 7.5rem;
+  resize: vertical;
+}
+
+.range {
+  accent-color: var(--pliegue-color-action-primary);
+  width: 100%;
+}
+
+.rights {
+  background: color-mix(in srgb, var(--pliegue-color-accent-warm) 14%, var(--pliegue-color-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--pliegue-color-accent-warm) 45%, transparent);
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  padding: 12px 14px;
+}
+
+.rights p,
+.note {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.backgroundActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.colorField {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.875rem;
+  font-weight: 600;
+  gap: 8px;
+}
+
+.colorField input {
+  background: none;
+  block-size: 36px;
+  border: 1px solid var(--pliegue-color-border-control);
+  border-radius: 10px;
+  cursor: pointer;
+  inline-size: 44px;
+  padding: 3px;
+}
+
+.fileInput {
+  block-size: 1px;
+  inline-size: 1px;
+  opacity: 0;
+  position: absolute;
+}
+
+/* ---- Pie: compartir ------------------------------------------------------------------ */
+
+.footer {
+  background: color-mix(in srgb, var(--pliegue-color-bg-surface) 94%, transparent);
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 14px 22px calc(16px + env(safe-area-inset-bottom));
+}
+
+.primaryActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.primaryActions > * {
+  flex: 1 1 auto;
+}
+
+.socialRow {
+  align-items: center;
+  display: flex;
+  gap: var(--pliegue-spacing-sm);
+  justify-content: space-between;
+}
+
+.socialRow > span {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.social {
+  display: flex;
+  gap: 4px;
+}
+
+.status {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  margin: 0;
+  min-height: 1.1rem;
+}
+
+/* ---- Móvil: vista previa arriba, controles debajo --------------------------------------- */
+
+@media (max-width: 860px) {
+  .dialog {
+    border-radius: 0;
+    height: 100dvh;
+    width: 100vw;
+  }
+
+  .layout {
+    /* `minmax(0, 1fr)` y no `1fr`: la columna no debe crecer hasta el ancho de su contenido. */
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 40dvh) minmax(0, 1fr);
+  }
+
+  .stage {
+    padding: 12px;
+  }
+
+  .stageHint {
+    bottom: 4px;
+  }
+
+  .controls {
+    border-left: 0;
+    border-top: 1px solid var(--pliegue-color-border-default);
+  }
+
+  .header {
+    padding: 12px 10px 10px 16px;
+  }
+
+  .header h2 {
+    font-size: 1.375rem;
+  }
+
+  .body {
+    padding: 14px 16px 20px;
+  }
+
+  .footer {
+    gap: 8px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  /* En el móvil, las tres acciones en una fila: el pie no debe comerse los controles. */
+  .primaryActions {
+    flex-wrap: nowrap;
+  }
+
+  .primaryActions > * {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 10px;
+  }
+
+  .wide,
+  .primaryActions svg,
+  .status[data-default="true"] {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open] {
+    animation: none;
+  }
+
+  .templateSwatch {
+    transition: none;
+  }
+}
+
+.control {
+  display: grid;
+  gap: 8px;
+}
+
+.controlLabel {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.controlHint {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.75rem;
+  margin: 0;
+}

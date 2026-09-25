@@ -10,6 +10,7 @@ import {
   scanLinkedFolder,
   unlinkLocalFolder,
   useLinkedFolders,
+  type FolderIndexProgress,
   type FolderSyncResult,
   type LinkedFolderSource,
 } from "../library/local-folder-store";
@@ -63,45 +64,80 @@ function formatLastScan(value: string | null) {
   return `Último escaneo · ${scanDateFormatter.format(new Date(value))}`;
 }
 
+function formatDuration(milliseconds: number) {
+  const seconds = Math.round(milliseconds / 1000);
+  if (seconds < 60) return `${Math.max(1, seconds)} s`;
+  const minutes = Math.round(seconds / 60);
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+}
+
+/**
+ * El tiempo restante se calcula sobre los archivos que hubo que extraer, no sobre todos: en un
+ * reescaneo la mayoría reutiliza su índice y termina al instante, así que promediar el total
+ * daría una previsión demasiado optimista justo cuando más importa acertar.
+ */
+function remainingTime(progress: FolderIndexProgress) {
+  if (progress.extracted < 2) return null;
+  const perExtraction = progress.elapsedMs / progress.extracted;
+  const pending = progress.total - progress.processed;
+  return pending > 0 ? formatDuration(perExtraction * pending) : null;
+}
+
 export function LocalSourcesPanel() {
   const linkedFolders = useLinkedFolders();
   const [busySourceId, setBusySourceId] = useState<string | null>(null);
+  const [progress, setProgress] = useState<FolderIndexProgress | null>(null);
   const [statusMessage, setStatusMessage] = useState(
     "Los cambios y el índice derivado se actualizan bajo demanda; Pliegue nunca copia ni modifica los originales.",
   );
   const isBusy = busySourceId !== null;
 
+  function endRun() {
+    setBusySourceId(null);
+    setProgress(null);
+  }
+
   async function linkFolder() {
     setBusySourceId("picker");
+    setProgress(null);
 
     try {
-      const result = await linkLocalFolder();
+      const result = await linkLocalFolder(setProgress);
       setStatusMessage(
         result.relinked ? `Permiso renovado. ${describeScan(result)}` : describeScan(result),
       );
     } catch (error) {
       setStatusMessage(describeFolderError(error));
     } finally {
-      setBusySourceId(null);
+      endRun();
     }
   }
 
   async function scanFolder(source: LinkedFolderSource, requestAccess: boolean) {
     setBusySourceId(source.id);
+    setProgress(null);
 
     try {
-      const result = await scanLinkedFolder(source.id, requestAccess);
+      const result = await scanLinkedFolder(source.id, requestAccess, setProgress);
       setStatusMessage(describeScan(result));
     } catch (error) {
       setStatusMessage(describeFolderError(error));
     } finally {
-      setBusySourceId(null);
+      endRun();
     }
   }
 
   async function unlinkFolder(source: LinkedFolderSource) {
+    const affected = linkedFolders.documents.filter(
+      (document) => document.sourceId === source.id,
+    ).length;
+    // El aviso enumera lo que realmente se pierde. Decir solo «el permiso y sus metadatos»
+    // llevó a desvincular una carpeta creyendo que se renovaba el acceso, y con ella se fueron
+    // el índice de texto y las fichas que costaron llamadas al proveedor.
     const confirmed = window.confirm(
-      `¿Desvincular «${source.name}»? Solo se eliminarán el permiso y sus metadatos en Pliegue; los archivos originales no cambiarán.`,
+      `¿Desvincular «${source.name}»?\n\nSe eliminarán de Pliegue el permiso, el índice de texto de ${affected} documento${
+        affected === 1 ? "" : "s"
+      } y sus fichas del catálogo IA. Volver a vincularla obliga a reextraer el texto y a analizarlo otra vez.\n\nLos archivos originales no cambiarán.\n\nSi solo quieres recuperar el acceso, cancela y usa «Conceder acceso».`,
     );
     if (!confirmed) return;
 
@@ -154,6 +190,37 @@ export function LocalSourcesPanel() {
           </span>
         </div>
       </div>
+
+      {progress ? (
+        <div className={styles.capabilityNote} role="note">
+          <strong>
+            Indexando {progress.processed} de {progress.total}
+            {remainingTime(progress)
+              ? ` · quedan unos ${remainingTime(progress)}`
+              : ""}
+          </strong>
+          <div
+            aria-label="Progreso de la indexación"
+            aria-valuemax={progress.total}
+            aria-valuemin={0}
+            aria-valuenow={progress.processed}
+            className={styles.progressTrack}
+            role="progressbar"
+          >
+            <span
+              className={styles.progressValue}
+              style={{
+                width: `${progress.total ? Math.round((progress.processed / progress.total) * 100) : 0}%`,
+              }}
+            />
+          </div>
+          <p>
+            {progress.extracted} con texto extraído
+            {progress.reused ? ` · ${progress.reused} sin cambios` : ""}. La extracción ocurre en
+            esta pestaña: mantenla abierta y no la recargues hasta que termine.
+          </p>
+        </div>
+      ) : null}
 
       {linkedFolders.supported === false ? (
         <div className={styles.capabilityNote} role="note">
@@ -217,7 +284,12 @@ export function LocalSourcesPanel() {
       ) : linkedFolders.supported ? (
         <div className={styles.capabilityNote} role="note">
           <strong>Aún no hay carpetas vinculadas.</strong>
-          <p>El navegador pedirá acceso de solo lectura a la carpeta que elijas.</p>
+          <p>
+            El navegador pedirá acceso de solo lectura a la carpeta que elijas. Pliegue abrirá
+            cada archivo para extraer su texto, así que un corpus de cientos de documentos puede
+            tardar varios minutos la primera vez; los escaneos siguientes solo releen lo que haya
+            cambiado.
+          </p>
         </div>
       ) : null}
 

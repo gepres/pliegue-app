@@ -10,5 +10,7 @@ export { Input } from "./input";
 export type { InputProps } from "./input";
 export { Select } from "./select";
 export type { SelectProps } from "./select";
+export { Switch } from "./switch";
+export type { SwitchProps } from "./switch";
 export { Tag } from "./tag";
 export { cx } from "./utils";

@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "pdfjs-assets": "node scripts/copy-pdfjs-assets.mjs",
+    "dev": "pnpm pdfjs-assets && next dev",
+    "build": "pnpm pdfjs-assets && next build",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "test": "vitest run"
@@ -18,6 +19,7 @@
     "@pliegue/ui": "workspace:*",
     "fflate": "0.8.3",
     "next": "16.2.12",
+    "pdfjs-dist": "6.2.108",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

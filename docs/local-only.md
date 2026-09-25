@@ -106,8 +106,16 @@ navegador.
 
 Al vincular un archivo o escanear una carpeta, Pliegue abre temporalmente cada original,
 extrae texto con el mismo pipeline seguro del lector y conserva como máximo 32.000
-caracteres normalizados por documento. TXT, Markdown, EPUB y Office pueden quedar
-`indexed`; PDF e imágenes quedan `metadata-only` hasta incorporar extracción PDF/OCR.
+caracteres normalizados por documento. TXT, Markdown, EPUB, Office y PDF con capa de texto
+pueden quedar `indexed`; las imágenes y los PDF escaneados quedan `metadata-only` hasta
+incorporar OCR.
+
+Las copias importadas se indexan igual que los archivos vinculados. El índice guarda la
+versión del extractor que lo produjo (`contentIndexVersion`): al ampliar la extracción, lo
+indexado con una versión anterior se rehace aunque el archivo no haya cambiado. Sin esa
+versión, «Buscar cambios» compara solo nombre, tamaño y fecha, y un documento ya vinculado
+conservaría para siempre un índice vacío. Para las copias importadas existe **Actualizar
+índice local**, que las rehace desde el binario ya guardado sin pedir permisos nuevos.
 
 El índice sirve para búsqueda local y no contiene el `Blob` original. Al abrir un resultado,
 el lector resuelve su referencia, comprueba permiso y ejecuta `handle.getFile()` contra la
@@ -122,9 +130,27 @@ u Ollama. El flujo está apagado por defecto, limita el extracto y omite version
 cambios. Autor, título canónico, año, género, tipo, idioma, temas, resumen y confianza se
 guardan en una base IndexedDB separada y alimentan búsqueda y filtros de Biblioteca.
 
-PDF e imágenes quedan `needs-content` hasta incorporar extracción PDF/OCR. El contrato,
+Las imágenes y los PDF escaneados quedan `needs-content` hasta incorporar OCR. El contrato,
 privacidad, credenciales de sesión y límites están documentados en
 [`ai-catalog.md`](./ai-catalog.md).
+
+## Extracción de PDF
+
+El texto de los PDF se extrae con [`pdf.js`](https://mozilla.github.io/pdf.js/), cargado bajo
+demanda igual que `fflate`: ninguna otra ruta paga su peso y el chunk solo se descarga al
+indexar el primer PDF. La extracción ocurre íntegramente en el navegador, sin ruta de
+servidor ni subida temporal.
+
+- Se piden fuentes, WASM y recursos auxiliares desactivados: extraer texto no los necesita y
+  así la operación no genera ninguna petición de red.
+- Límites: 50 MB de entrada, 300 páginas y 1.000.000 de caracteres en el lector; la
+  indexación pide un tope menor porque solo conserva 32.000 caracteres.
+- Un PDF protegido con contraseña o dañado se informa como tal y no interrumpe la
+  vinculación del resto de archivos.
+- Se conserva el número de página de cada fragmento, base para las citas verificables de
+  `04.5` y para medir el progreso dentro del documento.
+- Un PDF **escaneado** no tiene capa de texto: sus páginas salen vacías y el documento queda
+  `metadata-only`, esperando el OCR de `03.5`. No es un error.
 
 ## Extracción de EPUB y Office
 
@@ -157,5 +183,6 @@ nuevamente desde Biblioteca; backup, exportación masiva y restauración corresp
 
 - Tauri: diálogo nativo, scopes mínimos, permisos persistentes y file watchers en tiempo real.
 - Expo: document picker, almacenamiento sandbox y permisos por plataforma.
-- Extracción estructural de PDF, imágenes embebidas, tablas complejas y archivos protegidos.
+- Estructura de PDF más allá del texto plano: encabezados, columnas, tablas y coordenadas.
+- OCR para imágenes y PDF escaneados, imágenes embebidas y archivos protegidos.
 - Eliminación, cuota, exportación y recuperación de errores.

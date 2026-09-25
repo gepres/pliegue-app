@@ -34,9 +34,10 @@ El manifiesto guarda solo:
   fingerprint de entrada;
 - favoritos y progreso en sus almacenes versionados.
 
-No guarda el binario, miniaturas ni secretos. PDF e imágenes empiezan como `metadata-only`;
-DOCX, PPTX, XLSX, EPUB, TXT y Markdown usan extracción local. Un error de análisis no rompe
-la referencia: el original puede seguir abriéndose.
+No guarda el binario, miniaturas ni secretos. PDF, DOCX, PPTX, XLSX, EPUB, TXT y Markdown
+usan extracción local; las imágenes y los PDF escaneados sin capa de texto empiezan como
+`metadata-only`. Un error de análisis no rompe la referencia: el original puede seguir
+abriéndose.
 
 El catálogo IA recibe únicamente un extracto configurable del índice y devuelve título,
 autores, año, género, tipo, idioma, temas y resumen. La ficha es regenerable y nunca cambia

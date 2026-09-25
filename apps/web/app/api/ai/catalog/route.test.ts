@@ -21,10 +21,15 @@ const input = {
   title: "titulo",
 };
 
-function request(provider: "anthropic" | "openai") {
+const testKey = "sk-test-000000000000000000000000";
+
+function request(provider: "anthropic" | "openai", apiKey = testKey) {
   return new Request("http://localhost/api/ai/catalog", {
     body: JSON.stringify({ input, model: "test-model", provider }),
-    headers: { authorization: "Bearer secret-test", "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    },
     method: "POST",
   });
 }
@@ -32,6 +37,19 @@ function request(provider: "anthropic" | "openai") {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("catalog provider route", () => {
+  it("no reenvía al proveedor una credencial que no lo parece", async () => {
+    const providerFetch = vi.fn();
+    vi.stubGlobal("fetch", providerFetch);
+
+    const response = await POST(
+      request("openai", "Catálogo inteligente del espacio. Autor y título canónico."),
+    );
+
+    expect(response.status).toBe(400);
+    // Lo importante no es el código sino que el texto nunca sale del servidor.
+    expect(providerFetch).not.toHaveBeenCalled();
+  });
+
   it("usa Responses con esquema estricto y no incluye la clave en el cuerpo", async () => {
     const providerFetch = vi.fn().mockResolvedValue(
       Response.json({
@@ -54,9 +72,9 @@ describe("catalog provider route", () => {
       store: false,
       text: { format: { strict: true, type: "json_schema" } },
     });
-    expect(options.body).not.toContain("secret-test");
+    expect(options.body).not.toContain("sk-test-000000000000000000000000");
     expect((options.headers as Record<string, string>).authorization).toBe(
-      "Bearer secret-test",
+      "Bearer sk-test-000000000000000000000000",
     );
   });
 
@@ -79,7 +97,35 @@ describe("catalog provider route", () => {
       model: "test-model",
       output_config: { format: { type: "json_schema" } },
     });
-    expect(options.body).not.toContain("secret-test");
-    expect((options.headers as Record<string, string>)["x-api-key"]).toBe("secret-test");
+    expect(options.body).not.toContain("sk-test-000000000000000000000000");
+    expect((options.headers as Record<string, string>)["x-api-key"]).toBe("sk-test-000000000000000000000000");
+  });
+
+  it("devuelve el modelo inexistente y la clave inválida como fallos distintos", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json(
+          { error: { code: "model_not_found", message: "The model does not exist" } },
+          { status: 404 },
+        ),
+      ),
+    );
+    const modelo = (await POST(request("openai"))) as Response;
+    const cuerpoModelo = (await modelo.json()) as { error: string };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({ error: { code: "invalid_api_key" } }, { status: 401 }),
+      ),
+    );
+    const clave = (await POST(request("openai"))) as Response;
+    const cuerpoClave = (await clave.json()) as { error: string };
+
+    expect(modelo.status).toBe(404);
+    expect(cuerpoModelo.error).toContain("test-model");
+    expect(clave.status).toBe(401);
+    expect(cuerpoClave.error).not.toBe(cuerpoModelo.error);
   });
 });

@@ -2,14 +2,20 @@
 
 import { useSyncExternalStore } from "react";
 
-import { createLocalContentIndex } from "./local-content-index";
+import {
+  carriedIndexFields,
+  createLocalContentIndex,
+  isCurrentContentIndex,
+} from "./local-content-index";
 import {
   compareFolderDocuments,
   createLinkedFolderDocument,
   type FolderChangeSummary,
   type LinkedFileDescriptor,
   type LinkedFolderDocument,
+  listSkippedFiles,
   maxLinkedFolderFiles,
+  type SkippedLinkedFile,
 } from "./local-folder";
 
 const databaseName = "pliegue-linked-folders";
@@ -42,6 +48,8 @@ export interface LinkedFolderSource {
   lastScannedAt: string | null;
   name: string;
   permission: ReadPermissionState;
+  /** Archivos que el último escaneo no pudo leer. Ausente en carpetas escaneadas antes. */
+  skippedFiles?: SkippedLinkedFile[];
 }
 
 interface StoredLinkedFolderSource extends LinkedFolderSource {
@@ -58,6 +66,23 @@ interface LinkedFoldersSnapshot {
   sources: LinkedFolderSource[];
   status: "error" | "idle" | "loading" | "ready";
   supported: boolean | null;
+}
+
+/**
+ * Avance de la indexación de una carpeta. Vincular un corpus grande obliga a abrir y extraer
+ * el texto de cada archivo en el hilo del navegador, y sin este dato la interfaz solo puede
+ * ofrecer un botón inmóvil durante varios minutos.
+ */
+export interface FolderIndexProgress {
+  current: string | null;
+  /** Lo mide el store y no la interfaz: el reloj no tiene sitio dentro de un render. */
+  elapsedMs: number;
+  /** Archivos cuyo texto hubo que extraer de nuevo: son los que cuestan tiempo. */
+  extracted: number;
+  processed: number;
+  /** Archivos que conservaron el índice anterior por no haber cambiado. */
+  reused: number;
+  total: number;
 }
 
 export interface FolderSyncResult extends FolderChangeSummary {
@@ -161,14 +186,37 @@ async function queryReadPermission(handle: FileSystemDirectoryHandle) {
   }
 }
 
-async function requestReadPermission(handle: FileSystemDirectoryHandle) {
+/**
+ * Cuánto se espera a que el usuario conteste al diálogo del navegador antes de darlo por no
+ * mostrado. Chrome no lo dibuja si la pestaña está oculta y deja la promesa pendiente sin
+ * error ni resolución: sin este límite la interfaz se queda en «Solicitando…» para siempre.
+ */
+export const permissionRequestTimeoutMs = 20_000;
+
+/** «unanswered» no es un permiso: es que no se pudo llegar a preguntar. */
+export type PermissionRequestOutcome = ReadPermissionState | "unanswered";
+
+async function requestReadPermission(
+  handle: FileSystemDirectoryHandle,
+): Promise<PermissionRequestOutcome> {
   const requestPermission = permissionHandle(handle).requestPermission;
   if (!requestPermission) return queryReadPermission(handle);
 
+  const unanswered = Symbol("unanswered");
+
   try {
-    return await requestPermission.call(handle, { mode: "read" });
-  } catch {
-    return "denied" as const;
+    const outcome = await Promise.race([
+      requestPermission.call(handle, { mode: "read" }),
+      new Promise<typeof unanswered>((resolve) => {
+        window.setTimeout(() => resolve(unanswered), permissionRequestTimeoutMs);
+      }),
+    ]);
+    return outcome === unanswered ? "unanswered" : outcome;
+  } catch (error) {
+    // Sin activación de usuario el navegador rechaza en vez de preguntar. Tratarlo como una
+    // denegación sería mentir: nadie ha dicho que no, simplemente no se llegó a preguntar.
+    if (error instanceof DOMException && error.name === "SecurityError") return "unanswered";
+    return "denied";
   }
 }
 
@@ -350,6 +398,7 @@ async function readDocumentsForSource(database: IDBDatabase, sourceId: string) {
 async function saveFolderScan(
   source: StoredLinkedFolderSource,
   documents: readonly StoredLinkedFolderDocument[],
+  onProgress?: (progress: FolderIndexProgress) => void,
 ) {
   const database = await openDatabase();
 
@@ -361,7 +410,25 @@ async function saveFolderScan(
     );
     const previousById = new Map(previous.map((document) => [document.id, document]));
     const indexedDocuments: StoredLinkedFolderDocument[] = new Array(documents.length);
+    const startedAt = Date.now();
+    const progress: FolderIndexProgress = {
+      current: null,
+      elapsedMs: 0,
+      extracted: 0,
+      processed: 0,
+      reused: 0,
+      total: documents.length,
+    };
     let nextIndex = 0;
+
+    function publish(document: StoredLinkedFolderDocument, reused: boolean) {
+      progress.processed += 1;
+      progress.current = document.relativePath;
+      progress.elapsedMs = Date.now() - startedAt;
+      if (reused) progress.reused += 1;
+      else progress.extracted += 1;
+      onProgress?.({ ...progress });
+    }
 
     async function indexNextDocument() {
       while (nextIndex < documents.length) {
@@ -371,23 +438,31 @@ async function saveFolderScan(
         if (!document) continue;
         const priorDocument = previousById.get(document.id);
 
+        // El índice se reutiliza solo si el archivo no cambió Y lo produjo el extractor
+        // vigente: al ampliar la extracción, lo indexado con una versión anterior debe
+        // rehacerse aunque el archivo siga idéntico.
         if (
           priorDocument?.fingerprint === document.fingerprint &&
           priorDocument.indexStatus &&
-          priorDocument.indexedAt
+          priorDocument.indexedAt &&
+          isCurrentContentIndex(priorDocument.indexVersion)
         ) {
           indexedDocuments[index] = {
             ...document,
+            ...carriedIndexFields(priorDocument),
             indexedAt: priorDocument.indexedAt,
             indexStatus: priorDocument.indexStatus,
+            indexVersion: priorDocument.indexVersion,
             searchText: priorDocument.searchText ?? "",
           };
+          publish(document, true);
           continue;
         }
 
         const file = await document.handle.getFile();
         const contentIndex = await createLocalContentIndex(document.format, file);
         indexedDocuments[index] = { ...document, ...contentIndex };
+        publish(document, false);
       }
     }
 
@@ -437,7 +512,9 @@ function pickerWindow() {
   return window as DirectoryPickerWindow;
 }
 
-export async function linkLocalFolder(): Promise<FolderSyncResult> {
+export async function linkLocalFolder(
+  onProgress?: (progress: FolderIndexProgress) => void,
+): Promise<FolderSyncResult> {
   const showDirectoryPicker = pickerWindow().showDirectoryPicker;
   if (!showDirectoryPicker) throw new Error("Este navegador no permite vincular carpetas.");
 
@@ -465,8 +542,9 @@ export async function linkLocalFolder(): Promise<FolderSyncResult> {
     lastScannedAt: scannedAt,
     name: handle.name,
     permission: "granted",
+    skippedFiles: listSkippedFiles(files),
   };
-  const summary = await saveFolderScan(source, documents);
+  const summary = await saveFolderScan(source, documents, onProgress);
 
   sourceHandles.set(sourceId, handle);
   await loadLinkedFolders();
@@ -496,14 +574,17 @@ function updatePermissionSnapshot(sourceId: string, permission: ReadPermissionSt
   });
 }
 
-export async function requestLinkedFolderReadPermission(sourceId: string) {
+export async function requestLinkedFolderReadPermission(
+  sourceId: string,
+): Promise<PermissionRequestOutcome> {
   const handle = sourceHandles.get(sourceId);
   if (!handle) throw new Error("La carpeta vinculada ya no está disponible.");
 
   // Keep this as the first awaited operation so the browser preserves user activation.
-  const permission = await requestReadPermission(handle);
-  updatePermissionSnapshot(sourceId, permission);
-  return permission;
+  const outcome = await requestReadPermission(handle);
+  // Si no se llegó a preguntar, el estado guardado no cambia: seguimos sin saber la respuesta.
+  if (outcome !== "unanswered") updatePermissionSnapshot(sourceId, outcome);
+  return outcome;
 }
 
 export async function readLinkedDocumentFile(documentId: string, sourceId: string) {
@@ -535,14 +616,17 @@ export async function readLinkedDocumentFile(documentId: string, sourceId: strin
 export async function scanLinkedFolder(
   sourceId: string,
   requestAccess = false,
+  onProgress?: (progress: FolderIndexProgress) => void,
 ): Promise<FolderSyncResult> {
   const source = snapshot.sources.find((item) => item.id === sourceId);
   const handle = sourceHandles.get(sourceId);
   if (!source || !handle) throw new Error("La carpeta vinculada ya no está disponible.");
 
-  const permission = requestAccess
+  const outcome = requestAccess
     ? await requestReadPermission(handle)
     : await queryReadPermission(handle);
+  // Que no se haya podido preguntar deja el permiso donde estaba: pendiente, no denegado.
+  const permission: ReadPermissionState = outcome === "unanswered" ? "prompt" : outcome;
   updatePermissionSnapshot(sourceId, permission);
 
   if (permission !== "granted") {
@@ -567,8 +651,9 @@ export async function scanLinkedFolder(
     handle,
     lastScannedAt: new Date().toISOString(),
     permission,
+    skippedFiles: listSkippedFiles(files),
   };
-  const summary = await saveFolderScan(storedSource, documents);
+  const summary = await saveFolderScan(storedSource, documents, onProgress);
 
   await loadLinkedFolders();
   return {

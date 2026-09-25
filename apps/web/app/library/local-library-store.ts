@@ -2,11 +2,15 @@
 
 import { useSyncExternalStore } from "react";
 
+import { createLocalContentIndex, isCurrentContentIndex } from "./local-content-index";
 import {
   createImportedDocument,
   type ImportedDocument,
   validateLocalFile,
 } from "./local-file-metadata";
+
+/** Extracciones simultáneas: el pipeline corre en el hilo principal del navegador. */
+const indexingConcurrency = 4;
 
 const databaseName = "pliegue-local-library";
 const databaseVersion = 1;
@@ -190,8 +194,12 @@ async function importLocalFile(database: IDBDatabase, file: File): Promise<FileI
 
   if (duplicateKey !== undefined) return { kind: "duplicate" };
 
+  // Una copia importada se indexa igual que un archivo vinculado. Sin esto queda sin texto
+  // y el catálogo IA la descarta como «sin contenido» aunque sea un PDF perfectamente legible.
+  const contentIndex = await createLocalContentIndex(validation.format, file);
+
   try {
-    await saveImportedDocument(database, { ...document, blob: file });
+    await saveImportedDocument(database, { ...document, ...contentIndex, blob: file });
     return { kind: "imported" };
   } catch (error) {
     // The unique fingerprint index also protects against two equal files in one batch.
@@ -208,15 +216,88 @@ export async function importLocalFiles(files: readonly File[]): Promise<ImportRe
   const database = await openDatabase();
 
   try {
-    const outcomes = await Promise.all(files.map((file) => importLocalFile(database, file)));
+    const outcomes: FileImportOutcome[] = new Array(files.length);
+    let nextIndex = 0;
+
+    async function importNext() {
+      while (nextIndex < files.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        const file = files[index];
+        if (file) outcomes[index] = await importLocalFile(database, file);
+      }
+    }
+
+    await Promise.all(
+      Array.from({ length: Math.min(indexingConcurrency, files.length) }, () => importNext()),
+    );
 
     for (const outcome of outcomes) {
+      if (!outcome) continue;
       if (outcome.kind === "imported") result.imported += 1;
       if (outcome.kind === "duplicate") result.duplicates += 1;
       if (outcome.kind === "rejected") {
         result.rejected.push({ name: outcome.name, reason: outcome.reason });
       }
     }
+  } finally {
+    database.close();
+  }
+
+  await loadDocuments();
+  return result;
+}
+
+export interface ReindexResult {
+  failed: number;
+  indexed: number;
+  reviewed: number;
+}
+
+/**
+ * Rehace el índice de las copias importadas cuyo texto falta o proviene de una versión
+ * anterior del extractor. El binario ya está en IndexedDB, así que no se pide nada al
+ * usuario ni se envía nada fuera del navegador.
+ */
+export async function reindexImportedDocuments(): Promise<ReindexResult> {
+  const result: ReindexResult = { failed: 0, indexed: 0, reviewed: 0 };
+  const database = await openDatabase();
+
+  try {
+    const transaction = database.transaction(documentStoreName, "readonly");
+    const records = await requestResult(
+      transaction.objectStore(documentStoreName).getAll() as IDBRequest<StoredImportedDocument[]>,
+    );
+    await transactionComplete(transaction);
+
+    const pending = records.filter((record) => !isCurrentContentIndex(record.indexVersion));
+    result.reviewed = pending.length;
+    let nextIndex = 0;
+
+    async function reindexNext() {
+      while (nextIndex < pending.length) {
+        const record = pending[nextIndex];
+        nextIndex += 1;
+        if (!record) continue;
+
+        try {
+          const contentIndex = await createLocalContentIndex(record.format, record.blob);
+          const writeTransaction = database.transaction(documentStoreName, "readwrite");
+          const completed = transactionComplete(writeTransaction);
+          writeTransaction
+            .objectStore(documentStoreName)
+            .put({ ...record, ...contentIndex });
+          await completed;
+          if (contentIndex.indexStatus === "indexed") result.indexed += 1;
+        } catch {
+          result.failed += 1;
+        }
+      }
+    }
+
+    await Promise.all(
+      Array.from({ length: Math.min(indexingConcurrency, pending.length) }, () => reindexNext()),
+    );
   } finally {
     database.close();
   }
