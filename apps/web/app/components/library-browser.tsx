@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
-import { Button, Card, Field, Select, Tag, buttonClassName, cx } from "@pliegue/ui";
+import { Button, Card, Field, Select, Switch, Tag, buttonClassName, cx } from "@pliegue/ui";
 
 import { analyzeDocumentCatalogs } from "../ai/catalog-analysis";
 import { useAiSettings } from "../ai/ai-settings-store";
@@ -12,52 +13,54 @@ import {
   documentWorkTypes,
   type DocumentWorkType,
 } from "../ai/document-catalog";
+import { removeDocumentCatalogRecord } from "../ai/document-catalog-store";
 import {
-  removeDocumentCatalogRecord,
-  useDocumentCatalogs,
-} from "../ai/document-catalog-store";
-import { applyImportedCatalogs } from "../library/catalog-import";
-import { useImportedCatalogs } from "../library/imported-catalog-store";
-import {
-  applyDocumentCatalogs,
   availabilityStates,
   catalogFacets,
   documentFormats,
   filterDocuments,
+  organizationFacets,
+  sortDocuments,
   type AvailabilityState,
   type DocumentFormat,
   type DocumentOrigin,
+  type DocumentSortOrder,
   type LibraryDocument,
 } from "../library/documents";
 import { hasStaleIndex } from "../library/stale-index";
 import { toggleFavorite, useFavorites } from "../library/favorite-store";
-import {
-  linkLocalFiles,
-  unlinkLocalFile,
-  useLinkedFiles,
-} from "../library/local-file-reference-store";
+import { languageLabel } from "../library/language";
+import { linkLocalFiles, unlinkLocalFile } from "../library/local-file-reference-store";
 import {
   downloadImportedCopy,
   importLocalFiles,
   reindexImportedDocuments,
   removeImportedCopy,
-  useImportedDocuments,
 } from "../library/local-library-store";
-import { useLinkedFolders } from "../library/local-folder-store";
 import { clearReadingProgress } from "../library/reading-progress-store";
-import { CatalogImportPanel } from "./catalog-import-panel";
-import { Disclosure, Segmented, Toast } from "./app-ui/controls";
+import { useLibraryDocuments } from "../library/use-library-documents";
+import { Segmented, Toast } from "./app-ui/controls";
 import { Icon } from "./app-ui/icons";
-import { MenuItem, MenuSeparator, Popover, Sheet } from "./app-ui/overlays";
+import { MenuItem, MenuSeparator, Popover } from "./app-ui/overlays";
 import {
   LibraryDocumentTile,
   workTypeLabels,
   type LibraryView,
 } from "./library/library-document-tile";
 import libraryStyles from "./library/library.module.css";
-import { LocalSourcesPanel } from "./local-sources-panel";
 import { StaleIndexNotice } from "./stale-index-notice";
 import styles from "../(workspace)/app/workspace.module.css";
+
+const sortLabels: Record<DocumentSortOrder, string> = {
+  author: "Autor",
+  recent: "Orden de llegada",
+  series: "Serie y tomo",
+  title: "Título",
+  year: "Año, más reciente primero",
+};
+
+/** Cuántas categorías caben como atajo bajo el buscador antes de pedir el panel de filtros. */
+const categoryChipLimit = 8;
 
 const availabilityLabels: Record<AvailabilityState, string> = {
   available: "Disponible",
@@ -92,6 +95,8 @@ function describeCatalogStatus(document: LibraryDocument) {
   if (document.catalogStatus === "needs-content" && hasStaleIndex(document)) {
     return "Índice desactualizado";
   }
+  // Una ficha escrita a mano no es obra de la IA: decirlo evita que parezca una deducción.
+  if (document.catalogSource === "import") return "Ficha importada";
   return document.catalogStatus ? catalogStatusLabels[document.catalogStatus] : null;
 }
 
@@ -120,6 +125,7 @@ function describeFileLinkError(error: unknown) {
 }
 
 export function LibraryBrowser() {
+  const router = useRouter();
   const [availability, setAvailability] = useState<AvailabilityState | "all">("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [format, setFormat] = useState<DocumentFormat | "all">("all");
@@ -129,54 +135,77 @@ export function LibraryBrowser() {
   const [publicationYear, setPublicationYear] = useState<number | "all">("all");
   const [query, setQuery] = useState("");
   const [workType, setWorkType] = useState<DocumentWorkType | "all">("all");
+  const [category, setCategoryState] = useState<string | "all">("all");
+  const [subcategory, setSubcategory] = useState<string | "all">("all");
+  const [series, setSeries] = useState<string | "all">("all");
+  const [language, setLanguage] = useState<string | "all">("all");
+  const [hideDuplicates, setHideDuplicates] = useState(false);
+  const [sort, setSortState] = useState<DocumentSortOrder>("title");
   const [importing, setImporting] = useState(false);
   const [reindexing, setReindexing] = useState(false);
   const [linkingFiles, setLinkingFiles] = useState(false);
-  const [sourcesOpen, setSourcesOpen] = useState(false);
   const [view, setViewState] = useState<LibraryView>("grid");
   const [toast, setToast] = useState<{ nonce: number; text: string } | null>(null);
-  const [importStatus, setImportStatusState] = useState(
-    "Vincula un archivo: guardaremos su referencia, metadatos e índice; no el original.",
-  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const favorites = useFavorites();
-  const importedLibrary = useImportedDocuments();
-  const linkedFiles = useLinkedFiles();
-  const linkedFolders = useLinkedFolders();
-  const catalogs = useDocumentCatalogs();
-  const importedCatalogs = useImportedCatalogs();
+  const {
+    allDocuments,
+    baseDocuments,
+    catalogs,
+    importedLibrary,
+    linkedFiles,
+    linkedFolders,
+    loading: libraryLoading,
+    storageError,
+  } = useLibraryDocuments();
   const aiSettings = useAiSettings();
   const aiSecrets = useAiSessionSecrets();
-  const [catalogMessage, setCatalogMessageState] = useState(
-    "El catálogo IA es opcional. Actívalo en Ajustes o analiza un documento bajo demanda.",
-  );
 
-  // El resultado de cada acción se anuncia como aviso efímero, y además queda escrito en la
-  // hoja de Fuentes para quien quiera volver a leerlo.
+  // El resultado de cada acción se anuncia como aviso efímero.
   const notify = (text: string) =>
     setToast((current) => ({ nonce: (current?.nonce ?? 0) + 1, text }));
-  const setImportStatus = (text: string) => {
-    setImportStatusState(text);
-    notify(text);
-  };
-  const setCatalogMessage = (text: string) => {
-    setCatalogMessageState(text);
-    notify(text);
-  };
+  const setImportStatus = notify;
+  const setCatalogMessage = notify;
 
-  // La vista elegida se recuerda en este navegador; se lee tras montar para que el HTML del
-  // servidor y el primer render del cliente coincidan.
+  /** La subcategoría depende de la categoría: al cambiar de materia deja de tener sentido. */
+  function setCategory(next: string | "all") {
+    setCategoryState(next);
+    setSubcategory("all");
+  }
+
+  // La vista y el orden elegidos se recuerdan en este navegador; se leen tras montar para que
+  // el HTML del servidor y el primer render del cliente coincidan. La vista de Fuentes enlaza
+  // aquí con `?categoria=…` o `?serie=…` para abrir la Biblioteca ya filtrada.
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       try {
         const stored = window.localStorage.getItem("pliegue-library-view");
         if (stored === "list" || stored === "grid") setViewState(stored);
+        const storedSort = window.localStorage.getItem("pliegue-library-sort");
+        if (storedSort && storedSort in sortLabels) setSortState(storedSort as DocumentSortOrder);
       } catch {
         // Sin almacenamiento, la vista vuelve a cuadrícula en cada visita.
+      }
+      const params = new URLSearchParams(window.location.search);
+      const requestedCategory = params.get("categoria");
+      const requestedSeries = params.get("serie");
+      if (requestedCategory) setCategoryState(requestedCategory);
+      if (requestedSeries) {
+        setSeries(requestedSeries);
+        setSortState("series");
       }
     });
     return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  function setSort(next: DocumentSortOrder) {
+    setSortState(next);
+    try {
+      window.localStorage.setItem("pliegue-library-sort", next);
+    } catch {
+      // La elección dura lo que la página.
+    }
+  }
 
   function setView(next: LibraryView) {
     setViewState(next);
@@ -186,39 +215,31 @@ export function LibraryBrowser() {
       // Ídem: la elección dura lo que la página.
     }
   }
-  const baseDocuments = useMemo(
-    () => [
-      ...linkedFiles.documents,
-      ...linkedFolders.documents,
-      ...importedLibrary.documents,
-    ],
-    [importedLibrary.documents, linkedFiles.documents, linkedFolders.documents],
-  );
-  // El orden importa: la ficha importada se aplica después para que prevalezca sobre la que
-  // dedujo el modelo, que es lo que espera quien acaba de corregirla a mano.
-  const allDocuments = useMemo(
-    () =>
-      applyImportedCatalogs(
-        applyDocumentCatalogs(baseDocuments, catalogs.records),
-        importedCatalogs.records,
-      ),
-    [baseDocuments, catalogs.records, importedCatalogs.records],
-  );
   const favoriteIds = new Set(favorites);
   const facets = catalogFacets(allDocuments);
-  const filteredDocuments = filterDocuments(allDocuments, {
-    author,
-    availability,
-    favoriteIds,
-    favoritesOnly,
-    format,
-    genre,
-    origin,
-    publicationYear,
-    query,
-    workType,
-  });
-  const storageError = importedLibrary.error ?? linkedFiles.error ?? linkedFolders.error;
+  const organization = organizationFacets(allDocuments);
+  const subcategoryOptions = category === "all" ? [] : organization.subcategoriesOf(category);
+  const filteredDocuments = sortDocuments(
+    filterDocuments(allDocuments, {
+      author,
+      availability,
+      category,
+      favoriteIds,
+      favoritesOnly,
+      format,
+      genre,
+      hideDuplicates,
+      language,
+      origin,
+      publicationYear,
+      query,
+      series,
+      subcategory,
+      workType,
+    }),
+    sort,
+  );
+  const duplicateCount = allDocuments.filter((document) => document.organization?.duplicateOf).length;
   const providerReady =
     aiSettings.provider === "ollama" || Boolean(aiSecrets[aiSettings.provider]);
   const catalogedCount = allDocuments.filter(
@@ -239,19 +260,16 @@ export function LibraryBrowser() {
     }
 
     let active = true;
-    void analyzeDocumentCatalogs(baseDocuments, aiSettings)
-      .then((summary) => {
-        if (active) {
-          setCatalogMessageState(describeCatalogSummary(summary) || "El catálogo está al día.");
-        }
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          setCatalogMessageState(
-            error instanceof Error ? error.message : "No fue posible iniciar el catálogo automático.",
-          );
-        }
-      });
+    // El análisis automático trabaja en silencio: solo avisa si algo falla, porque un aviso
+    // de «catálogo al día» en cada visita sería ruido.
+    void analyzeDocumentCatalogs(baseDocuments, aiSettings).catch((error: unknown) => {
+      if (active) {
+        setToast((current) => ({
+          nonce: (current?.nonce ?? 0) + 1,
+          text: error instanceof Error ? error.message : "No fue posible iniciar el catálogo automático.",
+        }));
+      }
+    });
 
     return () => {
       active = false;
@@ -409,6 +427,16 @@ export function LibraryBrowser() {
     publicationYear !== "all"
       ? { key: "year", label: String(publicationYear), clear: () => setPublicationYear("all") }
       : null,
+    subcategory !== "all"
+      ? { key: "subcategory", label: subcategory, clear: () => setSubcategory("all") }
+      : null,
+    series !== "all" ? { key: "series", label: `Serie: ${series}`, clear: () => setSeries("all") } : null,
+    language !== "all"
+      ? { key: "language", label: languageLabel(language) ?? language, clear: () => setLanguage("all") }
+      : null,
+    hideDuplicates
+      ? { key: "duplicates", label: "Sin duplicados", clear: () => setHideDuplicates(false) }
+      : null,
   ].filter((item): item is { clear: () => void; key: string; label: string } => item !== null);
 
   function clearFilters() {
@@ -419,13 +447,17 @@ export function LibraryBrowser() {
     setAuthor("all");
     setGenre("all");
     setPublicationYear("all");
+    setCategory("all");
+    setSeries("all");
+    setLanguage("all");
+    setHideDuplicates(false);
     setFavoritesOnly(false);
   }
 
-  const libraryLoading =
-    importedLibrary.status !== "ready" ||
-    linkedFiles.status !== "ready" ||
-    linkedFolders.status !== "ready";
+  const categoryChips = organization.categories.slice(0, categoryChipLimit);
+  const selectedCategoryHidden =
+    category !== "all" &&
+    !categoryChips.some((item) => item.value.localeCompare(category, "es", { sensitivity: "base" }) === 0);
 
   return (
     <>
@@ -440,15 +472,14 @@ export function LibraryBrowser() {
           </p>
         </div>
         <div className={libraryStyles.headerActions}>
-          <button
+          <Link
             aria-label="Fuentes"
             className={cx(buttonClassName({ variant: "secondary" }), libraryStyles.sourcesButton)}
-            onClick={() => setSourcesOpen(true)}
-            type="button"
+            href="/app/biblioteca/fuentes"
           >
             <Icon name="folder" size={18} />
             <span>Fuentes</span>
-          </button>
+          </Link>
           <Popover
             kind="menu"
             title="Añadir a la Biblioteca"
@@ -478,7 +509,7 @@ export function LibraryBrowser() {
                   label="Vincular carpeta…"
                   onSelect={() => {
                     close();
-                    setSourcesOpen(true);
+                    router.push("/app/biblioteca/fuentes#carpetas");
                   }}
                 />
                 <MenuItem
@@ -498,7 +529,7 @@ export function LibraryBrowser() {
                   label="Importar índice JSON…"
                   onSelect={() => {
                     close();
-                    setSourcesOpen(true);
+                    router.push("/app/biblioteca/fuentes#indice-json");
                   }}
                 />
                 <MenuItem
@@ -578,6 +609,108 @@ export function LibraryBrowser() {
           width={520}
         >
           <div className={libraryStyles.filterPanel}>
+            <div className={libraryStyles.filterGroup}>
+              <span className={libraryStyles.filterGroupLabel}>Organización</span>
+              <div className={libraryStyles.filterGrid}>
+                <Field label="Categoría" labelFor="library-category">
+                  <Select
+                    disabled={!organization.categories.length}
+                    id="library-category"
+                    onChange={(event) => setCategory(event.target.value)}
+                    value={category}
+                  >
+                    <option value="all">Todas</option>
+                    {organization.categories.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.value} ({item.count})
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Subcategoría" labelFor="library-subcategory">
+                  <Select
+                    disabled={!subcategoryOptions.length}
+                    id="library-subcategory"
+                    onChange={(event) => setSubcategory(event.target.value)}
+                    value={subcategory}
+                  >
+                    <option value="all">{category === "all" ? "Elige una categoría" : "Todas"}</option>
+                    {subcategoryOptions.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.value} ({item.count})
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Serie" labelFor="library-series">
+                  <Select
+                    disabled={!organization.series.length}
+                    id="library-series"
+                    onChange={(event) => {
+                      setSeries(event.target.value);
+                      // Una serie se lee en orden: se ordena por tomo al elegirla.
+                      if (event.target.value !== "all") setSort("series");
+                    }}
+                    value={series}
+                  >
+                    <option value="all">Todas</option>
+                    {organization.series.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.value} ({item.count})
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Idioma" labelFor="library-language">
+                  <Select
+                    disabled={!organization.languages.length}
+                    id="library-language"
+                    onChange={(event) => setLanguage(event.target.value)}
+                    value={language}
+                  >
+                    <option value="all">Todos</option>
+                    {organization.languages.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {languageLabel(item.value)} ({item.count})
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+            </div>
+
+            <div className={libraryStyles.filterGroup}>
+              <span className={libraryStyles.filterGroupLabel}>Orden</span>
+              <div className={libraryStyles.filterGrid}>
+                <Field label="Ordenar por" labelFor="library-sort">
+                  <Select
+                    id="library-sort"
+                    onChange={(event) => setSort(event.target.value as DocumentSortOrder)}
+                    value={sort}
+                  >
+                    {Object.entries(sortLabels).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+              <Switch
+                checked={hideDuplicates}
+                description={
+                  duplicateCount
+                    ? `${duplicateCount} copia${duplicateCount === 1 ? "" : "s"} marcada${
+                        duplicateCount === 1 ? "" : "s"
+                      } como duplicada${duplicateCount === 1 ? "" : "s"}; se muestra el ejemplar principal.`
+                    : "Ninguna copia marcada como duplicada todavía."
+                }
+                disabled={!duplicateCount}
+                label="Ocultar duplicados"
+                onChange={(event) => setHideDuplicates(event.target.checked)}
+              />
+            </div>
+
             <div className={libraryStyles.filterGroup}>
               <span className={libraryStyles.filterGroupLabel}>Archivo</span>
               <div className={libraryStyles.filterGrid}>
@@ -725,11 +858,14 @@ export function LibraryBrowser() {
       </form>
 
       {/* ---- Atajos de filtro y filtros activos ----------------------------- */}
-      <div className={libraryStyles.chips}>
+      <div aria-label="Atajos de filtro" className={libraryStyles.chips} role="group">
         <button
-          aria-pressed={!favoritesOnly}
+          aria-pressed={!favoritesOnly && category === "all"}
           className={libraryStyles.chip}
-          onClick={() => setFavoritesOnly(false)}
+          onClick={() => {
+            setFavoritesOnly(false);
+            setCategory("all");
+          }}
           type="button"
         >
           Todo
@@ -742,6 +878,34 @@ export function LibraryBrowser() {
         >
           <Icon name="star" size={14} /> Favoritos
         </button>
+        {categoryChips.length ? <span aria-hidden="true" className={libraryStyles.chipDivider} /> : null}
+        {categoryChips.map((item) => {
+          const selected =
+            category !== "all" && item.value.localeCompare(category, "es", { sensitivity: "base" }) === 0;
+          return (
+            <button
+              aria-pressed={selected}
+              className={libraryStyles.chip}
+              key={item.value}
+              onClick={() => setCategory(selected ? "all" : item.value)}
+              type="button"
+            >
+              {item.value}
+              <span className={libraryStyles.chipCount}>{item.count}</span>
+            </button>
+          );
+        })}
+        {selectedCategoryHidden ? (
+          <button
+            aria-label={`Quitar filtro ${category}`}
+            className={cx(libraryStyles.chip, libraryStyles.chipActive)}
+            onClick={() => setCategory("all")}
+            type="button"
+          >
+            {category}
+            <Icon name="close" size={13} />
+          </button>
+        ) : null}
         {activeFilters.map((filter) => (
           <button
             aria-label={`Quitar filtro ${filter.label}`}
@@ -853,126 +1017,15 @@ export function LibraryBrowser() {
             <Button disabled={linkingFiles} onClick={() => void handleLinkedFiles()}>
               {linkingFiles ? "Vinculando…" : "Vincular archivos"}
             </Button>
-            <Button onClick={() => setSourcesOpen(true)} variant="secondary">
+            <Link
+              className={buttonClassName({ variant: "secondary" })}
+              href="/app/biblioteca/fuentes#carpetas"
+            >
               Vincular carpeta
-            </Button>
+            </Link>
           </div>
         </div>
       )}
-
-      {/* ---- Hoja de fuentes: todo lo que es gestionar y no leer -------------- */}
-      <Sheet
-        description="De dónde salen tus documentos y cómo se indexan. Nada se sube a ningún servidor."
-        onClose={() => setSourcesOpen(false)}
-        open={sourcesOpen}
-        title="Fuentes"
-        width={520}
-      >
-        <div className={cx(libraryStyles.sourcesBody, styles.sourcesBody)}>
-          <Disclosure
-            defaultOpen
-            icon="link"
-            meta={`${linkedFiles.documents.length} ref. · ${importedLibrary.documents.length} copias`}
-            summary="Referencias a archivos sueltos y copias de compatibilidad"
-            title="Archivos"
-          >
-            <p className={libraryStyles.sourceText}>
-              Pliegue guarda un permiso seguro, metadatos y un índice textual limitado. El archivo
-              completo permanece en su ubicación y se vuelve a leer solo cuando lo abres.
-            </p>
-            <div className={libraryStyles.sourceActions}>
-              <Button
-                aria-describedby="linked-files-status"
-                disabled={linkingFiles}
-                onClick={() => void handleLinkedFiles()}
-                size="sm"
-              >
-                {linkingFiles ? "Vinculando y analizando…" : "Vincular archivos"}
-              </Button>
-              <Button
-                disabled={importing || importedLibrary.status === "error"}
-                onClick={() => fileInputRef.current?.click()}
-                size="sm"
-                variant="secondary"
-              >
-                {importing ? "Importando copia…" : "Importar copia"}
-              </Button>
-              <Button
-                disabled={reindexing || !importedLibrary.documents.length}
-                onClick={() => void handleReindex()}
-                size="sm"
-                variant="quiet"
-              >
-                {reindexing ? "Rehaciendo índice…" : "Actualizar índice"}
-              </Button>
-            </div>
-            <p
-              aria-label="Estado de vinculación o importación"
-              aria-live="polite"
-              className={libraryStyles.sourceStatus}
-              id="linked-files-status"
-              role="status"
-            >
-              {importedLibrary.error ?? importStatus}
-            </p>
-          </Disclosure>
-
-          <Disclosure
-            icon="folder"
-            meta={`${linkedFolders.sources.length} carpeta${linkedFolders.sources.length === 1 ? "" : "s"}`}
-            summary="Carpetas vivas: detecta archivos nuevos o modificados"
-            title="Carpetas"
-          >
-            <LocalSourcesPanel />
-          </Disclosure>
-
-          <Disclosure
-            icon="database"
-            meta={`${importedCatalogs.records.length} fichas`}
-            summary="Crea o corrige fichas sin gastar IA"
-            title="Índice desde JSON"
-          >
-            <CatalogImportPanel documents={allDocuments} />
-          </Disclosure>
-
-          <Disclosure
-            icon="sparkles"
-            meta={`${catalogedCount}/${allDocuments.length}`}
-            summary="Fichas generadas por el proveedor que elijas"
-            title="Catálogo IA"
-          >
-            <p aria-live="polite" className={libraryStyles.sourceText} role="status">
-              {catalogs.error ?? catalogMessage}
-            </p>
-            <div className={libraryStyles.sourceActions}>
-              <Link
-                className={buttonClassName({ size: "sm", variant: "secondary" })}
-                href="/app/ajustes#ia"
-              >
-                Configurar proveedor
-              </Link>
-            </div>
-          </Disclosure>
-
-          <Disclosure
-            icon="cloud"
-            meta="Pendiente"
-            summary="Referencia remota, sin duplicar archivos"
-            title="Google Drive"
-          >
-            <p className={libraryStyles.sourceText}>
-              La capa documental ya contempla <code>fileId</code> y <code>driveId</code>. La
-              autorización OAuth y la renovación segura del acceso siguen pendientes antes de
-              habilitar esta fuente.
-            </p>
-            <div className={libraryStyles.sourceActions}>
-              <Button disabled size="sm" variant="secondary">
-                Conectar Google Drive
-              </Button>
-            </div>
-          </Disclosure>
-        </div>
-      </Sheet>
 
       <Toast message={toast?.text ?? null} nonce={toast?.nonce ?? 0} />
     </>

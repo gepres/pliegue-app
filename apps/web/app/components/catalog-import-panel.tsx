@@ -13,10 +13,14 @@ import {
   parseCatalogImportFile,
 } from "../library/catalog-import";
 import {
+  catalogExampleFileName,
+  catalogImportJsonSchema,
   catalogTemplateFileName,
+  createCatalogExample,
   createCatalogTemplate,
   serializeCatalogTemplate,
 } from "../library/catalog-template";
+import { Disclosure } from "./app-ui/controls";
 import type { LibraryDocument } from "../library/documents";
 import {
   removeImportedCatalogRecords,
@@ -33,13 +37,25 @@ const dialectLabels: Record<CatalogImportParseResult["dialect"], string> = {
 };
 
 interface ImportPreview {
+  categories: number;
+  covers: number;
   dialect: CatalogImportParseResult["dialect"];
   fileName: string;
   issues: CatalogImportIssue[];
   matched: number;
   pending: number;
   records: ImportedCatalogRecord[];
+  warnings: CatalogImportIssue[];
 }
+
+/** Referencia de campos, sacada del mismo esquema que valida la importación. */
+const fieldReference = Object.entries(catalogImportJsonSchema.properties.entries.items.properties)
+  .map(([name, definition]) => ({
+    description: "description" in definition ? definition.description : "",
+    name,
+    required: (catalogImportJsonSchema.properties.entries.items.required as readonly string[]).includes(name),
+  }))
+  .sort((left, right) => Number(right.required) - Number(left.required) || left.name.localeCompare(right.name));
 
 function downloadJson(fileName: string, content: string) {
   const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
@@ -78,6 +94,13 @@ export function CatalogImportPanel({ documents }: { documents: readonly LibraryD
     );
   }
 
+  function handleExampleDownload() {
+    downloadJson(catalogExampleFileName, `${JSON.stringify(createCatalogExample(), null, 2)}\n`);
+    setStatus(
+      "Ejemplo descargado: tres fichas que muestran una serie con portada, una copia duplicada y una entrada mínima.",
+    );
+  }
+
   async function handleFile(files: FileList | null) {
     const file = files?.[0];
     if (!file) return;
@@ -90,12 +113,19 @@ export function CatalogImportPanel({ documents }: { documents: readonly LibraryD
       const { byDocumentId, pending } = matchImportedCatalogs(documents, records);
 
       setPreview({
+        categories: new Set(
+          records
+            .map((record) => record.organization?.category?.toLocaleLowerCase("es"))
+            .filter(Boolean),
+        ).size,
+        covers: records.filter((record) => record.cover).length,
         dialect: parsed.dialect,
         fileName: file.name,
         issues: parsed.issues,
         matched: byDocumentId.size,
         pending: pending.length,
         records,
+        warnings: parsed.warnings,
       });
       setStatus(
         records.length
@@ -167,14 +197,19 @@ export function CatalogImportPanel({ documents }: { documents: readonly LibraryD
         <Tag>Índice por archivo · sin IA</Tag>
         <h2 id="catalog-import-title">Crea el índice desde un archivo JSON</h2>
         <p>
-          Descarga la plantilla con tus documentos, complétala donde falte y vuelve a subirla.
-          También se aceptan exportaciones CSL-JSON de Zotero, volcados Dublin Core y JSON-LD de
+          Descarga la plantilla con tus documentos, complétala donde falte y vuelve a subirla. Si
+          es la primera vez, el ejemplo muestra cómo se escribe cada caso: categoría y
+          subcategoría, serie con su tomo, portada incrustada y copias duplicadas. También se
+          aceptan exportaciones CSL-JSON de Zotero, volcados Dublin Core y JSON-LD de
           schema.org. Una ficha cuyo archivo aún no esté vinculado queda en espera y se aplica
           sola cuando lo vincules.
         </p>
       </div>
 
       <div className={styles.localImportActions}>
+        <Button disabled={busy} onClick={() => fileInputRef.current?.click()}>
+          {busy ? "Leyendo archivo…" : "Importar índice JSON"}
+        </Button>
         <Button
           aria-describedby="catalog-import-status"
           disabled={busy || !documents.length}
@@ -183,8 +218,8 @@ export function CatalogImportPanel({ documents }: { documents: readonly LibraryD
         >
           Descargar plantilla
         </Button>
-        <Button disabled={busy} onClick={() => fileInputRef.current?.click()} variant="quiet">
-          {busy ? "Leyendo archivo…" : "Importar índice JSON"}
+        <Button disabled={busy} onClick={handleExampleDownload} variant="quiet">
+          Descargar ejemplo
         </Button>
         {importedCatalogs.records.length ? (
           <Button disabled={busy} onClick={() => void handleClear()} variant="danger">
@@ -224,6 +259,16 @@ export function CatalogImportPanel({ documents }: { documents: readonly LibraryD
                 } no se puede${preview.issues.length === 1 ? "" : "n"} usar`
               : ""}
             .
+            {preview.covers || preview.categories
+              ? ` Trae ${preview.covers} portada${preview.covers === 1 ? "" : "s"} y ${
+                  preview.categories
+                } categoría${preview.categories === 1 ? "" : "s"}.`
+              : ""}
+            {preview.warnings.length
+              ? ` ${preview.warnings.length} portada${
+                  preview.warnings.length === 1 ? " no se puede usar: su ficha se importa" : "s no se pueden usar: sus fichas se importan"
+                } sin ella.`
+              : ""}
           </p>
 
           {preview.issues.length ? (
@@ -236,6 +281,22 @@ export function CatalogImportPanel({ documents }: { documents: readonly LibraryD
                       <Tag>Línea {issue.position}</Tag>
                     </div>
                     <span className={styles.folderSourceMeta}>{issue.reason}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {preview.warnings.length ? (
+            <ul aria-label="Portadas descartadas" className={styles.folderSourceList}>
+              {preview.warnings.slice(0, 8).map((warning) => (
+                <li className={styles.folderSourceItem} key={warning.position}>
+                  <div>
+                    <div className={styles.folderSourceTitle}>
+                      <strong>{warning.title ?? `Entrada ${warning.position}`}</strong>
+                      <Tag>Entrada {warning.position}</Tag>
+                    </div>
+                    <span className={styles.folderSourceMeta}>{warning.reason}</span>
                   </div>
                 </li>
               ))}
@@ -263,6 +324,25 @@ export function CatalogImportPanel({ documents }: { documents: readonly LibraryD
       >
         {importedCatalogs.error ?? status}
       </p>
+
+      <Disclosure
+        icon="info"
+        meta={`${fieldReference.length} campos`}
+        summary="Qué admite cada ficha y cómo escribirlo"
+        title="Referencia de campos"
+      >
+        <dl className={styles.fieldReference}>
+          {fieldReference.map((field) => (
+            <div key={field.name}>
+              <dt>
+                <code>{field.name}</code>
+                {field.required ? <Tag>Obligatorio</Tag> : null}
+              </dt>
+              <dd>{field.description}</dd>
+            </div>
+          ))}
+        </dl>
+      </Disclosure>
     </Card>
   );
 }

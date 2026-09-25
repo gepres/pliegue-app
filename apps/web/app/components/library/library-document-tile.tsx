@@ -83,15 +83,29 @@ export function LibraryDocumentTile({
     query: percent > 1 ? { document: document.id, resume: "1" } : { document: document.id },
   };
   const unavailable = document.availability !== "available" && document.reference.kind !== "local-copy";
+  const volume = document.bibliographic?.volume ?? null;
+  const duplicate = Boolean(document.organization?.duplicateOf);
+  const image = document.cover?.src ?? null;
 
+  // La portada real, si la ficha la trae; si no, la generada con formato e iniciales. La
+  // imagen viene incrustada en la ficha, así que no hay petición a la red que esperar.
   const cover = (
     <span
       aria-hidden="true"
       className={styles.cover}
+      data-cover={image ? "image" : "generated"}
       data-format={document.format}
     >
-      <span className={styles.coverFormat}>{document.format.toUpperCase()}</span>
-      <span className={styles.coverInitials}>{coverInitials(title)}</span>
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element -- data URI local: no hay nada que optimizar
+        <img alt="" className={styles.coverImage} decoding="async" loading="lazy" src={image} />
+      ) : (
+        <>
+          <span className={styles.coverFormat}>{document.format.toUpperCase()}</span>
+          <span className={styles.coverInitials}>{coverInitials(title)}</span>
+        </>
+      )}
+      {volume !== null ? <span className={styles.coverVolume}>{volume}</span> : null}
       {percent > 0 ? (
         <span className={styles.coverProgress}>
           <span style={{ width: `${percent}%` }} />
@@ -132,6 +146,11 @@ export function LibraryDocumentTile({
             <span>{originLabel}</span>
           )}
           {unavailable ? <span className={styles.tileWarning}>{availabilityLabel}</span> : null}
+          {duplicate ? (
+            <span className={styles.tileDuplicate} title={`Copia de ${document.organization?.duplicateOf}`}>
+              Duplicado
+            </span>
+          ) : null}
         </p>
 
         {view === "list" ? (
@@ -141,6 +160,16 @@ export function LibraryDocumentTile({
             ) : null}
             <div className={styles.tileTags}>
               <Tag>{document.meta}</Tag>
+              {document.organization?.category ? <Tag>{document.organization.category}</Tag> : null}
+              {document.organization?.subcategory ? (
+                <Tag>{document.organization.subcategory}</Tag>
+              ) : null}
+              {document.bibliographic?.series ? (
+                <Tag>
+                  {document.bibliographic.series}
+                  {volume !== null ? ` · ${volume}` : ""}
+                </Tag>
+              ) : null}
               {document.catalog ? <Tag>{workTypeLabels[document.catalog.workType]}</Tag> : null}
               {document.catalog?.publicationYear ? (
                 <Tag>{document.catalog.publicationYear}</Tag>

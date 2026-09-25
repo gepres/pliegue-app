@@ -4,11 +4,14 @@ import {
   applyImportedCatalogs,
   catalogMatchKeys,
   createImportedCatalogRecords,
+  describeRejectedCover,
   detectCatalogDialect,
   documentMatchKeys,
   matchImportedCatalogs,
   parseCatalogImportFile,
+  readCover,
   readPublicationYear,
+  readVolume,
 } from "./catalog-import";
 import type { LibraryDocument } from "./documents";
 
@@ -109,7 +112,8 @@ describe("importación CSL-JSON", () => {
     expect(result.entries[0]?.catalog).toMatchObject({
       authors: ["Marco Aurelio", "Anónimo"],
       canonicalTitle: "Meditaciones",
-      language: "español",
+      // El idioma se guarda como código: «español», «es» y «es-ES» son la misma opción.
+      language: "es",
       publicationYear: 1998,
       topics: ["estoicismo", "ética"],
       workType: "book",
@@ -345,5 +349,100 @@ describe("emparejamiento con la biblioteca", () => {
 
     expect(records).toHaveLength(1);
     expect(records[0]?.catalog.canonicalTitle).toBe("Corregida");
+  });
+});
+
+describe("contrato 2: organización, tomo y portada", () => {
+  const cover =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAeCAMAAAAbzM5ZAAAACVBMVEU2W0j79uzJkjKQtiJmAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAGklEQVR42mNgGGjAiALwCRIPmOCAYRQMQgAAV3AAMUOOf+kAAAAASUVORK5CYII=";
+
+  it("lee categoría, subcategoría, duplicado, tomo, editores y portada", () => {
+    const parsed = parseCatalogImportFile({
+      entries: [
+        {
+          category: "Historia",
+          cover: { height: 30, source: "pdf-page", src: cover, width: 20 },
+          duplicateOf: "Historia/TOMO-I.pdf",
+          editors: ["Héctor López Martínez"],
+          fileName: "TOMO-XVIII-HP-Basadre.pdf",
+          language: "Español",
+          series: "Historia de la República del Perú",
+          subcategory: "Historia del Perú",
+          title: "Historia de la República del Perú [1933-2000]",
+          volume: "Tomo XVIII",
+        },
+      ],
+      pliegueCatalog: 2,
+    });
+    const [entry] = parsed.entries;
+
+    expect(parsed.issues).toHaveLength(0);
+    expect(entry?.organization).toEqual({
+      category: "Historia",
+      duplicateOf: "Historia/TOMO-I.pdf",
+      subcategory: "Historia del Perú",
+    });
+    expect(entry?.bibliographic).toMatchObject({ editors: ["Héctor López Martínez"], volume: 18 });
+    expect(entry?.catalog.language).toBe("es");
+    expect(entry?.cover).toEqual({ height: 30, source: "pdf-page", src: cover, width: 20 });
+  });
+
+  it("solo acepta portadas incrustadas y de tamaño razonable", () => {
+    expect(readCover(cover)).toMatchObject({ source: "other", src: cover });
+    // Una URL obligaría a pedir la imagen a internet cada vez que se abre la Biblioteca.
+    expect(readCover("https://covers.openlibrary.org/b/id/1-L.jpg")).toBeNull();
+    expect(readCover({ src: "data:text/html;base64,PGgxPg==" })).toBeNull();
+    expect(readCover({ src: `data:image/webp;base64,${"A".repeat(400_001)}` })).toBeNull();
+  });
+
+  it("importa la ficha sin la portada inválida y explica por qué", () => {
+    const result = parseCatalogImportFile({
+      entries: [
+        { cover: "https://covers.openlibrary.org/b/id/1-L.jpg", fileName: "remota.pdf", title: "Remota" },
+        { cover: { src: `data:image/webp;base64,${"A".repeat(400_001)}` }, fileName: "enorme.pdf", title: "Enorme" },
+        { cover, fileName: "buena.pdf", title: "Buena" },
+        { fileName: "sin-portada.pdf", title: "Sin portada" },
+      ],
+      pliegueCatalog: 2,
+    });
+
+    expect(result.entries.map((entry) => entry.cover !== null)).toEqual([false, false, true, false]);
+    expect(result.issues).toEqual([]);
+    expect(result.warnings.map(({ position, title }) => [position, title])).toEqual([
+      [1, "Remota"],
+      [2, "Enorme"],
+    ]);
+    expect(result.warnings[0]?.reason).toMatch(/es una URL/);
+    expect(result.warnings[1]?.reason).toMatch(/el tope es 400.000/);
+    expect(describeRejectedCover({ src: "data:text/html;base64,PGgxPg==" })).toMatch(/no es una imagen/);
+  });
+
+  it("entiende el tomo como número, como texto o en números romanos", () => {
+    expect(readVolume(9)).toBe(9);
+    expect(readVolume("Tomo 12")).toBe(12);
+    expect(readVolume("IX")).toBe(9);
+    expect(readVolume("vol. XIV")).toBe(14);
+    expect(readVolume("sin número")).toBeNull();
+    expect(readVolume(0)).toBeNull();
+  });
+
+  it("aplica también los registros guardados con la versión 1, sin organización ni portada", () => {
+    const parsed = parseCatalogImportFile({
+      entries: [{ fileName: "Meditaciones.pdf", publisher: "Gredos", title: "Meditaciones" }],
+      pliegueCatalog: 1,
+    });
+    const [record] = createImportedCatalogRecords(parsed);
+    // Así llegaban de IndexedDB antes de este cambio: sin los campos nuevos.
+    const legacy = { ...record, bibliographic: { publisher: "Gredos" } } as unknown as NonNullable<
+      typeof record
+    >;
+    delete (legacy as { cover?: unknown }).cover;
+    delete (legacy as { organization?: unknown }).organization;
+
+    const [applied] = applyImportedCatalogs([linkedDocument], [legacy]);
+
+    expect(applied?.bibliographic).toMatchObject({ editors: [], publisher: "Gredos", volume: null });
+    expect(applied?.organization).toEqual({ category: null, duplicateOf: null, subcategory: null });
+    expect(applied?.cover).toBeUndefined();
   });
 });

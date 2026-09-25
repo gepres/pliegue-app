@@ -9,7 +9,9 @@ import {
   type FolderChangeSummary,
   type LinkedFileDescriptor,
   type LinkedFolderDocument,
+  listSkippedFiles,
   maxLinkedFolderFiles,
+  type SkippedLinkedFile,
 } from "./local-folder";
 
 const databaseName = "pliegue-linked-folders";
@@ -42,6 +44,8 @@ export interface LinkedFolderSource {
   lastScannedAt: string | null;
   name: string;
   permission: ReadPermissionState;
+  /** Archivos que el último escaneo no pudo leer. Ausente en carpetas escaneadas antes. */
+  skippedFiles?: SkippedLinkedFile[];
 }
 
 interface StoredLinkedFolderSource extends LinkedFolderSource {
@@ -533,6 +537,7 @@ export async function linkLocalFolder(
     lastScannedAt: scannedAt,
     name: handle.name,
     permission: "granted",
+    skippedFiles: listSkippedFiles(files),
   };
   const summary = await saveFolderScan(source, documents, onProgress);
 
@@ -641,6 +646,7 @@ export async function scanLinkedFolder(
     handle,
     lastScannedAt: new Date().toISOString(),
     permission,
+    skippedFiles: listSkippedFiles(files),
   };
   const summary = await saveFolderScan(storedSource, documents, onProgress);
 

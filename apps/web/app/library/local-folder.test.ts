@@ -4,6 +4,8 @@ import {
   compareFolderDocuments,
   createLinkedFolderDocument,
   createLinkedDocumentId,
+  describeSkippedFile,
+  listSkippedFiles,
 } from "./local-folder";
 
 const baseFile = {
@@ -66,5 +68,45 @@ describe("carpetas locales vinculadas", () => {
         [unchanged!, changed!, added!],
       ),
     ).toEqual({ added: 1, changed: 1, removed: 1, total: 3, unchanged: 1 });
+  });
+});
+
+describe("archivos que la carpeta no puede leer", () => {
+  const file = (relativePath: string, size = 1024) => ({
+    lastModified: 1,
+    name: relativePath.split("/").at(-1) ?? relativePath,
+    relativePath,
+    size,
+    type: "",
+  });
+
+  it("lista solo lo que no se convierte en documento", () => {
+    const skipped = listSkippedFiles([
+      file("libro.pdf"),
+      file("Antropologia del cuerpo.rar"),
+      file("Grinberg/charla.mp3"),
+      file("Larrea - La cultura de los olores"),
+      file("vacio.pdf", 0),
+    ]);
+
+    expect(skipped.map((item) => item.relativePath)).toEqual([
+      "Antropologia del cuerpo.rar",
+      "Grinberg/charla.mp3",
+      "Larrea - La cultura de los olores",
+      "vacio.pdf",
+    ]);
+  });
+
+  it("explica qué hacer con cada tipo", () => {
+    expect(describeSkippedFile({ relativePath: "a.rar", size: 10 }).kind).toBe("archive");
+    // Un ZIP ya extraído no se vuelve a extraer: duplicaría la carpeta.
+    expect(describeSkippedFile({ relativePath: "a.zip", size: 10 }).advice).toMatch(/extráelo.*ya lo extrajiste.*sobra/s);
+    expect(describeSkippedFile({ relativePath: "x/charla.mp3", size: 10 }).kind).toBe("audio");
+    expect(describeSkippedFile({ relativePath: "La cultura de los olores", size: 10 })).toEqual({
+      advice: "No tiene extensión. Si es un PDF, añade «.pdf» al final del nombre.",
+      kind: "no-extension",
+    });
+    expect(describeSkippedFile({ relativePath: "viejo.doc", size: 10 }).kind).toBe("legacy-office");
+    expect(describeSkippedFile({ relativePath: "vacio.pdf", size: 0 }).kind).toBe("empty");
   });
 });

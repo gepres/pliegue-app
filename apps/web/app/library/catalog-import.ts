@@ -5,13 +5,18 @@ import {
   parseDocumentCatalog,
 } from "../ai/document-catalog";
 import type { LibraryDocument } from "./documents";
+import { normalizeLanguage } from "./language";
 
 /**
  * Versión del contrato de intercambio. Viaja dentro del propio archivo para que una plantilla
  * descargada hoy siga siendo legible cuando el formato crezca: al subirla se sabe con qué
  * reglas se escribió en lugar de adivinarlo por la forma de los campos.
+ *
+ * 2 · añade la organización de la biblioteca (categoría, subcategoría, ejemplar duplicado),
+ * el número de tomo, los editores y la portada. Un archivo de la versión 1 se sigue leyendo
+ * igual: los campos nuevos quedan vacíos.
  */
-export const catalogImportVersion = 1;
+export const catalogImportVersion = 2;
 
 export const catalogImportDialects = ["csl-json", "dublin-core", "pliegue", "schema-org"] as const;
 
@@ -26,6 +31,7 @@ export type CatalogImportDialect = (typeof catalogImportDialects)[number];
 export interface CatalogBibliographicData {
   doi: string | null;
   edition: string | null;
+  editors: string[];
   isbn: string | null;
   originalTitle: string | null;
   pageCount: number | null;
@@ -34,7 +40,39 @@ export interface CatalogBibliographicData {
   series: string | null;
   translators: string[];
   url: string | null;
+  /** Número dentro de la serie: ordena los tomos 1, 2… 18 en lugar de alfabéticamente. */
+  volume: number | null;
 }
+
+/**
+ * Cómo se ordena la biblioteca. `category` es la materia (una por documento, para filtrar);
+ * `subcategory` la afina. Son texto libre: el vocabulario lo decide quien escribe el JSON, y
+ * la interfaz agrupa sin distinguir mayúsculas ni acentos.
+ */
+export interface CatalogOrganization {
+  category: string | null;
+  /** Ruta o nombre del ejemplar principal cuando este archivo es una copia repetida. */
+  duplicateOf: string | null;
+  subcategory: string | null;
+}
+
+export const catalogCoverSources = ["epub", "openlibrary", "pdf-image", "pdf-page", "other"] as const;
+export type CatalogCoverSource = (typeof catalogCoverSources)[number];
+
+/**
+ * Portada incrustada como data URI. Se exige así, y no como URL, para que mostrar la
+ * biblioteca no tenga que pedir nada a internet: el principio local-only se mantiene aunque
+ * la imagen se haya buscado fuera al preparar el archivo.
+ */
+export interface CatalogCover {
+  height: number | null;
+  source: CatalogCoverSource;
+  src: string;
+  width: number | null;
+}
+
+/** Tope por portada: una miniatura de 300 px en WebP ocupa entre 10 y 40 KB. */
+export const maxCoverDataUriLength = 400_000;
 
 /** Señas del archivo al que pertenece la ficha, en orden decreciente de fiabilidad. */
 export interface CatalogMatchHints {
@@ -48,9 +86,11 @@ export interface CatalogMatchHints {
 export interface CatalogImportEntry {
   bibliographic: CatalogBibliographicData;
   catalog: DocumentCatalogMetadata;
+  cover: CatalogCover | null;
   hints: CatalogMatchHints;
   /** Claves de emparejamiento de esta ficha, de la más fuerte a la más débil. */
   matchKeys: string[];
+  organization: CatalogOrganization;
   sourceLabel: string;
 }
 
@@ -64,11 +104,14 @@ export interface CatalogImportParseResult {
   dialect: CatalogImportDialect;
   entries: CatalogImportEntry[];
   issues: CatalogImportIssue[];
+  /** Entradas que sí se importan, pero sin algo que traían: hoy, una portada inválida. */
+  warnings: CatalogImportIssue[];
 }
 
 const emptyBibliographic: CatalogBibliographicData = {
   doi: null,
   edition: null,
+  editors: [],
   isbn: null,
   originalTitle: null,
   pageCount: null,
@@ -77,6 +120,13 @@ const emptyBibliographic: CatalogBibliographicData = {
   series: null,
   translators: [],
   url: null,
+  volume: null,
+};
+
+export const emptyOrganization: CatalogOrganization = {
+  category: null,
+  duplicateOf: null,
+  subcategory: null,
 };
 
 /**
@@ -323,6 +373,7 @@ function buildEntry(
   bibliographic: CatalogBibliographicData,
   hints: CatalogMatchHints,
   fallbackLabel: string,
+  extras: { cover?: CatalogCover | null; organization?: CatalogOrganization } = {},
 ): CatalogImportEntry | null {
   const matchKeys = catalogMatchKeys(hints);
   if (!matchKeys.length) return null;
@@ -330,10 +381,88 @@ function buildEntry(
   return {
     bibliographic,
     catalog,
+    cover: extras.cover ?? null,
     hints,
     matchKeys,
+    organization: extras.organization ?? emptyOrganization,
     sourceLabel: catalog.canonicalTitle ?? hints.fileName ?? fallbackLabel,
   };
+}
+
+const coverDataUriPattern = /^data:image\/(?:avif|gif|jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/;
+
+/**
+ * Acepta la portada como objeto `{ src, width, height, source }` o como el data URI suelto.
+ * Una URL externa se descarta a propósito (ver `CatalogCover`), igual que una imagen que
+ * supere el tope: una portada no puede convertir el catálogo en un archivo de decenas de MB.
+ */
+export function readCover(value: unknown): CatalogCover | null {
+  const record = asRecord(value);
+  const src = readString(record ? (record.src ?? record.dataUri ?? record.url) : value);
+  if (!src || src.length > maxCoverDataUriLength || !coverDataUriPattern.test(src)) return null;
+
+  const source = readString(record?.source);
+  const width = readInteger(record?.width);
+  const height = readInteger(record?.height);
+
+  return {
+    height: height !== null && height > 0 ? height : null,
+    source: catalogCoverSources.includes(source as CatalogCoverSource)
+      ? (source as CatalogCoverSource)
+      : "other",
+    src,
+    width: width !== null && width > 0 ? width : null,
+  };
+}
+
+/**
+ * Por qué se descarta la portada que trae una ficha, o `null` si no traía o es válida. Sin
+ * este aviso, quien escribe el JSON a mano ve la ficha importada sin su portada y no sabe
+ * que el problema era la URL o el tamaño.
+ */
+export function describeRejectedCover(value: unknown): string | null {
+  if (value === undefined || value === null || value === "" || readCover(value)) return null;
+
+  const record = asRecord(value);
+  const src = readString(record ? (record.src ?? record.dataUri ?? record.url) : value);
+
+  if (src && /^https?:\/\//i.test(src)) {
+    return "La portada es una URL y Pliegue no descarga imágenes: incrústala como data URI («data:image/webp;base64,…»).";
+  }
+  if (src && src.length > maxCoverDataUriLength) {
+    return `La portada ocupa ${src.length.toLocaleString("es")} caracteres y el tope es ${maxCoverDataUriLength.toLocaleString("es")}: redúcela a unos 300 px de ancho.`;
+  }
+  return "La portada no es una imagen incrustada válida: se espera un data URI en base64 de tipo avif, gif, jpeg, png o webp.";
+}
+
+function readOrganization(record: Record<string, unknown>): CatalogOrganization {
+  return {
+    category: readString(record.category),
+    duplicateOf: readString(record.duplicateOf),
+    subcategory: readString(record.subcategory),
+  };
+}
+
+/** El tomo puede venir como número o como «Tomo 3», «vol. 12», «III». */
+export function readVolume(value: unknown): number | null {
+  const direct = readInteger(value);
+  if (direct !== null) return direct > 0 && direct < 10_000 ? direct : null;
+
+  const text = readString(value);
+  if (!text) return null;
+  const digits = /(\d{1,4})/.exec(text)?.[1];
+  if (digits) return Number.parseInt(digits, 10);
+
+  const roman = /\b([IVXLC]+)\b/i.exec(text)?.[1]?.toUpperCase();
+  if (!roman) return null;
+  const values: Record<string, number> = { C: 100, I: 1, L: 50, V: 5, X: 10 };
+  let total = 0;
+  for (let index = 0; index < roman.length; index += 1) {
+    const current = values[roman[index] ?? ""] ?? 0;
+    const next = values[roman[index + 1] ?? ""] ?? 0;
+    total += current < next ? -current : current;
+  }
+  return total > 0 ? total : null;
 }
 
 function readBibliographic(
@@ -341,6 +470,7 @@ function readBibliographic(
   keys: {
     doi?: string[];
     edition?: string[];
+    editors?: string[];
     isbn?: string[];
     originalTitle?: string[];
     pageCount?: string[];
@@ -349,6 +479,7 @@ function readBibliographic(
     series?: string[];
     translators?: string[];
     url?: string[];
+    volume?: string[];
   },
 ): CatalogBibliographicData {
   function first(candidates: string[] | undefined) {
@@ -362,6 +493,7 @@ function readBibliographic(
   return {
     doi: first(keys.doi),
     edition: first(keys.edition),
+    editors: (keys.editors ?? []).flatMap((key) => readNameList(record[key])),
     isbn: first(keys.isbn),
     originalTitle: first(keys.originalTitle),
     pageCount: readInteger(
@@ -372,6 +504,9 @@ function readBibliographic(
     series: first(keys.series),
     translators: (keys.translators ?? []).flatMap((key) => readNameList(record[key])),
     url: first(keys.url),
+    volume: readVolume(
+      (keys.volume ?? []).map((key) => record[key]).find((value) => value !== undefined),
+    ),
   };
 }
 
@@ -393,7 +528,7 @@ function readPliegueEntry(value: unknown, position: number): CatalogImportEntry 
     canonicalTitle: readString(record.canonicalTitle ?? record.title),
     confidence: readConfidence(record.confidence),
     genres: readStringList(record.genres ?? record.genre),
-    language: readString(record.language),
+    language: normalizeLanguage(readString(record.language)),
     publicationYear: readPublicationYear(record.publicationYear ?? record.year ?? record.date),
     summary: readString(record.summary ?? record.abstract),
     topics: readStringList(record.topics ?? record.keywords ?? record.tags),
@@ -405,6 +540,7 @@ function readPliegueEntry(value: unknown, position: number): CatalogImportEntry 
     readBibliographic(record, {
       doi: ["doi", "DOI"],
       edition: ["edition"],
+      editors: ["editors"],
       isbn: ["isbn", "ISBN"],
       originalTitle: ["originalTitle"],
       pageCount: ["pageCount", "numberOfPages"],
@@ -413,6 +549,7 @@ function readPliegueEntry(value: unknown, position: number): CatalogImportEntry 
       series: ["series"],
       translators: ["translators"],
       url: ["url", "URL"],
+      volume: ["volume", "volumeNumber"],
     }),
     {
       fileName: readString(record.fileName ?? record.file ?? record.originalName),
@@ -422,6 +559,7 @@ function readPliegueEntry(value: unknown, position: number): CatalogImportEntry 
       sizeBytes: readInteger(record.sizeBytes ?? record.size),
     },
     `Entrada ${position}`,
+    { cover: readCover(record.cover), organization: readOrganization(record) },
   );
 }
 
@@ -434,7 +572,7 @@ function readCslEntry(value: unknown, position: number): CatalogImportEntry | nu
     canonicalTitle: readString(record.title),
     confidence: readConfidence(undefined),
     genres: readStringList(record.genre ?? record["collection-title"]),
-    language: readString(record.language),
+    language: normalizeLanguage(readString(record.language)),
     publicationYear: readPublicationYear(record.issued ?? record["original-date"]),
     summary: readString(record.abstract),
     topics: readStringList(record.keyword),
@@ -446,6 +584,7 @@ function readCslEntry(value: unknown, position: number): CatalogImportEntry | nu
     readBibliographic(record, {
       doi: ["DOI"],
       edition: ["edition"],
+      editors: ["editor"],
       isbn: ["ISBN"],
       originalTitle: ["original-title"],
       pageCount: ["number-of-pages"],
@@ -454,6 +593,7 @@ function readCslEntry(value: unknown, position: number): CatalogImportEntry | nu
       series: ["collection-title"],
       translators: ["translator"],
       url: ["URL"],
+      volume: ["volume"],
     }),
     {
       // CSL no describe archivos. `note` y `call-number` son donde Zotero deja el adjunto,
@@ -481,7 +621,7 @@ function readDublinCoreEntry(value: unknown, position: number): CatalogImportEnt
     canonicalTitle: readString(field("title")),
     confidence: readConfidence(undefined),
     genres: readStringList(field("subject")),
-    language: readString(field("language")),
+    language: normalizeLanguage(readString(field("language"))),
     publicationYear: readPublicationYear(field("date") ?? field("issued")),
     summary: readString(field("description") ?? field("abstract")),
     topics: readStringList(field("subject")),
@@ -520,7 +660,7 @@ function readSchemaOrgEntry(value: unknown, position: number): CatalogImportEntr
     canonicalTitle: readString(record.name ?? record.headline),
     confidence: readConfidence(undefined),
     genres: readStringList(record.genre),
-    language: readString(record.inLanguage),
+    language: normalizeLanguage(readString(record.inLanguage)),
     publicationYear: readPublicationYear(record.datePublished ?? record.copyrightYear),
     summary: readString(record.abstract ?? record.description),
     topics: readStringList(record.keywords ?? record.about),
@@ -612,6 +752,7 @@ export function parseCatalogImportFile(value: unknown): CatalogImportParseResult
   const read = dialectReaders[dialect];
   const entries: CatalogImportEntry[] = [];
   const issues: CatalogImportIssue[] = [];
+  const warnings: CatalogImportIssue[] = [];
 
   rawEntries.forEach((raw, index) => {
     const position = index + 1;
@@ -621,6 +762,9 @@ export function parseCatalogImportFile(value: unknown): CatalogImportParseResult
       const entry = read(raw, position);
       if (entry) {
         entries.push(entry);
+        // Solo la plantilla propia lee portadas; en los demás dialectos «cover» no significa nada.
+        const coverProblem = dialect === "pliegue" ? describeRejectedCover(record?.cover) : null;
+        if (coverProblem) warnings.push({ position, reason: coverProblem, title: entry.sourceLabel });
         return;
       }
 
@@ -640,18 +784,22 @@ export function parseCatalogImportFile(value: unknown): CatalogImportParseResult
     }
   });
 
-  return { dialect, entries, issues };
+  return { dialect, entries, issues, warnings };
 }
 
 export interface ImportedCatalogRecord {
   bibliographic: CatalogBibliographicData;
   catalog: DocumentCatalogMetadata;
+  /** Ausente en los registros guardados con la versión 1. */
+  cover?: CatalogCover | null;
   dialect: CatalogImportDialect;
   importedAt: string;
   /** Clave primaria del registro: la más fuerte de las disponibles en la ficha. */
   matchKey: string;
   matchKeys: string[];
-  schemaVersion: typeof catalogImportVersion;
+  /** Ausente en los registros guardados con la versión 1. */
+  organization?: CatalogOrganization;
+  schemaVersion: number;
   sourceLabel: string;
 }
 
@@ -670,10 +818,12 @@ export function createImportedCatalogRecords(
     byKey.set(matchKey, {
       bibliographic: entry.bibliographic,
       catalog: entry.catalog,
+      cover: entry.cover,
       dialect: result.dialect,
       importedAt,
       matchKey,
       matchKeys: entry.matchKeys,
+      organization: entry.organization,
       schemaVersion: catalogImportVersion,
       sourceLabel: entry.sourceLabel,
     });
@@ -732,6 +882,10 @@ export function matchImportedCatalogs(
  * La ficha importada pisa a la deducida por el modelo. Es deliberado: quien escribe el JSON
  * está corrigiendo lo que la IA no supo ver, y el orden inverso convertiría cada análisis
  * posterior en una regresión silenciosa de un dato verificado a mano.
+ *
+ * Con la ficha viajan los datos bibliográficos, la organización y la portada. Antes solo se
+ * aplicaba `catalog`: la editorial, la serie o el ISBN se guardaban y no llegaban nunca al
+ * documento, así que al volver a exportar la plantilla desaparecían.
  */
 export function applyImportedCatalogs(
   documents: readonly LibraryDocument[],
@@ -751,9 +905,12 @@ export function applyImportedCatalogs(
 
     return {
       ...rest,
+      bibliographic: { ...emptyBibliographic, ...record.bibliographic },
       catalog: record.catalog,
       catalogSource: "import" as const,
       catalogStatus: "analyzed" as const,
+      ...(record.cover ? { cover: record.cover } : {}),
+      organization: { ...emptyOrganization, ...record.organization },
     };
   });
 }

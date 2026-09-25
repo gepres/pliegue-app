@@ -1113,3 +1113,37 @@
 .sourcesBody .folderSourceItem {
   grid-template-columns: minmax(0, 1fr);
 }
+
+/* Referencia de campos del índice JSON: nombre en código y su explicación debajo. */
+.fieldReference {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  margin: 0;
+}
+
+.fieldReference > div {
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: 4px;
+  padding-bottom: var(--pliegue-spacing-sm);
+}
+
+.fieldReference dt {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.fieldReference code {
+  font-family: var(--pliegue-font-data);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.fieldReference dd {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin: 0;
+}
