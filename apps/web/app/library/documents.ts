@@ -46,7 +46,13 @@ export interface LibraryDocument {
   catalogError?: string;
   catalogSource?: CatalogSource;
   catalogStatus?: CatalogAnalysisStatus;
-  cover?: CatalogCover;
+  /**
+   * La portada de la ficha importada o, si no trae, la que el índice sacó del propio archivo.
+   * `null` cuando el archivo no tiene una reconocible.
+   */
+  cover?: CatalogCover | null;
+  /** Idioma deducido del texto al indexar: el filtro lo usa si la ficha no dice ninguno. */
+  detectedLanguage?: string | null;
   format: DocumentFormat;
   id: string;
   imported?: boolean;
@@ -96,6 +102,11 @@ function sameLabel(left: string | null | undefined, right: string) {
   return left ? normalizeSearchText(left.trim()) === normalizeSearchText(right.trim()) : false;
 }
 
+/** Idioma del documento: el de su ficha y, si no tiene, el que se detectó en su texto. */
+export function documentLanguage(document: LibraryDocument) {
+  return normalizeLanguage(document.catalog?.language) ?? document.detectedLanguage ?? null;
+}
+
 /** Título con el que se muestra el documento: el de la ficha si existe. */
 export function documentDisplayTitle(document: LibraryDocument) {
   return document.catalog?.canonicalTitle ?? document.title;
@@ -138,7 +149,7 @@ export function filterDocuments(
     if (
       filters.language &&
       filters.language !== "all" &&
-      normalizeLanguage(document.catalog?.language) !== filters.language
+      documentLanguage(document) !== filters.language
     ) {
       return false;
     }
@@ -290,7 +301,7 @@ export function organizationFacets(documents: readonly LibraryDocument[]) {
 
   return {
     categories,
-    languages: countLabels(documents.map((document) => normalizeLanguage(document.catalog?.language))),
+    languages: countLabels(documents.map(documentLanguage)),
     series: countLabels(documents.map((document) => document.bibliographic?.series)),
     subcategoriesOf(category: string) {
       return subcategoriesByCategory.get(normalizeSearchText(category)) ?? [];

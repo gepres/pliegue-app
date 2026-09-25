@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  documentLanguage,
   filterDocuments,
   organizationFacets,
   sortDocuments,
   type LibraryDocument,
 } from "./documents";
-import { languageLabel, normalizeLanguage } from "./language";
+import { detectTextLanguage, languageLabel, normalizeLanguage } from "./language";
 
 function book(
   id: string,
@@ -129,6 +130,26 @@ describe("idioma", () => {
     expect(languageLabel("en")).toBe("inglés");
     expect(languageLabel(null)).toBeNull();
   });
+
+  it("detecta el idioma de un texto corrido por sus palabras más frecuentes", () => {
+    const spanish =
+      "La biblioteca de la ciudad guarda los libros que la gente dona cada año. Los lectores llegan por la mañana, se sientan junto a las ventanas y leen con calma, porque el silencio es parte del lugar. Algunos toman notas en sus cuadernos, otros buscan un dato para su trabajo y los más jóvenes vienen a estudiar para los exámenes del curso.";
+    const english =
+      "The library of the city keeps the books that people donate every year. Readers arrive in the morning, sit by the windows and read with calm, because the silence is part of the place. Some of them take notes in their notebooks, others look for a fact for their work, and the youngest come to study for the exams of the course.";
+    const portuguese =
+      "A biblioteca da cidade guarda os livros que as pessoas doam todos os anos. Os leitores chegam pela manhã, sentam-se junto das janelas e leem com calma, porque o silêncio é parte do lugar. Alguns tomam notas nos seus cadernos, outros procuram um dado para o seu trabalho e os mais jovens vêm estudar para os exames do curso.";
+
+    expect(detectTextLanguage(spanish)).toBe("es");
+    expect(detectTextLanguage(english)).toBe("en");
+    expect(detectTextLanguage(portuguese)).toBe("pt");
+  });
+
+  it("no opina con poco texto ni con listas de nombres y cifras", () => {
+    expect(detectTextLanguage("Historia de la República del Perú. Tomo IX")).toBeNull();
+    expect(
+      detectTextLanguage(Array.from({ length: 60 }, (_, index) => `Basadre ${index} 1939`).join(" ")),
+    ).toBeNull();
+  });
 });
 
 describe("organización de la biblioteca", () => {
@@ -186,5 +207,21 @@ describe("organización de la biblioteca", () => {
       { count: 5, value: "es" },
       { count: 1, value: "en" },
     ]);
+  });
+
+  it("usa el idioma detectado en el texto cuando el documento no tiene ficha", () => {
+    const withoutCatalog: LibraryDocument = {
+      ...book("sin-ficha", "Documento sin ficha"),
+      detectedLanguage: "pt",
+    };
+    delete withoutCatalog.catalog;
+
+    expect(documentLanguage(withoutCatalog)).toBe("pt");
+    expect(organizationFacets([withoutCatalog]).languages).toEqual([{ count: 1, value: "pt" }]);
+    expect(filterDocuments([withoutCatalog], { ...baseFilters, language: "pt" })).toHaveLength(1);
+    // Lo que dice la ficha manda sobre lo que se dedujo del texto.
+    expect(
+      documentLanguage({ ...book("con-ficha", "Con ficha", { language: "English" }), detectedLanguage: "es" }),
+    ).toBe("en");
   });
 });

@@ -2,7 +2,11 @@
 
 import { useSyncExternalStore } from "react";
 
-import { createLocalContentIndex, isCurrentContentIndex } from "./local-content-index";
+import {
+  carriedIndexFields,
+  createLocalContentIndex,
+  isCurrentContentIndex,
+} from "./local-content-index";
 import {
   createLinkedFileDocument,
   type LinkedFileDocument,
@@ -260,6 +264,7 @@ export async function linkLocalFiles(): Promise<LinkLocalFilesResult> {
           existing?.fingerprint === fingerprint &&
           isCurrentContentIndex(existing.indexVersion)
             ? {
+                ...carriedIndexFields(existing),
                 indexedAt: existing.indexedAt ?? new Date().toISOString(),
                 indexStatus: existing.indexStatus ?? ("pending" as const),
                 indexVersion: existing.indexVersion,

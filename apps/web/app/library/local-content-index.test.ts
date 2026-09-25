@@ -17,6 +17,8 @@ describe("createLocalContentIndex", () => {
     );
 
     expect(result).toEqual({
+      cover: null,
+      detectedLanguage: null,
       indexedAt: "2026-08-01T00:00:00.000Z",
       indexStatus: "indexed",
       indexVersion: contentIndexVersion,
@@ -32,6 +34,8 @@ describe("createLocalContentIndex", () => {
     );
 
     expect(result).toEqual({
+      cover: null,
+      detectedLanguage: null,
       indexedAt: "2026-08-02T00:00:00.000Z",
       indexStatus: "indexed",
       indexVersion: contentIndexVersion,
@@ -63,6 +67,14 @@ describe("createLocalContentIndex", () => {
     await expect(
       createLocalContentIndex("pdf", new Blob(["no es un pdf"])),
     ).resolves.toMatchObject({ indexStatus: "error", searchText: "" });
+  });
+
+  it("guarda el idioma detectado en el texto y, sin canvas, ninguna portada", async () => {
+    const text =
+      "Los lectores llegan por la mañana, se sientan junto a las ventanas y leen con calma, porque el silencio es parte del lugar. Algunos toman notas en sus cuadernos, otros buscan un dato para su trabajo y los más jóvenes vienen a estudiar para los exámenes del curso.";
+    const result = await createLocalContentIndex("txt", new Blob([text]));
+
+    expect(result).toMatchObject({ cover: null, detectedLanguage: "es", indexStatus: "indexed" });
   });
 
   it("limita el texto derivado almacenado", async () => {

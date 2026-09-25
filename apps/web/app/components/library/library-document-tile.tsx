@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Tag, cx } from "@pliegue/ui";
 
 import type { DocumentWorkType } from "../../ai/document-catalog";
-import type { LibraryDocument } from "../../library/documents";
+import { documentLanguage, type LibraryDocument } from "../../library/documents";
+import { languageLabel } from "../../library/language";
 import { useReadingProgress } from "../../library/reading-progress-store";
 import { IconButton } from "../app-ui/controls";
 import { Icon } from "../app-ui/icons";
@@ -59,6 +60,7 @@ export function LibraryDocumentTile({
   isFavorite,
   onToggleFavorite,
   originLabel,
+  showDetails = false,
   view,
 }: {
   actions: DocumentTileActions;
@@ -69,6 +71,8 @@ export function LibraryDocumentTile({
   isFavorite: boolean;
   onToggleFavorite: () => void;
   originLabel: string;
+  /** En cuadrícula, muestra también la ficha. La lista la muestra siempre. */
+  showDetails?: boolean;
   view: LibraryView;
 }) {
   const progress = useReadingProgress(document.id);
@@ -86,6 +90,25 @@ export function LibraryDocumentTile({
   const volume = document.bibliographic?.volume ?? null;
   const duplicate = Boolean(document.organization?.duplicateOf);
   const image = document.cover?.src ?? null;
+  const language = languageLabel(documentLanguage(document));
+  const gridDetails = view === "grid" && showDetails;
+  const summary = document.catalog?.summary ? (
+    <p className={styles.tileSummary}>{document.catalog.summary}</p>
+  ) : null;
+  const series = document.bibliographic?.series
+    ? `${document.bibliographic.series}${volume !== null ? ` · ${volume}` : ""}`
+    : null;
+  const workType = document.catalog ? workTypeLabels[document.catalog.workType] : null;
+  const year = document.catalog?.publicationYear ?? null;
+  const organization = [document.organization?.category, document.organization?.subcategory]
+    .filter(Boolean)
+    .join(" › ");
+  const attributes = [workType, year, language, document.catalog?.genres[0]].filter(Boolean).join(" · ");
+  const facts = [
+    { lead: true, text: organization },
+    { lead: false, text: series ?? "" },
+    { lead: false, text: attributes },
+  ].filter((fact) => fact.text);
 
   // La portada real, si la ficha la trae; si no, la generada con formato e iniciales. La
   // imagen viene incrustada en la ficha, así que no hay petición a la red que esperar.
@@ -117,7 +140,7 @@ export function LibraryDocumentTile({
   return (
     <article
       aria-label={title}
-      className={cx(styles.tile, view === "list" && styles.tileList)}
+      className={cx(styles.tile, view === "list" && styles.tileList, gridDetails && styles.tileWithDetails)}
       data-unavailable={unavailable ? "true" : undefined}
     >
       {readable ? (
@@ -155,25 +178,17 @@ export function LibraryDocumentTile({
 
         {view === "list" ? (
           <>
-            {document.catalog?.summary ? (
-              <p className={styles.tileSummary}>{document.catalog.summary}</p>
-            ) : null}
+            {summary}
             <div className={styles.tileTags}>
               <Tag>{document.meta}</Tag>
               {document.organization?.category ? <Tag>{document.organization.category}</Tag> : null}
               {document.organization?.subcategory ? (
                 <Tag>{document.organization.subcategory}</Tag>
               ) : null}
-              {document.bibliographic?.series ? (
-                <Tag>
-                  {document.bibliographic.series}
-                  {volume !== null ? ` · ${volume}` : ""}
-                </Tag>
-              ) : null}
-              {document.catalog ? <Tag>{workTypeLabels[document.catalog.workType]}</Tag> : null}
-              {document.catalog?.publicationYear ? (
-                <Tag>{document.catalog.publicationYear}</Tag>
-              ) : null}
+              {series ? <Tag>{series}</Tag> : null}
+              {workType ? <Tag>{workType}</Tag> : null}
+              {year ? <Tag>{year}</Tag> : null}
+              {language ? <Tag>{language}</Tag> : null}
               {document.catalog?.genres.slice(0, 2).map((genre) => (
                 <Tag key={genre}>{genre}</Tag>
               ))}
@@ -183,6 +198,24 @@ export function LibraryDocumentTile({
           </>
         ) : null}
       </div>
+
+      {/* En la cuadrícula, la ficha va en su propia fila, a todo el ancho de la tarjeta: al
+          lado de la estrella y el menú se quedaba en una columna demasiado estrecha. */}
+      {gridDetails ? (
+        <div className={styles.tileDetails}>
+          {summary}
+          {facts.length ? (
+            // Renglones y no píldoras: en una tarjeta estrecha, las píldoras se partían en dos.
+            <ul className={styles.tileFacts}>
+              {facts.map((fact) => (
+                <li className={fact.lead ? styles.tileFactsLead : undefined} key={fact.text}>
+                  {fact.text}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className={styles.tileActions}>
         <IconButton

@@ -2,7 +2,11 @@
 
 import { useSyncExternalStore } from "react";
 
-import { createLocalContentIndex, isCurrentContentIndex } from "./local-content-index";
+import {
+  carriedIndexFields,
+  createLocalContentIndex,
+  isCurrentContentIndex,
+} from "./local-content-index";
 import {
   compareFolderDocuments,
   createLinkedFolderDocument,
@@ -445,6 +449,7 @@ async function saveFolderScan(
         ) {
           indexedDocuments[index] = {
             ...document,
+            ...carriedIndexFields(priorDocument),
             indexedAt: priorDocument.indexedAt,
             indexStatus: priorDocument.indexStatus,
             indexVersion: priorDocument.indexVersion,

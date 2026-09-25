@@ -48,6 +48,45 @@ export function normalizeLanguage(value: string | null | undefined): string | nu
   return byAlias.get(firstWord) ?? byAlias.get(folded) ?? folded;
 }
 
+/**
+ * Palabras vacías frecuentes de cada lengua, ya sin tildes como el texto que se compara. Las
+ * compartidas («que», «para») suman a varias a la vez y no desempatan; deciden las propias:
+ * «los», «uma», «the», «der».
+ */
+const stopwords = new Map(
+  Object.entries({
+    de: "der die und das ist nicht mit den ein eine zu von auf sich auch dem des fur wird werden",
+    en: "the and of to is in that it was for with as on are this by be which from have",
+    es: "el la los las del y que en una por con para es se lo como mas pero sus su al",
+    fr: "le les des et est une dans que pour pas sur au du ce qui sont avec il elle",
+    it: "il che di e la per non una sono della del gli anche come piu nel alla degli",
+    pt: "o os do da dos das em nao uma e com ao tambem mais que para se por pelo pela",
+  }).map(([code, words]) => [code, new Set(words.split(" "))] as const),
+);
+
+/** Por debajo, el texto es un título, un índice o una portada: no basta para decidir. */
+const minimumWords = 40;
+
+/**
+ * Idioma probable de un texto, o `null` si hay poco texto o dos lenguas quedan demasiado
+ * cerca. Se calcula al indexar, en el dispositivo, para que el filtro de idioma funcione
+ * también en los documentos que aún no tienen ficha.
+ */
+export function detectTextLanguage(text: string): string | null {
+  const words = fold(text.slice(0, 20_000)).match(/\p{L}+/gu) ?? [];
+  if (words.length < minimumWords) return null;
+
+  const [best, second] = [...stopwords]
+    .map(([code, set]) => ({ code, hits: words.filter((word) => set.has(word)).length }))
+    .sort((left, right) => right.hits - left.hits);
+
+  // En un texto corrido, las palabras vacías de su lengua son más de la cuarta parte; con
+  // menos del 8 % lo que hay son nombres, cifras o una tabla.
+  if (!best || best.hits / words.length < 0.08) return null;
+  if (second && best.hits < second.hits * 1.25) return null;
+  return best.code;
+}
+
 let displayNames: Intl.DisplayNames | null | undefined;
 
 /** «es» → «español». Si el código no es ISO, se devuelve tal cual. */

@@ -135,6 +135,23 @@
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
 }
 
+/* Nota bajo los selectores de organización cuando aún no hay fichas que los llenen. */
+.filterHint {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.filterHint .textButton {
+  display: inline;
+  padding: 0 2px;
+}
+
+.detailsToggle {
+  flex: none;
+}
+
 .filterFooter {
   align-items: center;
   border-top: 1px solid var(--pliegue-color-border-default);
@@ -244,6 +261,11 @@
   grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
 }
 
+/* Con detalles, cada tarjeta lleva su ficha debajo: columnas algo más anchas para leerla. */
+.gridDetailed {
+  grid-template-columns: repeat(auto-fill, minmax(208px, 1fr));
+}
+
 .list {
   display: grid;
   gap: 0;
@@ -263,6 +285,9 @@
 }
 
 .tile {
+  /* Sin esto, en una fila de tarjetas de distinto alto el espacio sobrante se repartía entre
+     portada y texto, y los títulos de una misma fila quedaban a alturas distintas. */
+  align-content: start;
   display: grid;
   gap: 10px;
   grid-template-areas:
@@ -533,6 +558,46 @@
 
 .tileTags > * {
   min-height: 22px;
+}
+
+/* La ficha dentro de la cuadrícula: más compacta que en la lista, donde hay toda la fila. */
+.tileDetails .tileSummary {
+  font-size: 0.75rem;
+  -webkit-line-clamp: 4;
+}
+
+/* Con detalles, la ficha ocupa una tercera fila a todo el ancho. */
+.tileWithDetails {
+  grid-template-areas:
+    "cover cover"
+    "body actions"
+    "details details";
+}
+
+.tileDetails {
+  grid-area: details;
+  margin-top: -6px;
+  min-width: 0;
+}
+
+.tileFacts {
+  color: var(--pliegue-color-text-secondary);
+  display: grid;
+  font-size: 0.75rem;
+  gap: 2px;
+  line-height: 1.4;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.tileFacts li {
+  overflow-wrap: anywhere;
+}
+
+.tileFactsLead {
+  color: var(--pliegue-color-text-primary);
+  font-weight: 600;
 }
 
 /* Vista de lista: fila con miniatura, como una lista de archivos de escritorio. */

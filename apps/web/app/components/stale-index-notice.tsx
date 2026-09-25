@@ -6,7 +6,7 @@ import { Button } from "@pliegue/ui";
 
 import type { LibraryDocument } from "../library/documents";
 import { linkLocalFiles } from "../library/local-file-reference-store";
-import { scanLinkedFolder } from "../library/local-folder-store";
+import { scanLinkedFolder, type FolderIndexProgress } from "../library/local-folder-store";
 import { reindexImportedDocuments } from "../library/local-library-store";
 import { findStaleIndexes, type StaleIndexAction } from "../library/stale-index";
 import styles from "../(workspace)/app/workspace.module.css";
@@ -40,6 +40,7 @@ export function StaleIndexNotice({ documents }: { documents: readonly LibraryDoc
   const report = findStaleIndexes(documents);
   const [busy, setBusy] = useState<StaleIndexAction | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [progress, setProgress] = useState<FolderIndexProgress | null>(null);
 
   // El aviso solo existe mientras haya algo desactualizado. Los almacenes que ejecutan cada
   // acción vuelven a publicar sus documentos al terminar, así que desaparece sin recargar.
@@ -58,9 +59,21 @@ export function StaleIndexNotice({ documents }: { documents: readonly LibraryDoc
         setMessage(`${result.updated} referencia${result.updated === 1 ? "" : "s"} actualizada${result.updated === 1 ? "" : "s"}.`);
       } else {
         // En secuencia y no en paralelo: cada escaneo abre los archivos de su carpeta para
-        // extraer el texto, y solaparlos deja la pestaña sin respuesta.
-        for (const sourceId of sourceIds) await scanLinkedFolder(sourceId, false);
-        setMessage("Carpetas reescaneadas.");
+        // extraer el texto, y solaparlos deja la pestaña sin respuesta. El clic sirve de gesto
+        // para pedir el permiso de lectura: sin pedirlo, una carpeta sin acceso concedido se
+        // quedaba igual y el aviso decía de todos modos que se había reescaneado.
+        let scanned = 0;
+        let withoutAccess = 0;
+        for (const sourceId of sourceIds) {
+          const result = await scanLinkedFolder(sourceId, true, setProgress);
+          if (result.permission === "granted") scanned += 1;
+          else withoutAccess += 1;
+        }
+        setMessage(
+          withoutAccess
+            ? `${scanned} carpeta${scanned === 1 ? "" : "s"} al día y ${withoutAccess} sin permiso de lectura: concédelo cuando el navegador lo pida o desde Fuentes.`
+            : "Carpetas al día: portadas, idioma y texto rehechos.",
+        );
       }
     } catch (error) {
       setMessage(
@@ -70,6 +83,7 @@ export function StaleIndexNotice({ documents }: { documents: readonly LibraryDoc
       );
     } finally {
       setBusy(null);
+      setProgress(null);
     }
   }
 
@@ -80,9 +94,10 @@ export function StaleIndexNotice({ documents }: { documents: readonly LibraryDoc
         anterior del extractor.
       </strong>
       <p>
-        No les falta texto porque sean escaneos: su índice se creó antes de que Pliegue supiera
-        leer este formato y no se rehace solo. Hasta que lo hagas siguen sin ser buscables por
-        contenido y el catálogo IA los cuenta como pendientes de extracción.
+        Al rehacerlo, cada documento recibe lo que Pliegue aprendió después: la portada sacada
+        del propio archivo, el idioma detectado en su texto y, en los formatos que antes no sabía
+        leer, el texto para buscar por contenido. No se rehace solo porque hay que abrir cada
+        archivo otra vez.
       </p>
       <div className={styles.localImportActions}>
         {report.groups.map((group) => (
@@ -94,7 +109,9 @@ export function StaleIndexNotice({ documents }: { documents: readonly LibraryDoc
             variant="secondary"
           >
             {busy === group.action
-              ? busyLabels[group.action]
+              ? group.action === "rescan-folder" && progress
+                ? `Rehaciendo ${progress.processed} de ${progress.total}…`
+                : busyLabels[group.action]
               : `${actionLabels[group.action]} · ${group.count}`}
           </Button>
         ))}

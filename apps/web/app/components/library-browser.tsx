@@ -39,7 +39,7 @@ import {
 } from "../library/local-library-store";
 import { clearReadingProgress } from "../library/reading-progress-store";
 import { useLibraryDocuments } from "../library/use-library-documents";
-import { Segmented, Toast } from "./app-ui/controls";
+import { IconButton, Segmented, Toast } from "./app-ui/controls";
 import { Icon } from "./app-ui/icons";
 import { MenuItem, MenuSeparator, Popover } from "./app-ui/overlays";
 import {
@@ -145,6 +145,8 @@ export function LibraryBrowser() {
   const [reindexing, setReindexing] = useState(false);
   const [linkingFiles, setLinkingFiles] = useState(false);
   const [view, setViewState] = useState<LibraryView>("grid");
+  // La cuadrícula enseña portadas; con detalles, además la ficha: sinopsis, categoría, serie…
+  const [gridDetails, setGridDetailsState] = useState(false);
   const [toast, setToast] = useState<{ nonce: number; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const favorites = useFavorites();
@@ -181,6 +183,9 @@ export function LibraryBrowser() {
       try {
         const stored = window.localStorage.getItem("pliegue-library-view");
         if (stored === "list" || stored === "grid") setViewState(stored);
+        if (window.localStorage.getItem("pliegue-library-grid-details") === "true") {
+          setGridDetailsState(true);
+        }
         const storedSort = window.localStorage.getItem("pliegue-library-sort");
         if (storedSort && storedSort in sortLabels) setSortState(storedSort as DocumentSortOrder);
       } catch {
@@ -202,6 +207,15 @@ export function LibraryBrowser() {
     setSortState(next);
     try {
       window.localStorage.setItem("pliegue-library-sort", next);
+    } catch {
+      // La elección dura lo que la página.
+    }
+  }
+
+  function setGridDetails(next: boolean) {
+    setGridDetailsState(next);
+    try {
+      window.localStorage.setItem("pliegue-library-grid-details", String(next));
     } catch {
       // La elección dura lo que la página.
     }
@@ -677,6 +691,20 @@ export function LibraryBrowser() {
                   </Select>
                 </Field>
               </div>
+              {/* Sin esta nota, los selectores vacíos parecen averiados: dicen de dónde salen. */}
+              {!organization.categories.length || !organization.languages.length ? (
+                <p className={libraryStyles.filterHint}>
+                  {organization.categories.length
+                    ? null
+                    : "Categoría, subcategoría y serie llegan con el índice JSON. "}
+                  {organization.languages.length
+                    ? null
+                    : "El idioma sale de las fichas o se detecta al actualizar el índice. "}
+                  <Link className={libraryStyles.textButton} href="/app/biblioteca/fuentes#indice-json">
+                    Importar índice JSON
+                  </Link>
+                </p>
+              ) : null}
             </div>
 
             <div className={libraryStyles.filterGroup}>
@@ -855,6 +883,16 @@ export function LibraryBrowser() {
           ]}
           value={view}
         />
+        {view === "grid" ? (
+          <IconButton
+            aria-pressed={gridDetails}
+            className={libraryStyles.detailsToggle}
+            icon="info"
+            label="Detalles en la cuadrícula"
+            onClick={() => setGridDetails(!gridDetails)}
+            tone={gridDetails ? "active" : "plain"}
+          />
+        ) : null}
       </form>
 
       {/* ---- Atajos de filtro y filtros activos ----------------------------- */}
@@ -943,7 +981,11 @@ export function LibraryBrowser() {
       ) : filteredDocuments.length ? (
         <section
           aria-label="Documentos de la biblioteca"
-          className={view === "grid" ? libraryStyles.grid : libraryStyles.list}
+          className={
+            view === "grid"
+              ? cx(libraryStyles.grid, gridDetails && libraryStyles.gridDetailed)
+              : libraryStyles.list
+          }
         >
           {filteredDocuments.map((document) => {
             const isCopy = document.reference.kind === "local-copy";
@@ -991,6 +1033,7 @@ export function LibraryBrowser() {
                 key={document.id}
                 onToggleFavorite={() => toggleFavorite(document.id)}
                 originLabel={originLabels[document.origin]}
+                showDetails={gridDetails}
                 view={view}
               />
             );
