@@ -108,6 +108,8 @@
 .appBarTitle p {
   color: var(--pliegue-color-text-secondary);
   display: flex;
+  /* Si no cabe, se corta antes de meterse bajo los botones de la derecha. */
+  overflow: hidden;
   font-family: var(--pliegue-font-data);
   font-size: 0.625rem;
   gap: 10px;
@@ -607,5 +609,45 @@
 
   .imageFrame {
     min-height: 55vh;
+  }
+}
+
+/* En el teléfono más estrecho la línea de datos se queda con la página: el avance ya lo dicen
+   la cápsula y la barra del dock, y cortado a media palabra («7 % LEÍD») no ayudaba. */
+@media (max-width: 370px) {
+  .hideOnNarrow {
+    display: none;
+  }
+}
+
+/* Mientras se traduce una sección se sigue leyendo el original; este aviso lo dice. */
+.sectionTranslating {
+  align-items: center;
+  color: var(--pliegue-color-text-secondary);
+  display: flex;
+  font-family: var(--pliegue-font-ui);
+  font-size: 0.8125rem;
+  gap: var(--pliegue-spacing-xs);
+  margin: 0 0 var(--pliegue-spacing-md);
+}
+
+.sectionTranslating::before {
+  animation: sectionTranslatingPulse 1.2s ease-in-out infinite;
+  background: var(--pliegue-color-action-primary);
+  border-radius: 50%;
+  content: "";
+  height: 8px;
+  width: 8px;
+}
+
+@keyframes sectionTranslatingPulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sectionTranslating::before {
+    animation: none;
   }
 }

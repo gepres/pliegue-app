@@ -23,6 +23,8 @@ import {
 } from "../library/annotations";
 import { applyImportedCatalogs } from "../library/catalog-import";
 import { applyDocumentCatalogs } from "../library/documents";
+import { normalizeLanguage } from "../library/language";
+import { defaultPagesAhead } from "../library/translation";
 import { useImportedCatalogs } from "../library/imported-catalog-store";
 import { useImmersiveMode, useReaderScroll } from "../mode/immersive";
 import { annotationAtPoint, useAnnotationHighlights, type SelectionCapture } from "./reader/annotation-highlights";
@@ -75,7 +77,10 @@ import {
   resolveLocalReaderDocument,
   type LocalReaderDocument,
 } from "../library/local-reader-state";
-import { PdfReader, type PdfReaderProps } from "./pdf-reader";
+import { PdfReader, type PdfLayoutBlock, type PdfPageTranslationView, type PdfReaderProps } from "./pdf-reader";
+import type { StructuredDocumentBlock, StructuredDocumentSection } from "../library/structured-document-extractor";
+import { TranslationPanel } from "./reader/translation-panel";
+import { useBookTranslation } from "./reader/use-book-translation";
 import { PageHeader } from "./workspace-page";
 import styles from "./local-document-reader.module.css";
 
@@ -135,11 +140,44 @@ function ImagePreview({
   );
 }
 
+/** La traducción de una sección: un texto por bloque, en el mismo orden, o que aún se traduce. */
+export interface SectionTranslationView {
+  language: string;
+  pending: boolean;
+  texts: readonly string[] | null;
+}
+
 function StructuredPreview({
+  onSectionChange,
   preview,
+  translation,
 }: {
+  onSectionChange?: ((section: number) => void) | undefined;
   preview: Extract<LocalDocumentPreview, { kind: "structured" }>;
+  /** Por número de sección (desde 1); `null` muestra el original. */
+  translation?: ReadonlyMap<number, SectionTranslationView> | null | undefined;
 }) {
+  const sectionsRef = useRef<HTMLDivElement>(null);
+
+  // Qué sección se está leyendo: la que más pantalla ocupa, como las páginas de la vista
+  // Lectura del PDF. La traducción la usa para ir primero por ella y después por las siguientes.
+  useEffect(() => {
+    const container = sectionsRef.current;
+    if (!container || !onSectionChange) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const best = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+        const index = Number(best?.target.getAttribute("data-section-index"));
+        if (Number.isFinite(index) && index > 0) onSectionChange(index);
+      },
+      { threshold: [0, 0.1, 0.25, 0.5] },
+    );
+    for (const element of container.querySelectorAll("[data-section-index]")) observer.observe(element);
+    return () => observer.disconnect();
+  }, [onSectionChange, preview.sections.length]);
+
   const formatLabel =
     preview.format === "docx"
       ? "Word"
@@ -163,27 +201,49 @@ function StructuredPreview({
           disponible sin modificar el archivo original.
         </p>
       ) : null}
-      <div className={styles.structuredSections} data-annotation-scope="document">
-        {preview.sections.map((section) => {
+      {/* Con la traducción a la vista no se resalta: una marca guardaría un texto que no es el
+          del libro y ya no se encontraría al volver al original. */}
+      <div
+        className={styles.structuredSections}
+        data-annotation-scope={translation ? undefined : "document"}
+        ref={sectionsRef}
+      >
+        {preview.sections.map((section, sectionIndex) => {
           const headingId = `extracted-${section.id}`;
+          const view = translation?.get(sectionIndex + 1);
+          const texts = view && !view.pending && view.texts?.length === section.blocks.length ? view.texts : null;
+          const blocks = texts
+            ? section.blocks.map<StructuredDocumentBlock>((block, index) =>
+                block.kind === "table" ? block : { ...block, text: texts[index] || block.text },
+              )
+            : section.blocks;
           // Sin título propio, la sección se nombra solo por su número: «Sección 3» dos veces
           // no dice más. Y el bloque que ya es el título no se vuelve a pintar debajo.
           const untitled = section.title === section.label;
-          const [lead, ...rest] = section.blocks;
-          const leadIsTitle =
-            (lead?.kind === "heading" || lead?.kind === "paragraph") && lead.text.trim() === section.title.trim();
+          const titleIndex = section.blocks.findIndex(
+            (block) => (block.kind === "heading" || block.kind === "paragraph") && block.text.trim() === section.title.trim(),
+          );
+          const title = texts && titleIndex >= 0 ? texts[titleIndex] || section.title : section.title;
+          const [, ...rest] = blocks;
 
           return (
             <section
               aria-labelledby={headingId}
               className={styles.structuredSection}
+              data-section-index={sectionIndex + 1}
               key={section.id}
+              lang={texts ? view?.language : undefined}
             >
               <header>
                 <span id={untitled ? headingId : undefined}>{section.label}</span>
-                {untitled ? null : <h2 id={headingId}>{section.title}</h2>}
+                {untitled ? null : <h2 id={headingId}>{title}</h2>}
               </header>
-              <ExtractedBlocks blocks={leadIsTitle ? rest : section.blocks} sectionTitle={section.title} />
+              {view?.pending ? (
+                <p className={styles.sectionTranslating} role="status">
+                  Traduciendo esta sección…
+                </p>
+              ) : null}
+              <ExtractedBlocks blocks={titleIndex === 0 ? rest : blocks} sectionTitle={section.title} />
             </section>
           );
         })}
@@ -195,13 +255,28 @@ function StructuredPreview({
 /** Lo que el visor de PDF necesita para marcar y recortar zonas. */
 type PdfAnnotationProps = Pick<
   PdfReaderProps,
-  "cropMode" | "onCropModeChange" | "onRegionClick" | "onRegionSelected" | "onRegionTools" | "pendingRegion" | "regions"
+  | "cropMode"
+  | "onCropModeChange"
+  | "onRegionClick"
+  | "onRegionSelected"
+  | "onRegionTools"
+  | "pendingRegion"
+  | "regions"
+  | "translation"
 >;
+
+/** Lo que la vista de EPUB y DOCX necesita para traducirse sección a sección. */
+interface StructuredTranslationProps {
+  onSectionChange: (section: number) => void;
+  onSections: (sections: readonly StructuredDocumentSection[] | null) => void;
+  translation: ReadonlyMap<number, SectionTranslationView> | null;
+}
 
 function PreviewCanvas({
   document,
   initialPercent,
   pdf,
+  structured,
   onKindChange,
   onOutline,
   onPageChange,
@@ -222,6 +297,7 @@ function PreviewCanvas({
   pdf: PdfAnnotationProps;
   restartSignal: number;
   resumeRequested: boolean;
+  structured: StructuredTranslationProps;
 }) {
   const documentId = document.id;
   const format = document.format;
@@ -271,6 +347,10 @@ function PreviewCanvas({
   // El índice de los formatos que Pliegue compone sale de sus propias secciones; el del PDF
   // lo aporta el visor al leer los marcadores del archivo.
   const readyPreview = state.status === "ready" ? state.preview : null;
+  const { onSections } = structured;
+  useEffect(() => {
+    onSections(readyPreview?.kind === "structured" ? readyPreview.sections : null);
+  }, [onSections, readyPreview]);
   useEffect(() => {
     onKindChange(readyPreview?.kind ?? null);
     if (readyPreview?.kind === "structured") {
@@ -393,7 +473,15 @@ function PreviewCanvas({
     return <ImagePreview document={document} preview={preview} />;
   }
 
-  if (preview.kind === "structured") return <StructuredPreview preview={preview} />;
+  if (preview.kind === "structured") {
+    return (
+      <StructuredPreview
+        onSectionChange={structured.onSectionChange}
+        preview={preview}
+        translation={structured.translation}
+      />
+    );
+  }
 
   return (
     <Card className={styles.unsupportedPreview} tone="subtle">
@@ -601,6 +689,73 @@ function useDocumentProgress(
   return { progressPercent: progress?.percent ?? 0, restart };
 }
 
+/**
+ * La traducción de las páginas de alrededor —las que se ven o están a punto de verse—: las ya
+ * traducidas con su texto y las que están en cola, marcadas para enseñar que se traducen.
+ */
+/** Lo que se traduce: los bloques de una página de PDF, con su caja, o el texto de un bloque de EPUB. */
+type TranslationSourceBlock = PdfLayoutBlock | { text: string };
+
+function isLayoutBlock(block: TranslationSourceBlock): block is PdfLayoutBlock {
+  return "box" in block;
+}
+
+type TranslatedUnitOf = (
+  unit: number,
+) => { source: TranslationSourceBlock[]; translated: { text: string }[] } | undefined;
+
+function pdfTranslationViews(
+  pages: { current: number; total: number },
+  ahead: number,
+  language: string,
+  unitOf: TranslatedUnitOf,
+  snapshot: { pending: readonly number[]; working: number | null },
+) {
+  const views = new Map<number, PdfPageTranslationView>();
+  const last = Math.min(pages.total, pages.current + ahead + 1);
+  for (let number = Math.max(1, pages.current - 2); number <= last; number += 1) {
+    const done = unitOf(number);
+    const layout = done?.source.filter(isLayoutBlock) ?? [];
+    if (done && layout.length === done.source.length) {
+      views.set(number, {
+        blocks: layout.map((block, index) => ({ ...block, translated: done.translated[index]?.text ?? "" })),
+        language,
+        pending: false,
+      });
+    } else if (snapshot.working === number || snapshot.pending.includes(number)) {
+      views.set(number, { blocks: [], language, pending: true });
+    }
+  }
+  return views;
+}
+
+/** Lo mismo para las secciones de un EPUB o un DOCX: un texto por bloque, en su orden. */
+function sectionTranslationViews(
+  total: number,
+  current: number,
+  ahead: number,
+  language: string,
+  unitOf: TranslatedUnitOf,
+  snapshot: { pending: readonly number[]; working: number | null },
+) {
+  const views = new Map<number, SectionTranslationView>();
+  const last = Math.min(total, current + ahead + 1);
+  for (let number = Math.max(1, current - 2); number <= last; number += 1) {
+    const done = unitOf(number);
+    if (done) {
+      views.set(number, { language, pending: false, texts: done.translated.map((block) => block.text) });
+    } else if (snapshot.working === number || snapshot.pending.includes(number)) {
+      views.set(number, { language, pending: true, texts: null });
+    }
+  }
+  return views;
+}
+
+/** En un PDF, lo que se traduce de una vez es una página. */
+function pageUnitId(unit: number) {
+  return `page:${unit}`;
+}
+
 function LocalReaderShell({
   document,
   permissionRequired = false,
@@ -625,6 +780,9 @@ function LocalReaderShell({
   const [previewKind, setPreviewKind] = useState<LocalDocumentPreview["kind"] | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [translationOpen, setTranslationOpen] = useState(false);
+  // Con la traducción en marcha, «Original» la esconde sin detenerla: sigue preparando páginas.
+  const [translationVisible, setTranslationVisible] = useState(true);
   const previewRef = useRef<HTMLElement>(null);
   const markContentReady = useCallback(() => setContentReady(true), []);
   const reportPage = useCallback(
@@ -646,7 +804,7 @@ function LocalReaderShell({
   const [postcard, setPostcard] = useState<PostcardContent | null>(null);
   const regionToolsRef = useRef<Parameters<NonNullable<PdfReaderProps["onRegionTools"]>>[0]>(null);
   // Mientras se recorta, las barras se quedan: el dock tiene el botón para salir.
-  const chrome = useReaderChrome(appearanceOpen || cropMode);
+  const chrome = useReaderChrome(appearanceOpen || cropMode || translationOpen);
   const fullscreen = useFullscreen();
 
   // La ficha del documento, si la tiene: título y autor de verdad para la postal y para la
@@ -656,6 +814,72 @@ function LocalReaderShell({
   const catalog = useMemo(
     () => applyImportedCatalogs(applyDocumentCatalogs([document], aiCatalogs.records), importedCatalogs.records)[0]?.catalog,
     [aiCatalogs.records, document, importedCatalogs.records],
+  );
+
+  // ---- Traducción ----------------------------------------------------------------------
+  // En el dispositivo, página a página en un PDF y sección a sección en un EPUB o un DOCX:
+  // primero la que se lee, luego las siguientes. Lo traducido se guarda; en el PDF se pinta
+  // encima del original sin taparle las imágenes.
+  const isPdf = previewKind === "pdf";
+  const [structuredSections, setStructuredSections] = useState<readonly StructuredDocumentSection[] | null>(null);
+  const [currentSection, setCurrentSection] = useState(1);
+  const translatable = isPdf || (previewKind === "structured" && Boolean(structuredSections?.length));
+  // Por delante se preparan cinco páginas, pero solo dos secciones: en un EPUB cada una es un
+  // capítulo entero.
+  const translationAhead = isPdf ? defaultPagesAhead : 2;
+  const translation = useBookTranslation<TranslationSourceBlock>({
+    currentUnit: isPdf ? (pages?.current ?? 1) : currentSection,
+    documentId: document.id,
+    loadUnit: async (unit) => {
+      if (!isPdf) {
+        const section = structuredSections?.[unit - 1];
+        if (!section) throw new Error("Esa sección ya no está en el documento.");
+        // Las tablas se dejan como están: sus cifras y celdas no se tocan.
+        return { blocks: section.blocks.map((block) => ({ text: block.kind === "table" ? "" : block.text })) };
+      }
+      const tools = regionToolsRef.current;
+      if (!tools) throw new Error("El visor del PDF aún no está listo.");
+      return { blocks: await tools.readLayout(unit) };
+    },
+    pagesAhead: translationAhead,
+    unitCount: isPdf ? (pages?.total ?? 0) : (structuredSections?.length ?? 0),
+    unitId: isPdf ? pageUnitId : (unit) => `section:${structuredSections?.[unit - 1]?.id ?? unit}`,
+  });
+  const translationActive = translation.phase.kind === "ready";
+  const sourceLanguageGuess =
+    normalizeLanguage(catalog?.language) ??
+    ("detectedLanguage" in document && typeof document.detectedLanguage === "string" ? document.detectedLanguage : null);
+  const { pair: translationPair, snapshot: translationSnapshot, unit: translatedUnit } = translation;
+  const showTranslation = translatable && translationActive && translationVisible;
+  const pdfTranslation = useMemo(
+    () =>
+      showTranslation && isPdf && translationPair && pages
+        ? pdfTranslationViews(pages, translationAhead, translationPair.target, translatedUnit, translationSnapshot)
+        : null,
+    [isPdf, pages, showTranslation, translatedUnit, translationAhead, translationPair, translationSnapshot],
+  );
+  const sectionTranslation = useMemo(
+    () =>
+      showTranslation && !isPdf && translationPair && structuredSections
+        ? sectionTranslationViews(
+            structuredSections.length,
+            currentSection,
+            translationAhead,
+            translationPair.target,
+            translatedUnit,
+            translationSnapshot,
+          )
+        : null,
+    [
+      currentSection,
+      isPdf,
+      showTranslation,
+      structuredSections,
+      translatedUnit,
+      translationAhead,
+      translationPair,
+      translationSnapshot,
+    ],
   );
   const displayTitle = catalog?.canonicalTitle ?? document.title;
   const displayAuthor = catalog?.authors.length ? catalog.authors.join(", ") : null;
@@ -717,6 +941,11 @@ function LocalReaderShell({
       } else if (key === "a") {
         event.preventDefault();
         setAppearanceOpen((open) => !open);
+      } else if (key === "t" && translatable) {
+        event.preventDefault();
+        // En marcha, alterna traducción y original; si no, abre el panel para empezar.
+        if (translationActive) setTranslationVisible((visible) => !visible);
+        else setTranslationOpen((open) => !open);
       } else if (key === "f" && fullscreen.supported) {
         event.preventDefault();
         fullscreen.toggle();
@@ -724,7 +953,7 @@ function LocalReaderShell({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [fullscreen, selfScrolling]);
+  }, [fullscreen, selfScrolling, translatable, translationActive]);
 
   // ---- Marcas ------------------------------------------------------------------------
   function createAnnotation(target: AnnotationTarget, color: HighlightColor, note = "") {
@@ -871,13 +1100,53 @@ function LocalReaderShell({
         <div className={styles.appBarTitle}>
           <h1 title={displayTitle}>{displayTitle}</h1>
           <p>
-            <span>{document.format.toUpperCase()}</span>
+            <span className={styles.hideOnSmall}>{document.format.toUpperCase()}</span>
             {pageLabel ? <span>{pageLabel}</span> : null}
-            <span>{progressPercent} % leído</span>
+            <span className={styles.hideOnNarrow}>{progressPercent} % leído</span>
+            {/* En el teléfono no cabe: el avance está en el panel y el botón queda resaltado. */}
+            {translationActive ? <span className={styles.hideOnSmall}>{translationSnapshot.percent} % traducido</span> : null}
           </p>
         </div>
 
         <div className={styles.appBarActions}>
+          {translatable ? (
+            <Popover
+              onOpenChange={setTranslationOpen}
+              open={translationOpen}
+              title="Traducir el libro"
+              trigger={(props) => (
+                <IconButton
+                  {...props}
+                  icon="translate"
+                  label={translationActive ? "Traducción" : "Traducir"}
+                  shortcut="T"
+                  tone={translationActive ? "active" : "plain"}
+                />
+              )}
+              width={360}
+            >
+              {() => (
+                <TranslationPanel
+                  ahead={translationAhead}
+                  onClear={translation.clear}
+                  onRetry={translation.retry}
+                  onStart={(next) => {
+                    setTranslationVisible(true);
+                    void translation.start(next);
+                  }}
+                  onStop={translation.stop}
+                  onVisibleChange={setTranslationVisible}
+                  pair={translationPair}
+                  phase={translation.phase}
+                  snapshot={translationSnapshot}
+                  sourceGuess={sourceLanguageGuess}
+                  unitCount={isPdf ? (pages?.total ?? 0) : (structuredSections?.length ?? 0)}
+                  unitNoun={isPdf ? { plural: "páginas", singular: "página" } : { plural: "secciones", singular: "sección" }}
+                  visible={translationVisible}
+                />
+              )}
+            </Popover>
+          ) : null}
           <Popover
             onOpenChange={setAppearanceOpen}
             open={appearanceOpen}
@@ -959,9 +1228,15 @@ function LocalReaderShell({
               },
               pendingRegion,
               regions: regionMarks,
+              translation: pdfTranslation,
             }}
             restartSignal={restartSignal}
             resumeRequested={resumeRequested}
+            structured={{
+              onSectionChange: setCurrentSection,
+              onSections: setStructuredSections,
+              translation: sectionTranslation,
+            }}
           />
         )}
       </main>

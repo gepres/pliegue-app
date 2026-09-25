@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
   canvasOutputScale,
@@ -18,8 +18,9 @@ import {
   type PdfPageSize,
 } from "../library/pdf-page-layout";
 import type { HighlightColor, NormalizedRect } from "../library/annotations";
-import { reflowPage, toReflowItems } from "../library/pdf-reflow";
+import { layoutPage, reflowPage, toReflowItems } from "../library/pdf-reflow";
 import { describePdfFailure, openPdfDocument } from "../library/pdf-runtime";
+import { dominantColor, fitFontSize, inkFor, isListLike, originalLeading } from "../library/translation";
 import type { StructuredDocumentBlock } from "../library/structured-document-extractor";
 import { ExtractedBlocks } from "./extracted-blocks";
 import { IconButton, Segmented } from "./app-ui/controls";
@@ -102,6 +103,8 @@ export interface PdfReaderProps {
   /** Solo salta a la posición guardada cuando el usuario lo ha pedido. */
   resumeRequested?: boolean;
   title: string;
+  /** Traducción de las páginas cercanas a la actual; `null` o ausente muestra el original. */
+  translation?: ReadonlyMap<number, PdfPageTranslationView> | null;
 }
 
 /**
@@ -203,6 +206,7 @@ const PdfPage = memo(function PdfPage({
   scale,
   shouldRender,
   title,
+  translation,
 }: {
   /** Zona que se está recortando o recién recortada en esta página. */
   crop: NormalizedRect | null;
@@ -213,6 +217,7 @@ const PdfPage = memo(function PdfPage({
   scale: number;
   shouldRender: boolean;
   title: string;
+  translation: PdfPageTranslationView | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
@@ -335,12 +340,124 @@ const PdfPage = memo(function PdfPage({
         </button>
       ))}
       {crop ? <span aria-hidden="true" className={styles.cropBox} style={regionStyle(crop)} /> : null}
+      {translation ? <PageTranslationLayer page={pageNumber} view={translation} /> : null}
       <span aria-hidden="true" className={styles.pageNumber}>
         {pageNumber}
       </span>
     </div>
   );
 });
+
+/**
+ * La traducción encima de la página. Cada bloque tapa solo la caja de su texto original, con
+ * el color del papel, así que imágenes, gráficos y filetes siguen a la vista. La letra se
+ * ajusta a la caja: se estima por superficie y, si aun así no cabe, se encoge al pintarse.
+ */
+function PageTranslationLayer({ page, view }: { page: number; view: PdfPageTranslationView }) {
+  const layerRef = useRef<HTMLDivElement>(null);
+
+  // El color del papel solo se puede leer con la página ya dibujada: se toma al montar si ya
+  // lo está y, si no, en cuanto el marco pasa a `data-drawn="true"`.
+  useLayoutEffect(() => {
+    const layer = layerRef.current;
+    const frame = layer?.parentElement;
+    if (!layer || !frame) return;
+    const paint = () => {
+      if (frame.dataset.drawn === "true") paintOnPaper(layer, frame.querySelector("canvas"));
+    };
+    paint();
+    const observer = new MutationObserver(paint);
+    observer.observe(frame, { attributeFilter: ["data-drawn"], attributes: true });
+    return () => observer.disconnect();
+  }, [view]);
+
+  return (
+    <div
+      aria-label={`Traducción de la página ${page}`}
+      className={styles.translationLayer}
+      lang={view.language}
+      ref={layerRef}
+      role="group"
+    >
+      {view.blocks.map((block, index) =>
+        block.translated ? (
+          <FittedTranslation block={block} key={index} />
+        ) : null,
+      )}
+      {view.pending ? (
+        <span className={styles.translationPending} role="status">
+          <span aria-hidden="true" className={styles.translationSpinner} />
+          Traduciendo esta página…
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** Lado de la miniatura en la que se mide el color del papel: basta y cuesta poco. */
+const paperSample = 64;
+
+/**
+ * Pinta cada bloque traducido con el color del papel que tiene debajo y una tinta que
+ * contraste: sin esto, un escaneo amarillento o una portada de tela quedaban con parches
+ * blancos. Se mide sobre una miniatura de la caja, no píxel a píxel.
+ */
+function paintOnPaper(layer: HTMLElement, canvas: HTMLCanvasElement | null) {
+  if (!canvas || canvas.width === 0 || canvas.height === 0) return;
+  const sample = window.document.createElement("canvas");
+  sample.width = paperSample;
+  sample.height = paperSample;
+  const context = sample.getContext("2d", { willReadFrequently: true });
+  if (!context) return;
+
+  for (const element of layer.querySelectorAll<HTMLElement>("[data-box]")) {
+    const [x = 0, y = 0, width = 0, height = 0] = (element.dataset.box ?? "").split(",").map(Number);
+    const sourceWidth = Math.max(1, Math.round(width * canvas.width));
+    const sourceHeight = Math.max(1, Math.round(height * canvas.height));
+    context.clearRect(0, 0, paperSample, paperSample);
+    context.drawImage(canvas, Math.round(x * canvas.width), Math.round(y * canvas.height), sourceWidth, sourceHeight, 0, 0, paperSample, paperSample);
+    const paper = dominantColor(context.getImageData(0, 0, paperSample, paperSample).data);
+    if (!paper) continue;
+    const color = `rgb(${paper.r} ${paper.g} ${paper.b})`;
+    element.style.backgroundColor = color;
+    element.style.boxShadow = `0 0 0 2px ${color}`;
+    element.style.color = inkFor(paper);
+  }
+}
+
+function FittedTranslation({ block }: { block: PdfLayoutBlock & { translated: string } }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const leading = originalLeading(block.size.height, block.lines, block.fontHeight);
+  const estimate = fitFontSize(block.size, block.translated.length, block.fontHeight, leading);
+
+  // La estimación acierta casi siempre; si el texto aún desborda su caja, se encoge lo que
+  // falte en un solo paso y sin bajar de la mitad del cuerpo original. Se corrige en el propio
+  // elemento: la proporción vale a cualquier zoom, porque letra y caja escalan a la vez.
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element || element.scrollHeight <= element.clientHeight + 1) return;
+    const ratio = Math.sqrt(element.clientHeight / element.scrollHeight);
+    const fitted = Math.max(block.fontHeight * 0.5, estimate * ratio * 0.97);
+    element.style.fontSize = `calc(var(--scale-factor) * ${fitted.toFixed(2)}px)`;
+  }, [block.fontHeight, estimate]);
+
+  return (
+    <p
+      className={styles.translationBlock}
+      data-box={`${block.box.x},${block.box.y},${block.box.width},${block.box.height}`}
+      data-centered={block.centered ? "true" : undefined}
+      data-kind={block.kind}
+      ref={ref}
+      style={{
+        ...regionStyle(block.box),
+        fontSize: `calc(var(--scale-factor) * ${estimate.toFixed(2)}px)`,
+        lineHeight: leading.toFixed(3),
+      }}
+    >
+      {block.translated}
+    </p>
+  );
+}
 
 function regionStyle(rect: NormalizedRect): React.CSSProperties {
   return {
@@ -404,8 +521,75 @@ async function readRegionText(pdf: PdfDocument, pageNumber: number, rect: Normal
   }
 }
 
-/** Lo que el lector puede pedir al visor sobre una zona de una página. */
+/** Un bloque de texto de la página con su caja: lo que hace falta para traducirlo y taparlo. */
+export interface PdfLayoutBlock {
+  /** Caja relativa a la página, de 0 a 1: vale a cualquier zoom. */
+  box: NormalizedRect;
+  /** Centrado en la página, como un título o una dedicatoria. */
+  centered: boolean;
+  /** Cuerpo del original, en unidades del PDF a escala 1. */
+  fontHeight: number;
+  kind: "heading" | "paragraph";
+  lines: number;
+  /** Ancho y alto de la caja en unidades del PDF, para ajustar la letra de la traducción. */
+  size: { height: number; width: number };
+  text: string;
+}
+
+/**
+ * Una página en bloques, con su caja sobre la página. Sirve para páginas que aún no se han
+ * dibujado: la traducción se prepara antes de llegar a ellas.
+ */
+async function readPageLayout(pdf: PdfDocument, pageNumber: number) {
+  const page = await pdf.getPage(pageNumber);
+  try {
+    const viewport = page.getViewport({ scale: 1 });
+    const content = await page.getTextContent();
+    const { blocks } = layoutPage(
+      toReflowItems(content.items as Parameters<typeof toReflowItems>[0]),
+      viewport.width,
+    );
+    return blocks.map<PdfLayoutBlock>((block) => {
+      const [x1 = 0, y1 = 0] = viewport.convertToViewportPoint(block.box.left, block.box.bottom);
+      const [x2 = 0, y2 = 0] = viewport.convertToViewportPoint(block.box.right, block.box.top);
+      const left = Math.max(0, Math.min(x1, x2));
+      const right = Math.min(viewport.width, Math.max(x1, x2));
+      const top = Math.max(0, Math.min(y1, y2));
+      const bottom = Math.min(viewport.height, Math.max(y1, y2));
+      const center = (left + right) / 2 / viewport.width;
+      return {
+        box: {
+          height: (bottom - top) / viewport.height,
+          width: (right - left) / viewport.width,
+          x: left / viewport.width,
+          y: top / viewport.height,
+        },
+        centered: Math.abs(center - 0.5) < 0.04 && right - left < viewport.width * 0.8,
+        fontHeight: block.fontHeight,
+        kind: block.kind,
+        lines: block.lines,
+        size: { height: bottom - top, width: right - left },
+        // Un índice o una lista de ilustraciones: cada renglón acaba en su número de página. Unidos
+        // en un párrafo, la traducción los fundía («… antiguos. 138 Algunos símbolos… 139»).
+        text: isListLike(block.lineTexts) ? block.lineTexts.join("\n") : block.text,
+      };
+    });
+  } finally {
+    page.cleanup();
+  }
+}
+
+/** Lo que la traducción pinta sobre una página: sus bloques traducidos, o que aún se traduce. */
+export interface PdfPageTranslationView {
+  blocks: readonly (PdfLayoutBlock & { translated: string })[];
+  /** Idioma de la traducción, para el atributo `lang`. */
+  language: string;
+  pending: boolean;
+}
+
+/** Lo que el lector puede pedir al visor sobre una página o una zona de ella. */
 export interface PdfRegionTools {
+  readLayout: (page: number) => Promise<PdfLayoutBlock[]>;
   readText: (page: number, rect: NormalizedRect) => Promise<string>;
   render: (page: number, rect: NormalizedRect) => Promise<Blob>;
 }
@@ -423,12 +607,14 @@ function PdfReadingView({
   onPageChange,
   pageCount,
   title,
+  translation,
 }: {
   document: PdfDocument;
   initialPage: number;
   onPageChange: (page: number) => void;
   pageCount: number;
   title: string;
+  translation: ReadonlyMap<number, PdfPageTranslationView> | null;
 }) {
   const [pages, setPages] = useState<ReflowedPage[]>([]);
   const [target, setTarget] = useState(() =>
@@ -525,7 +711,17 @@ function PdfReadingView({
 
   return (
     <article className={styles.reading}>
-      {pages.map((page) => (
+      {pages.map((page) => {
+        // Los bloques traducidos salen del mismo recompositor y en el mismo orden: casan uno a
+        // uno. Si no casan (otra extracción), se lee el original antes que mezclar.
+        const view = translation?.get(page.number);
+        const translated =
+          view && !view.pending && page.blocks.length > 0 && view.blocks.length === page.blocks.length
+            ? page.blocks.map<StructuredDocumentBlock>((block, index) =>
+                block.kind === "table" ? block : { ...block, text: view.blocks[index]?.translated || block.text },
+              )
+            : null;
+        return (
         <section
           aria-label={`Página ${page.number} de ${title}`}
           className={styles.readingPage}
@@ -535,8 +731,19 @@ function PdfReadingView({
           <header className={styles.readingPageMark}>
             <span>Página {page.number}</span>
             {page.columns > 1 ? <span>Dos columnas</span> : null}
+            {translated ? <span>Traducida</span> : null}
           </header>
-          {page.blocks.length > 0 ? (
+          {view?.pending ? (
+            <p className={styles.readingTranslating} role="status">
+              <span aria-hidden="true" className={styles.translationSpinner} />
+              Traduciendo esta página…
+            </p>
+          ) : null}
+          {translated ? (
+            <div lang={view?.language}>
+              <ExtractedBlocks blocks={translated} sectionTitle={`página ${page.number}`} />
+            </div>
+          ) : page.blocks.length > 0 ? (
             <div data-annotation-page={page.number} data-annotation-scope={`pdf-reading:${page.number}`}>
               <ExtractedBlocks blocks={page.blocks} sectionTitle={`página ${page.number}`} />
             </div>
@@ -547,7 +754,8 @@ function PdfReadingView({
             </p>
           )}
         </section>
-      ))}
+        );
+      })}
 
       <div className={styles.readingFoot} ref={sentinelRef}>
         {failure ? (
@@ -583,6 +791,7 @@ export function PdfReader({
   restartSignal = 0,
   resumeRequested = false,
   title,
+  translation = null,
 }: PdfReaderProps) {
   // Zona que se está dibujando con el puntero, antes de soltarlo.
   const [draft, setDraft] = useState<{ page: number; rect: NormalizedRect } | null>(null);
@@ -881,6 +1090,7 @@ export function PdfReader({
   useEffect(() => {
     if (!loadedDocument) return;
     regionToolsRef.current?.({
+      readLayout: (page) => readPageLayout(loadedDocument, page),
       readText: (page, rect) => readRegionText(loadedDocument, page, rect),
       render: (page, rect) => renderRegionImage(loadedDocument, page, rect),
     });
@@ -1025,6 +1235,7 @@ export function PdfReader({
               onPageChange={reportReadingPage}
               pageCount={pageCount}
               title={title}
+              translation={translation}
             />
           ) : (
             <div
@@ -1051,6 +1262,7 @@ export function PdfReader({
                   regions={regionsByPage.get(placement.number) ?? noRegions}
                   scale={scale}
                   shouldRender={index >= range.first && index <= range.last}
+                  translation={translation?.get(placement.number) ?? null}
                   title={title}
                 />
               ))}

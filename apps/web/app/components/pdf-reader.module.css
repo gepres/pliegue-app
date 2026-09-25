@@ -400,6 +400,26 @@
   }
 }
 
+/* En el teléfono más estrecho, «Original» y «Lectura» se tocaban: cada opción era más estrecha
+   que su palabra. El control ocupa lo que necesitan las dos, con un punto menos de letra. */
+@media (max-width: 380px) {
+  .dock [role="radiogroup"] {
+    flex: none;
+    min-width: max-content;
+  }
+
+  .dock [role="radiogroup"] button {
+    font-size: 0.6875rem;
+    letter-spacing: 0;
+    padding-inline: 7px;
+  }
+
+  /* El zoom se queda en su porcentaje, que sigue abriendo el menú: la flecha no cabía. */
+  .zoomTrigger svg {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dock {
     transition: none;
@@ -489,4 +509,100 @@
   transform: translateX(-50%);
   white-space: nowrap;
   z-index: 6;
+}
+
+/* ---- Traducción sobre la página -----------------------------------------------------
+   Cada bloque tapa solo la caja de su texto original con el blanco del papel (el PDF se
+   dibuja sobre blanco también en el tema oscuro), así que imágenes, gráficos y filetes
+   siguen a la vista. Queda por encima del texto original y por debajo de las zonas
+   marcadas, que así se siguen viendo y pulsando. */
+.translationLayer {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+
+.translationBlock {
+  background: #fff;
+  /* Unos píxeles más de papel alrededor: los rasgos del original asoman por los bordes. */
+  box-shadow: 0 0 0 2px #fff;
+  color: #1d1b18;
+  font-family: var(--pliegue-reader-font-family, var(--pliegue-font-reading, serif));
+  hyphens: auto;
+  margin: 0;
+  /* Recorta lo que no quepa, pero deja asomar los rasgos de las letras: con el interlineado
+     del original, ascendentes y descendentes rozan el borde de la caja. */
+  overflow: clip;
+  overflow-clip-margin: 0.2em;
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+  position: absolute;
+  text-align: justify;
+  /* Un índice o un poema se traducen renglón a renglón y conservan sus saltos. */
+  white-space: pre-line;
+}
+
+.translationBlock[data-kind="heading"] {
+  font-weight: 600;
+  text-align: left;
+}
+
+.translationBlock[data-centered="true"] {
+  text-align: center;
+}
+
+/* Mientras se traduce la página se sigue viendo el original; el aviso flota arriba. */
+.translationPending,
+.readingTranslating {
+  align-items: center;
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-full);
+  box-shadow: var(--pliegue-elevation-overlay);
+  color: var(--pliegue-color-text-secondary);
+  display: inline-flex;
+  font-family: var(--pliegue-font-ui);
+  font-size: 0.8125rem;
+  gap: 8px;
+  padding: 6px 14px;
+}
+
+.translationPending {
+  left: 50%;
+  pointer-events: none;
+  position: absolute;
+  top: 16px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.readingTranslating {
+  box-shadow: none;
+  margin: 0 0 var(--pliegue-spacing-md);
+}
+
+.translationSpinner {
+  animation: translationSpin 0.9s linear infinite;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  border-right-color: transparent;
+  display: inline-block;
+  flex: none;
+  height: 12px;
+  width: 12px;
+}
+
+@keyframes translationSpin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .translationSpinner {
+    animation: none;
+    border-right-color: currentColor;
+    opacity: 0.6;
+  }
 }
