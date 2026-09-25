@@ -7,6 +7,10 @@
 .reader {
   background: var(--pliegue-color-bg-subtle);
   height: 100dvh;
+  /* El dock se aparta deslizándose hacia abajo. Sin recorte, al salir alargaba la página
+     90 px, aparecía una segunda barra de desplazamiento y el ancho útil encogía: todas las
+     páginas saltaban de lado cada vez que las barras se iban o volvían. */
+  overflow: clip;
   position: relative;
 }
 
@@ -24,6 +28,11 @@
   padding: calc(var(--reader-bar-height, 56px) + env(safe-area-inset-top)) 0
     calc(150px + env(safe-area-inset-bottom));
   position: relative;
+  /* El hueco de la barra queda reservado aunque el documento aún no desborde, y la barra es
+     fina: el único desplazamiento del lector no debe robar ancho ni cambiarlo. */
+  scrollbar-color: color-mix(in srgb, var(--pliegue-color-text-primary) 26%, transparent) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
 .group {

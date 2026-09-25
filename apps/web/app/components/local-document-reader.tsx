@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button, Card, Tag, buttonClassName } from "@pliegue/ui";
 
-import { useImmersiveMode } from "../mode/immersive";
+import { useImmersiveMode, useReaderScroll } from "../mode/immersive";
 import { IconButton } from "./app-ui/controls";
 import { Icon } from "./app-ui/icons";
 import { Popover, Sheet } from "./app-ui/overlays";
@@ -599,6 +599,7 @@ function LocalReaderShell({
   const fullscreen = useFullscreen();
 
   useImmersiveMode(true);
+  useReaderScroll(selfScrolling ? "self" : "page");
 
   const restartReading = useCallback(() => {
     restart();
@@ -641,6 +642,12 @@ function LocalReaderShell({
   }, [fullscreen]);
 
   const pageLabel = pages ? `Página ${pages.current} de ${pages.total}` : null;
+  // La cápsula dice dónde se está: la página en un PDF, el punto del texto en lo demás.
+  const peekPosition = selfScrolling
+    ? pages
+      ? `${pages.current} / ${pages.total}`
+      : null
+    : `${position} %`;
 
   return (
     <div
@@ -704,6 +711,21 @@ function LocalReaderShell({
           ) : null}
         </div>
       </header>
+
+      {/* Mientras se lee, la cabecera se recoge en una cápsula con el título y la posición,
+          como la barra compacta de los navegadores móviles. Tocarla o hacer clic la
+          despliega: no hace falta desplazarse hacia atrás ni perder el sitio. */}
+      <button
+        aria-label={`Mostrar los controles de lectura. ${document.title}${pageLabel ? `, ${pageLabel}` : ""}`}
+        className={styles.peek}
+        data-reader-peek=""
+        inert={!chrome.hidden}
+        onClick={chrome.show}
+        type="button"
+      >
+        <span className={styles.peekTitle}>{document.title}</span>
+        {peekPosition ? <span className={styles.peekPosition}>{peekPosition}</span> : null}
+      </button>
 
       <main
         className={styles.stage}

@@ -13,8 +13,12 @@
   min-height: 100dvh;
 }
 
+/* El PDF se desplaza dentro de su visor: el lector mide justo la pantalla y recorta lo que
+   se asome, como el dock cuando se aparta hacia abajo. */
 .readerApp[data-self-scrolling="true"] {
   background: var(--pliegue-color-bg-subtle);
+  height: 100dvh;
+  overflow: clip;
 }
 
 /* Hilo de progreso: siempre visible, incluso con las barras escondidas. */
@@ -121,6 +125,87 @@
   gap: 2px;
 }
 
+/* ---- Cápsula: la cabecera recogida mientras se lee ------------------------------------
+   Como la barra compacta de los navegadores móviles: al apartarse las barras queda una
+   pastilla con el título y la posición, y tocarla las despliega. Flota por encima del
+   documento, así que aparecer o irse no mueve ni un píxel del texto. */
+
+.peek {
+  align-items: center;
+  backdrop-filter: saturate(1.4) blur(20px);
+  background: color-mix(in srgb, var(--pliegue-color-bg-surface) 84%, transparent);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-full);
+  box-shadow: var(--pliegue-elevation-raised);
+  color: var(--pliegue-color-text-primary);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 10px;
+  left: 50%;
+  max-width: min(460px, calc(100% - 32px));
+  min-height: 34px;
+  opacity: 0;
+  padding: 4px 14px;
+  pointer-events: none;
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top));
+  transform: translate(-50%, -10px) scale(0.96);
+  transition:
+    opacity var(--pliegue-motion-base) ease,
+    transform 300ms cubic-bezier(0.2, 0.9, 0.3, 1),
+    background-color var(--pliegue-motion-base) ease;
+  z-index: 31;
+}
+
+.readerApp[data-chrome="hidden"] .peek {
+  /* Al rato se atenúa para no competir con el texto; sigue ahí para tocarla. */
+  animation: peek-rest 900ms ease 2.4s forwards;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.readerApp[data-chrome="hidden"] .peek:focus-visible {
+  animation: none;
+}
+
+@media (hover: hover) {
+  .readerApp[data-chrome="hidden"] .peek:hover {
+    animation: none;
+    background: color-mix(in srgb, var(--pliegue-color-bg-surface) 96%, transparent);
+  }
+}
+
+@keyframes peek-rest {
+  to {
+    opacity: 0.45;
+  }
+}
+
+.peek:focus-visible {
+  outline: 3px solid var(--pliegue-color-focus-ring);
+  outline-offset: 2px;
+}
+
+.peekTitle {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.peekPosition {
+  color: var(--pliegue-color-text-secondary);
+  flex: none;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
 /* ---- Escenario ------------------------------------------------------------- */
 
 .stage {
@@ -152,7 +237,8 @@
     right: var(--reader-panel-width);
   }
 
-  .readerApp[data-panel="open"] .textDock {
+  .readerApp[data-panel="open"] .textDock,
+  .readerApp[data-panel="open"] .peek {
     left: calc(50% - var(--reader-panel-width) / 2);
   }
 }
@@ -254,10 +340,15 @@
 
 @media (prefers-reduced-motion: reduce) {
   .appBar,
+  .peek,
   .textDock,
   .stage,
   .progressLine span {
     transition: none;
+  }
+
+  .readerApp[data-chrome="hidden"] .peek {
+    animation: none;
   }
 }
 

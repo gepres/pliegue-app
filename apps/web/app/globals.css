@@ -76,6 +76,17 @@ html {
   text-size-adjust: 100%;
 }
 
+/* Lector abierto (lo marca `useReaderScroll`). Con un PDF solo se desplaza el visor, nunca
+   la página: no puede aparecer una segunda barra. Con texto se desplaza la página, y su
+   barra reserva el sitio desde el principio para que nada salte al cargar. */
+:root[data-reader-scroll="self"] {
+  overflow: hidden;
+}
+
+:root[data-reader-scroll="page"] {
+  scrollbar-gutter: stable;
+}
+
 a {
   color: inherit;
 }

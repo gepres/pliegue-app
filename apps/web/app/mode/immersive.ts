@@ -21,3 +21,20 @@ export function useImmersiveMode(active: boolean) {
     };
   }, [active]);
 }
+
+/**
+ * Quién se desplaza con un documento abierto. El PDF trae su propio contenedor y la página no
+ * debe moverse: cuando lo hacía, aparecía una segunda barra de desplazamiento y el ancho útil
+ * cambiaba cada vez que las barras del lector se apartaban, así que el documento entero daba
+ * un salto de lado. Con texto se desplaza la página, y su barra reserva el sitio desde el
+ * principio para que tampoco salte al terminar de cargar.
+ */
+export function useReaderScroll(model: "page" | "self") {
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.readerScroll = model;
+    return () => {
+      delete root.dataset.readerScroll;
+    };
+  }, [model]);
+}

@@ -253,8 +253,11 @@
 
 /* ---- Modo inmersivo: con un documento abierto el marco se retira ---------- */
 
+/* Sin la barra de pestañas tampoco su hueco: en móvil el marco reservaba 64 px abajo y el
+   lector medía más que la pantalla, así que se podía arrastrar entero. */
 :global(html[data-immersive="true"]) .shell {
   display: block;
+  padding-bottom: 0;
 }
 
 :global(html[data-immersive="true"]) .sidebar,
