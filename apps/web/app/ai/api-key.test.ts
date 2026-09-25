@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { checkApiKey } from "./api-key";
+import { checkApiKey, normalizeApiKey } from "./api-key";
 
 describe("comprobación de credenciales antes de enviarlas", () => {
   it("rechaza un texto pegado por error en lugar de la clave", () => {
@@ -33,5 +33,30 @@ describe("comprobación de credenciales antes de enviarlas", () => {
 
     expect(check.error).toBeNull();
     expect(check.warning).toMatch(/sk-ant-/);
+  });
+});
+
+describe("limpieza de lo que se pega junto con la clave", () => {
+  const key = `sk-proj-${"a1B2_c3-".repeat(6)}`;
+
+  it("quita la cabecera, la variable, las comillas y los caracteres invisibles", () => {
+    expect(normalizeApiKey(`Bearer ${key}`)).toEqual({ key, removed: ["«Bearer»"] });
+    expect(normalizeApiKey(`Authorization: Bearer ${key}`).key).toBe(key);
+    expect(normalizeApiKey(`x-api-key: ${key}`).key).toBe(key);
+    expect(normalizeApiKey(`OPENAI_API_KEY="${key}"`)).toEqual({
+      key,
+      removed: ["el nombre de la variable", "las comillas"],
+    });
+    expect(normalizeApiKey(`export ANTHROPIC_API_KEY='${key}'`).key).toBe(key);
+    expect(normalizeApiKey(`"Bearer ${key}"`).key).toBe(key);
+    expect(normalizeApiKey(`​${key}﻿`)).toEqual({ key, removed: ["caracteres invisibles"] });
+  });
+
+  it("deja igual una clave limpia y no toca los espacios de en medio", () => {
+    expect(normalizeApiKey(`  ${key}\n`)).toEqual({ key, removed: [] });
+    // Un texto pegado por error sigue siendo texto: la comprobación lo rechaza igual.
+    const pegado = "Catálogo inteligente del espacio Autor, título canónico, año, género.";
+    expect(checkApiKey("openai", normalizeApiKey(pegado).key).error).toMatch(/espacios o saltos/);
+    expect(checkApiKey("openai", normalizeApiKey(`${key} Copiar`).key).error).toMatch(/espacios o saltos/);
   });
 });

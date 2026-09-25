@@ -760,7 +760,17 @@
   align-items: center;
   display: grid;
   gap: var(--pliegue-spacing-sm);
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+/* La clave se enmascara con CSS y no con `type="password"`, para que el gestor de contraseñas
+   no la rellene ni la guarde (ver ai-settings-panel.tsx). El texto de ayuda se sigue leyendo. */
+.aiSecretMasked {
+  -webkit-text-security: disc;
+}
+
+.aiSecretMasked::placeholder {
+  -webkit-text-security: none;
 }
 
 .aiSecretIssue {
