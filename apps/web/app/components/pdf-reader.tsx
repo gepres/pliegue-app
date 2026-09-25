@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Button } from "@pliegue/ui";
 
 import {
   canvasOutputScale,
@@ -23,12 +22,19 @@ import { reflowPage, toReflowItems } from "../library/pdf-reflow";
 import { describePdfFailure, openPdfDocument } from "../library/pdf-runtime";
 import type { StructuredDocumentBlock } from "../library/structured-document-extractor";
 import { ExtractedBlocks } from "./extracted-blocks";
+import { IconButton, Segmented } from "./app-ui/controls";
+import { Icon } from "./app-ui/icons";
+import { Popover } from "./app-ui/overlays";
+import type { OutlineItem } from "./reader/outline";
 import styles from "./pdf-reader.module.css";
 
 type PdfDocument = Awaited<ReturnType<typeof openPdfDocument>>["document"];
 
 /** Páginas cuyo tamaño se pide de una vez al abrir; evita miles de promesas simultáneas. */
 const sizeBatch = 16;
+
+/** Ancho máximo de página al ajustar: cómodo de leer sin mover la cabeza. */
+const comfortablePageWidth = 1040;
 
 /** Páginas que se recomponen de una tanda en el modo lectura. */
 const reflowBatch = 8;
@@ -71,9 +77,15 @@ export interface PdfReaderProps {
   /** Avance guardado, para retomar en la página que corresponda. */
   initialPercent?: number;
   onError?: (message: string) => void;
+  /** Marcadores del PDF, resueltos a número de página, para el índice del panel. */
+  onOutline?: (items: OutlineItem[]) => void;
+  /** Página que se está leyendo y total, para la barra del lector. */
+  onPageChange?: (page: number, pageCount: number) => void;
   /** Avance real, contado en páginas. Sustituye a la medición por desplazamiento. */
   onProgressChange?: (percent: number) => void;
   onReady?: () => void;
+  /** Petición de salto desde fuera (el índice); `nonce` permite repetir la misma página. */
+  pageRequest?: { nonce: number; page: number } | null;
   /** Cambia de valor para pedir la vuelta a la primera página. */
   restartSignal?: number;
   /** Solo salta a la posición guardada cuando el usuario lo ha pedido. */
@@ -110,6 +122,54 @@ async function readPageSizes(document: PdfDocument, signal: { cancelled: boolean
   }
 
   return sizes;
+}
+
+/** Número máximo de marcadores que se muestran: un índice de mil entradas no se lee. */
+const outlineLimit = 300;
+
+/**
+ * Marcadores del PDF aplanados en una lista con nivel. El destino de cada uno puede venir
+ * con nombre o como referencia a la página; los dos se resuelven a un número de página.
+ */
+async function readPdfOutline(document: PdfDocument): Promise<OutlineItem[]> {
+  type Node = { dest: unknown; items?: Node[]; title: string };
+  const outline = (await document.getOutline()) as Node[] | null;
+  if (!outline?.length) return [];
+
+  const items: OutlineItem[] = [];
+
+  async function resolvePage(dest: unknown): Promise<number | null> {
+    try {
+      const explicit = typeof dest === "string" ? await document.getDestination(dest) : dest;
+      if (!Array.isArray(explicit) || explicit.length === 0) return null;
+      const reference = explicit[0] as unknown;
+      if (typeof reference === "number") return reference + 1;
+      const index = await document.getPageIndex(reference as Parameters<PdfDocument["getPageIndex"]>[0]);
+      return index + 1;
+    } catch {
+      return null;
+    }
+  }
+
+  async function walk(nodes: Node[], level: number) {
+    for (const node of nodes) {
+      if (items.length >= outlineLimit) return;
+      const page = await resolvePage(node.dest);
+      if (page !== null) {
+        items.push({
+          id: `pdf-outline-${items.length}`,
+          label: node.title.trim() || `Página ${page}`,
+          level,
+          meta: String(page),
+          target: { kind: "page", page },
+        });
+      }
+      if (node.items?.length && level < 2) await walk(node.items, level + 1);
+    }
+  }
+
+  await walk(outline, 0);
+  return items;
 }
 
 function PdfPage({
@@ -389,8 +449,11 @@ export function PdfReader({
   blob,
   initialPercent = 0,
   onError,
+  onOutline,
+  onPageChange,
   onProgressChange,
   onReady,
+  pageRequest = null,
   restartSignal = 0,
   resumeRequested = false,
   title,
@@ -469,8 +532,10 @@ export function PdfReader({
 
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width ?? 0;
-      // Se descuenta el margen lateral para que la página no toque los bordes.
-      setAvailableWidth(Math.max(0, width - pageGap * 2));
+      // Se descuenta el margen lateral para que la página no toque los bordes, y se pone
+      // techo: a pantalla completa en un monitor ancho, «ajustar al ancho» llevaba la página
+      // al 235 % y cada renglón pedía mover la cabeza. Más allá, el zoom es manual.
+      setAvailableWidth(Math.min(comfortablePageWidth, Math.max(0, width - pageGap * 2)));
     });
 
     observer.observe(frame);
@@ -647,6 +712,46 @@ export function PdfReader({
     return () => window.cancelAnimationFrame(frame);
   }, [goToPage, restartSignal]);
 
+  // ---- Página en curso hacia fuera ------------------------------------------
+  const pageChangeRef = useRef(onPageChange);
+  useEffect(() => {
+    pageChangeRef.current = onPageChange;
+  }, [onPageChange]);
+
+  useEffect(() => {
+    if (pageCount > 0) pageChangeRef.current?.(currentPage, pageCount);
+  }, [currentPage, pageCount]);
+
+  // ---- Saltos pedidos desde el índice --------------------------------------
+  useEffect(() => {
+    if (!pageRequest || !documentReady) return;
+    goToPage(pageRequest.page);
+    // Solo el `nonce` dispara el salto: `goToPage` cambia con cada zoom y no debe repetirlo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageRequest?.nonce, documentReady]);
+
+  // ---- Marcadores del documento --------------------------------------------
+  const outlineRef = useRef(onOutline);
+  useEffect(() => {
+    outlineRef.current = onOutline;
+  }, [onOutline]);
+
+  const loadedDocument = state.status === "ready" ? state.document : null;
+  useEffect(() => {
+    if (!loadedDocument) return;
+    let cancelled = false;
+    void readPdfOutline(loadedDocument)
+      .then((items) => {
+        if (!cancelled) outlineRef.current?.(items);
+      })
+      .catch(() => {
+        if (!cancelled) outlineRef.current?.([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadedDocument]);
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.target !== event.currentTarget) return;
 
@@ -677,104 +782,10 @@ export function PdfReader({
 
   const zoomPercent = Math.round(scale * 100);
   const usingFit = manualScale === null;
+  const ready = state.status === "ready" && pageCount > 0;
 
   return (
     <div className={styles.reader}>
-      <div className={styles.toolbar}>
-        <div className={styles.group}>
-          <Button
-            aria-label="Página anterior"
-            disabled={currentPage <= 1}
-            onClick={() => stepPage(-1)}
-            size="sm"
-            variant="quiet"
-          >
-            ←
-          </Button>
-          <span aria-live="polite" className={styles.pageStatus}>
-            {state.status === "ready" && pageCount > 0 ? (
-              <>
-                <strong>{currentPage}</strong> / {pageCount}
-              </>
-            ) : (
-              "Cargando…"
-            )}
-          </span>
-          <Button
-            aria-label="Página siguiente"
-            disabled={pageCount === 0 || currentPage >= pageCount}
-            onClick={() => stepPage(1)}
-            size="sm"
-            variant="quiet"
-          >
-            →
-          </Button>
-        </div>
-
-        <div className={styles.group}>
-          {mode === "original" ? (
-            <>
-              <Button
-                aria-label="Reducir"
-                disabled={!sizes}
-                onClick={() =>
-                  setManualScale((current) => nextZoomStep(current ?? fitScale, "out"))
-                }
-                size="sm"
-                variant="quiet"
-              >
-                −
-              </Button>
-              <span className={styles.zoomStatus}>{zoomPercent} %</span>
-              <Button
-                aria-label="Ampliar"
-                disabled={!sizes}
-                onClick={() =>
-                  setManualScale((current) => nextZoomStep(current ?? fitScale, "in"))
-                }
-                size="sm"
-                variant="quiet"
-              >
-                +
-              </Button>
-              <Button
-                aria-pressed={usingFit}
-                disabled={!sizes || usingFit}
-                onClick={() => setManualScale(null)}
-                size="sm"
-                variant={usingFit ? "secondary" : "quiet"}
-              >
-                Ajustar ancho
-              </Button>
-            </>
-          ) : (
-            <span className={styles.modeHint}>Texto recompuesto</span>
-          )}
-
-          {/* Dos maneras de leer el mismo documento: fiel a la página o fiel al texto. */}
-          <div className={styles.modeSwitch} role="group" aria-label="Forma de leer">
-            <Button
-              aria-pressed={mode === "original"}
-              disabled={!sizes}
-              onClick={() => switchMode("original")}
-              size="sm"
-              variant={mode === "original" ? "secondary" : "quiet"}
-            >
-              Original
-            </Button>
-            <Button
-              aria-pressed={mode === "reading"}
-              disabled={!sizes}
-              onClick={() => switchMode("reading")}
-              size="sm"
-              variant={mode === "reading" ? "secondary" : "quiet"}
-            >
-              Lectura
-            </Button>
-          </div>
-        </div>
-      </div>
-
       <div className={styles.frame} ref={frameRef}>
         <div
           aria-label={`Páginas de ${title}`}
@@ -813,6 +824,178 @@ export function PdfReader({
           )}
         </div>
       </div>
+
+      {/* Dock inferior, como en los lectores nativos: el pulgar llega, y la parte de arriba
+          queda para el título. Se aparta junto con la barra superior al leer. */}
+      <div aria-label="Controles del documento" className={styles.dock} role="toolbar">
+        <div className={styles.scrubber}>
+          <input
+            aria-label="Desplazarse a una página"
+            aria-valuetext={`Página ${currentPage} de ${pageCount}`}
+            className={styles.scrubberInput}
+            disabled={!ready}
+            max={Math.max(1, pageCount)}
+            min={1}
+            onChange={(event) => goToPage(Number(event.target.value), "auto")}
+            step={1}
+            style={
+              {
+                "--scrub": pageCount > 1 ? (currentPage - 1) / (pageCount - 1) : 0,
+              } as React.CSSProperties
+            }
+            type="range"
+            value={currentPage}
+          />
+        </div>
+
+        <div className={styles.dockRow}>
+          <div className={styles.group}>
+            <IconButton
+              disabled={currentPage <= 1}
+              icon="chevronLeft"
+              label="Página anterior"
+              onClick={() => stepPage(-1)}
+              shortcut="←"
+              size="sm"
+            />
+            <PageField
+              currentPage={currentPage}
+              disabled={!ready}
+              onSubmit={(page) => goToPage(page)}
+              pageCount={pageCount}
+            />
+            <IconButton
+              disabled={!ready || currentPage >= pageCount}
+              icon="chevronRight"
+              label="Página siguiente"
+              onClick={() => stepPage(1)}
+              shortcut="→"
+              size="sm"
+            />
+          </div>
+
+          {/* Dos maneras de leer el mismo documento: fiel a la página o fiel al texto. */}
+          <Segmented<PdfViewMode>
+            label="Forma de leer"
+            onChange={(next) => {
+              if (sizes && next !== mode) switchMode(next);
+            }}
+            options={[
+              { label: "Original", value: "original" },
+              { label: "Lectura", value: "reading" },
+            ]}
+            size="sm"
+            value={mode}
+          />
+
+          <div className={styles.group}>
+            {mode === "original" ? (
+              <Popover
+                placement="above"
+                title="Zoom"
+                trigger={(props) => (
+                  <button
+                    {...props}
+                    aria-label={`Zoom: ${zoomPercent} %`}
+                    className={styles.zoomTrigger}
+                    disabled={!sizes}
+                    type="button"
+                  >
+                    {zoomPercent} %
+                    <Icon name="chevronDown" size={14} />
+                  </button>
+                )}
+                width={240}
+              >
+                <div className={styles.zoomPanel}>
+                  <div className={styles.zoomStepper}>
+                    <IconButton
+                      icon="minus"
+                      label="Reducir"
+                      onClick={() =>
+                        setManualScale((current) => nextZoomStep(current ?? fitScale, "out"))
+                      }
+                      size="sm"
+                    />
+                    <output>{zoomPercent} %</output>
+                    <IconButton
+                      icon="plus"
+                      label="Ampliar"
+                      onClick={() =>
+                        setManualScale((current) => nextZoomStep(current ?? fitScale, "in"))
+                      }
+                      size="sm"
+                    />
+                  </div>
+                  <button
+                    aria-pressed={usingFit}
+                    className={styles.zoomFit}
+                    disabled={usingFit}
+                    onClick={() => setManualScale(null)}
+                    type="button"
+                  >
+                    <Icon name="measure" size={16} />
+                    Ajustar al ancho
+                  </button>
+                </div>
+              </Popover>
+            ) : (
+              <span className={styles.modeHint}>Texto recompuesto</span>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
+  );
+}
+
+/**
+ * Número de página editable: escribir «37» e Intro lleva a la 37. En un documento largo,
+ * saltar así es más rápido que cualquier barra.
+ */
+function PageField({
+  currentPage,
+  disabled,
+  onSubmit,
+  pageCount,
+}: {
+  currentPage: number;
+  disabled: boolean;
+  onSubmit: (page: number) => void;
+  pageCount: number;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+
+  function commit() {
+    if (draft === null) return;
+    const page = Number.parseInt(draft, 10);
+    setDraft(null);
+    if (Number.isFinite(page)) onSubmit(Math.min(pageCount, Math.max(1, page)));
+  }
+
+  return (
+    <label className={styles.pageField}>
+      <span className={styles.visuallyHidden}>Página actual</span>
+      <input
+        disabled={disabled}
+        inputMode="numeric"
+        onBlur={commit}
+        onChange={(event) => setDraft(event.target.value.replace(/[^0-9]/g, ""))}
+        onFocus={(event) => event.target.select()}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commit();
+            event.currentTarget.blur();
+          } else if (event.key === "Escape") {
+            setDraft(null);
+            event.currentTarget.blur();
+          }
+        }}
+        size={Math.max(2, String(pageCount).length)}
+        value={draft ?? (disabled ? "–" : String(currentPage))}
+      />
+      <span aria-hidden="true">/ {pageCount || "–"}</span>
+    </label>
   );
 }

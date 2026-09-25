@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Button, Card, Field, Input, Select, Tag, buttonClassName } from "@pliegue/ui";
+import { Button, Card, Field, Select, Tag, buttonClassName, cx } from "@pliegue/ui";
 
 import { analyzeDocumentCatalogs } from "../ai/catalog-analysis";
 import { useAiSettings } from "../ai/ai-settings-store";
@@ -46,7 +46,15 @@ import {
 import { useLinkedFolders } from "../library/local-folder-store";
 import { clearReadingProgress } from "../library/reading-progress-store";
 import { CatalogImportPanel } from "./catalog-import-panel";
-import { DocumentCard } from "./workspace-page";
+import { Disclosure, Segmented, Toast } from "./app-ui/controls";
+import { Icon } from "./app-ui/icons";
+import { MenuItem, MenuSeparator, Popover, Sheet } from "./app-ui/overlays";
+import {
+  LibraryDocumentTile,
+  workTypeLabels,
+  type LibraryView,
+} from "./library/library-document-tile";
+import libraryStyles from "./library/library.module.css";
 import { LocalSourcesPanel } from "./local-sources-panel";
 import { StaleIndexNotice } from "./stale-index-notice";
 import styles from "../(workspace)/app/workspace.module.css";
@@ -87,18 +95,6 @@ function describeCatalogStatus(document: LibraryDocument) {
   return document.catalogStatus ? catalogStatusLabels[document.catalogStatus] : null;
 }
 
-const workTypeLabels: Record<DocumentWorkType, string> = {
-  article: "Artículo",
-  book: "Libro",
-  essay: "Ensayo",
-  image: "Imagen",
-  notes: "Notas",
-  other: "Otro",
-  presentation: "Presentación",
-  report: "Informe",
-  spreadsheet: "Hoja de cálculo",
-  thesis: "Tesis",
-};
 
 function describeCatalogSummary(summary: Awaited<ReturnType<typeof analyzeDocumentCatalogs>>) {
   return [
@@ -136,7 +132,10 @@ export function LibraryBrowser() {
   const [importing, setImporting] = useState(false);
   const [reindexing, setReindexing] = useState(false);
   const [linkingFiles, setLinkingFiles] = useState(false);
-  const [importStatus, setImportStatus] = useState(
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [view, setViewState] = useState<LibraryView>("grid");
+  const [toast, setToast] = useState<{ nonce: number; text: string } | null>(null);
+  const [importStatus, setImportStatusState] = useState(
     "Vincula un archivo: guardaremos su referencia, metadatos e índice; no el original.",
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -148,9 +147,45 @@ export function LibraryBrowser() {
   const importedCatalogs = useImportedCatalogs();
   const aiSettings = useAiSettings();
   const aiSecrets = useAiSessionSecrets();
-  const [catalogMessage, setCatalogMessage] = useState(
+  const [catalogMessage, setCatalogMessageState] = useState(
     "El catálogo IA es opcional. Actívalo en Ajustes o analiza un documento bajo demanda.",
   );
+
+  // El resultado de cada acción se anuncia como aviso efímero, y además queda escrito en la
+  // hoja de Fuentes para quien quiera volver a leerlo.
+  const notify = (text: string) =>
+    setToast((current) => ({ nonce: (current?.nonce ?? 0) + 1, text }));
+  const setImportStatus = (text: string) => {
+    setImportStatusState(text);
+    notify(text);
+  };
+  const setCatalogMessage = (text: string) => {
+    setCatalogMessageState(text);
+    notify(text);
+  };
+
+  // La vista elegida se recuerda en este navegador; se lee tras montar para que el HTML del
+  // servidor y el primer render del cliente coincidan.
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        const stored = window.localStorage.getItem("pliegue-library-view");
+        if (stored === "list" || stored === "grid") setViewState(stored);
+      } catch {
+        // Sin almacenamiento, la vista vuelve a cuadrícula en cada visita.
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  function setView(next: LibraryView) {
+    setViewState(next);
+    try {
+      window.localStorage.setItem("pliegue-library-view", next);
+    } catch {
+      // Ídem: la elección dura lo que la página.
+    }
+  }
   const baseDocuments = useMemo(
     () => [
       ...linkedFiles.documents,
@@ -206,11 +241,13 @@ export function LibraryBrowser() {
     let active = true;
     void analyzeDocumentCatalogs(baseDocuments, aiSettings)
       .then((summary) => {
-        if (active) setCatalogMessage(describeCatalogSummary(summary) || "El catálogo está al día.");
+        if (active) {
+          setCatalogMessageState(describeCatalogSummary(summary) || "El catálogo está al día.");
+        }
       })
       .catch((error: unknown) => {
         if (active) {
-          setCatalogMessage(
+          setCatalogMessageState(
             error instanceof Error ? error.message : "No fue posible iniciar el catálogo automático.",
           );
         }
@@ -360,46 +397,122 @@ export function LibraryBrowser() {
     }
   }
 
+  const activeFilters = [
+    origin !== "all" ? { key: "origin", label: `Origen: ${originLabels[origin]}`, clear: () => setOrigin("all") } : null,
+    format !== "all" ? { key: "format", label: `Formato: ${format.toUpperCase()}`, clear: () => setFormat("all") } : null,
+    availability !== "all"
+      ? { key: "availability", label: availabilityLabels[availability], clear: () => setAvailability("all") }
+      : null,
+    workType !== "all" ? { key: "workType", label: workTypeLabels[workType], clear: () => setWorkType("all") } : null,
+    author !== "all" ? { key: "author", label: author, clear: () => setAuthor("all") } : null,
+    genre !== "all" ? { key: "genre", label: genre, clear: () => setGenre("all") } : null,
+    publicationYear !== "all"
+      ? { key: "year", label: String(publicationYear), clear: () => setPublicationYear("all") }
+      : null,
+  ].filter((item): item is { clear: () => void; key: string; label: string } => item !== null);
+
+  function clearFilters() {
+    setOrigin("all");
+    setFormat("all");
+    setAvailability("all");
+    setWorkType("all");
+    setAuthor("all");
+    setGenre("all");
+    setPublicationYear("all");
+    setFavoritesOnly(false);
+  }
+
+  const libraryLoading =
+    importedLibrary.status !== "ready" ||
+    linkedFiles.status !== "ready" ||
+    linkedFolders.status !== "ready";
+
   return (
     <>
-      <Card
-        aria-labelledby="local-import-title"
-        as="section"
-        className={styles.localImportPanel}
-        id="importar-archivos"
-        tone="subtle"
-      >
+      {/* ---- Cabecera: título grande de app y las dos acciones que cuentan ---- */}
+      <header className={libraryStyles.header}>
         <div>
-          <Tag>Referencia local · sin copia</Tag>
-          <h2 id="local-import-title">Vincula archivos y conserva el original en su carpeta</h2>
+          <h1>Biblioteca</h1>
           <p>
-            Pliegue guarda un permiso seguro, metadatos y un índice textual limitado. El
-            archivo completo permanece en su ubicación y se vuelve a leer solo cuando lo
-            abres.
+            {allDocuments.length} documento{allDocuments.length === 1 ? "" : "s"} ·{" "}
+            {linkedFiles.documents.length + linkedFolders.documents.length} vinculados ·{" "}
+            {importedLibrary.documents.length} copias
           </p>
         </div>
-        <div className={styles.localImportActions}>
-          <Button
-            aria-describedby="linked-files-status"
-            disabled={linkingFiles}
-            onClick={() => void handleLinkedFiles()}
+        <div className={libraryStyles.headerActions}>
+          <button
+            aria-label="Fuentes"
+            className={libraryStyles.sourcesButton}
+            onClick={() => setSourcesOpen(true)}
+            type="button"
           >
-            {linkingFiles ? "Vinculando y analizando…" : "Vincular archivos"}
-          </Button>
-          <Button
-            disabled={importing || importedLibrary.status === "error"}
-            onClick={() => fileInputRef.current?.click()}
-            variant="quiet"
+            <Icon name="folder" size={18} />
+            <span>Fuentes</span>
+          </button>
+          <Popover
+            kind="menu"
+            title="Añadir a la Biblioteca"
+            trigger={(props) => (
+              <button {...props} className={libraryStyles.addButton} type="button">
+                <Icon name="plus" size={18} />
+                <span>Añadir</span>
+              </button>
+            )}
+            width={300}
           >
-            {importing ? "Importando copia…" : "Importar copia · compatibilidad"}
-          </Button>
-          <Button
-            disabled={reindexing || !importedLibrary.documents.length}
-            onClick={() => void handleReindex()}
-            variant="quiet"
-          >
-            {reindexing ? "Rehaciendo índice…" : "Actualizar índice local"}
-          </Button>
+            {(close) => (
+              <>
+                <MenuItem
+                  description="Guarda la referencia; el original se queda en su carpeta"
+                  disabled={linkingFiles}
+                  icon="link"
+                  label={linkingFiles ? "Vinculando…" : "Vincular archivos"}
+                  onSelect={() => {
+                    close();
+                    void handleLinkedFiles();
+                  }}
+                />
+                <MenuItem
+                  description="Sigue una carpeta y detecta cambios"
+                  icon="folder"
+                  label="Vincular carpeta…"
+                  onSelect={() => {
+                    close();
+                    setSourcesOpen(true);
+                  }}
+                />
+                <MenuItem
+                  description="Copia dentro del navegador, para navegadores sin vínculo"
+                  disabled={importing || importedLibrary.status === "error"}
+                  icon="download"
+                  label={importing ? "Importando…" : "Importar copia"}
+                  onSelect={() => {
+                    close();
+                    fileInputRef.current?.click();
+                  }}
+                />
+                <MenuSeparator />
+                <MenuItem
+                  description="Fichas desde una plantilla, Zotero o Dublin Core"
+                  icon="database"
+                  label="Importar índice JSON…"
+                  onSelect={() => {
+                    close();
+                    setSourcesOpen(true);
+                  }}
+                />
+                <MenuItem
+                  disabled={reindexing || !importedLibrary.documents.length}
+                  icon="refresh"
+                  label={reindexing ? "Rehaciendo índice…" : "Actualizar índice local"}
+                  onSelect={() => {
+                    close();
+                    void handleReindex();
+                  }}
+                />
+              </>
+            )}
+          </Popover>
           <input
             accept=".pdf,.epub,.docx,.pptx,.xlsx,.txt,.md,.png,.jpg,.jpeg"
             aria-label="Seleccionar archivos para importar"
@@ -409,202 +522,246 @@ export function LibraryBrowser() {
             ref={fileInputRef}
             type="file"
           />
-          <span>
-            {linkedFiles.documents.length} referencias · {importedLibrary.documents.length} copias
-          </span>
         </div>
-        <StaleIndexNotice documents={allDocuments} />
-        {linkedFiles.supported === false ? (
-          <div className={styles.capabilityNote} role="note">
-            <strong>La vinculación persistente no está disponible en esta ventana.</strong>
-            <p>
-              El botón sigue activo para que puedas reintentar. Abre Pliegue mediante HTTPS
-              o localhost en Chrome o Edge; nunca crearemos una copia automáticamente.
-            </p>
-          </div>
-        ) : null}
-        <p
-          aria-label="Estado de vinculación o importación"
-          aria-live="polite"
-          id="linked-files-status"
-          role="status"
-        >
-          {importedLibrary.error ?? importStatus}
-        </p>
-      </Card>
+      </header>
 
-      <LocalSourcesPanel />
+      <StaleIndexNotice documents={allDocuments} />
 
-      <CatalogImportPanel documents={allDocuments} />
-
-      <Card
-        aria-labelledby="drive-reference-title"
-        as="section"
-        className={styles.driveReferencePanel}
-        tone="subtle"
-      >
-        <div>
-          <Tag>Google Drive · referencia remota</Tag>
-          <h2 id="drive-reference-title">Conecta Drive sin duplicar sus archivos</h2>
+      {linkedFiles.supported === false ? (
+        <div className={styles.capabilityNote} role="note">
+          <strong>La vinculación persistente no está disponible en esta ventana.</strong>
           <p>
-            La capa documental ya contempla <code>fileId</code> y <code>driveId</code>. La
-            autorización OAuth y la renovación segura del acceso siguen pendientes antes de
-            habilitar esta fuente.
+            Abre Pliegue mediante HTTPS o localhost en Chrome o Edge; nunca crearemos una copia
+            automáticamente.
           </p>
         </div>
-        <div className={styles.driveReferenceActions}>
-          <Button disabled variant="quiet">
-            Conectar Google Drive
-          </Button>
-          <span>OAuth pendiente · Foundry 03.1</span>
-        </div>
-      </Card>
+      ) : null}
 
-      <form className={styles.toolbar} onSubmit={(event) => event.preventDefault()} role="search">
-        <Field
-          className={styles.librarySearch}
-          label="Buscar en la biblioteca"
-          labelFor="library-search"
-        >
-          <Input
+      {/* ---- Barra de búsqueda: buscar, filtrar y cambiar de vista ------------ */}
+      <form
+        className={libraryStyles.commandBar}
+        onSubmit={(event) => event.preventDefault()}
+        role="search"
+      >
+        <label className={libraryStyles.search}>
+          <Icon name="search" size={18} />
+          <span className={libraryStyles.visuallyHidden}>Buscar en la biblioteca</span>
+          <input
             id="library-search"
             name="q"
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Título, autor o concepto…"
+            placeholder="Buscar por título, autor o concepto"
             type="search"
             value={query}
           />
-        </Field>
-        <Field label="Origen" labelFor="library-origin">
-          <Select
-            id="library-origin"
-            onChange={(event) => setOrigin(event.target.value as DocumentOrigin | "all")}
-            value={origin}
-          >
-            <option value="all">Todo el espacio</option>
-            <option disabled value="drive">
-              Google Drive · aún no conectado
-            </option>
-            <option value="local">Archivos locales</option>
-          </Select>
-        </Field>
-        <Field label="Formato" labelFor="library-format">
-          <Select
-            id="library-format"
-            onChange={(event) => setFormat(event.target.value as DocumentFormat | "all")}
-            value={format}
-          >
-            <option value="all">Todos</option>
-            {documentFormats.map((item) => (
-              <option key={item} value={item}>
-                {item.toUpperCase()}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Disponibilidad" labelFor="library-availability">
-          <Select
-            id="library-availability"
-            onChange={(event) =>
-              setAvailability(event.target.value as AvailabilityState | "all")
-            }
-            value={availability}
-          >
-            <option value="all">Cualquier estado</option>
-            {availabilityStates.map((item) => (
-              <option key={item} value={item}>
-                {availabilityLabels[item]}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <label className={styles.favoriteFilter}>
-          <input
-            checked={favoritesOnly}
-            onChange={(event) => setFavoritesOnly(event.target.checked)}
-            type="checkbox"
-          />
-          Solo favoritos
         </label>
+
+        <Popover
+          align="end"
+          title="Filtros"
+          trigger={(props) => (
+            <button
+              {...props}
+              aria-label={
+                activeFilters.length ? `Filtros, ${activeFilters.length} activos` : "Filtros"
+              }
+              className={libraryStyles.filterButton}
+              type="button"
+            >
+              <Icon name="filter" size={18} />
+              <span>Filtros</span>
+              {activeFilters.length ? (
+                <span className={libraryStyles.filterCount}>{activeFilters.length}</span>
+              ) : null}
+            </button>
+          )}
+          width={520}
+        >
+          <div className={libraryStyles.filterPanel}>
+            <div className={libraryStyles.filterGroup}>
+              <span className={libraryStyles.filterGroupLabel}>Archivo</span>
+              <div className={libraryStyles.filterGrid}>
+                <Field label="Origen" labelFor="library-origin">
+                  <Select
+                    id="library-origin"
+                    onChange={(event) => setOrigin(event.target.value as DocumentOrigin | "all")}
+                    value={origin}
+                  >
+                    <option value="all">Todo el espacio</option>
+                    <option disabled value="drive">
+                      Google Drive · aún no conectado
+                    </option>
+                    <option value="local">Archivos locales</option>
+                  </Select>
+                </Field>
+                <Field label="Formato" labelFor="library-format">
+                  <Select
+                    id="library-format"
+                    onChange={(event) => setFormat(event.target.value as DocumentFormat | "all")}
+                    value={format}
+                  >
+                    <option value="all">Todos</option>
+                    {documentFormats.map((item) => (
+                      <option key={item} value={item}>
+                        {item.toUpperCase()}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Disponibilidad" labelFor="library-availability">
+                  <Select
+                    id="library-availability"
+                    onChange={(event) =>
+                      setAvailability(event.target.value as AvailabilityState | "all")
+                    }
+                    value={availability}
+                  >
+                    <option value="all">Cualquier estado</option>
+                    {availabilityStates.map((item) => (
+                      <option key={item} value={item}>
+                        {availabilityLabels[item]}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+            </div>
+
+            <div className={libraryStyles.filterGroup}>
+              <span className={libraryStyles.filterGroupLabel}>
+                Catálogo inteligente · {catalogedCount}/{allDocuments.length} con ficha
+              </span>
+              <div className={libraryStyles.filterGrid}>
+                <Field label="Tipo de obra" labelFor="library-work-type">
+                  <Select
+                    id="library-work-type"
+                    onChange={(event) =>
+                      setWorkType(event.target.value as DocumentWorkType | "all")
+                    }
+                    value={workType}
+                  >
+                    <option value="all">Todos los tipos</option>
+                    {documentWorkTypes.map((item) => (
+                      <option key={item} value={item}>
+                        {workTypeLabels[item]}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Autor" labelFor="library-author">
+                  <Select
+                    id="library-author"
+                    onChange={(event) => setAuthor(event.target.value)}
+                    value={author}
+                  >
+                    <option value="all">Todos los autores</option>
+                    {facets.authors.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Género" labelFor="library-genre">
+                  <Select
+                    id="library-genre"
+                    onChange={(event) => setGenre(event.target.value)}
+                    value={genre}
+                  >
+                    <option value="all">Todos los géneros</option>
+                    {facets.genres.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Año" labelFor="library-year">
+                  <Select
+                    id="library-year"
+                    onChange={(event) =>
+                      setPublicationYear(
+                        event.target.value === "all" ? "all" : Number(event.target.value),
+                      )
+                    }
+                    value={publicationYear}
+                  >
+                    <option value="all">Cualquier año</option>
+                    {facets.publicationYears.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+            </div>
+
+            <div className={libraryStyles.filterFooter}>
+              <button
+                className={libraryStyles.textButton}
+                disabled={!activeFilters.length && !favoritesOnly}
+                onClick={clearFilters}
+                type="button"
+              >
+                Limpiar filtros
+              </button>
+              <Link className={libraryStyles.textButton} href="/app/ajustes#ia">
+                Configurar proveedor IA
+              </Link>
+            </div>
+          </div>
+        </Popover>
+
+        <Segmented<LibraryView>
+          label="Vista"
+          onChange={setView}
+          options={[
+            { label: "Cuadrícula", preview: <Icon name="grid" size={18} />, value: "grid" },
+            { label: "Lista", preview: <Icon name="list" size={18} />, value: "list" },
+          ]}
+          value={view}
+        />
       </form>
 
-      <fieldset className={styles.catalogFilters}>
-        <legend>Filtros del catálogo inteligente</legend>
-        <Field label="Tipo de obra" labelFor="library-work-type">
-          <Select
-            id="library-work-type"
-            onChange={(event) => setWorkType(event.target.value as DocumentWorkType | "all")}
-            value={workType}
+      {/* ---- Atajos de filtro y filtros activos ----------------------------- */}
+      <div className={libraryStyles.chips}>
+        <button
+          aria-pressed={!favoritesOnly}
+          className={libraryStyles.chip}
+          onClick={() => setFavoritesOnly(false)}
+          type="button"
+        >
+          Todo
+        </button>
+        <button
+          aria-pressed={favoritesOnly}
+          className={libraryStyles.chip}
+          onClick={() => setFavoritesOnly(!favoritesOnly)}
+          type="button"
+        >
+          <Icon name="star" size={14} /> Favoritos
+        </button>
+        {activeFilters.map((filter) => (
+          <button
+            aria-label={`Quitar filtro ${filter.label}`}
+            className={cx(libraryStyles.chip, libraryStyles.chipActive)}
+            key={filter.key}
+            onClick={filter.clear}
+            type="button"
           >
-            <option value="all">Todos los tipos</option>
-            {documentWorkTypes.map((item) => (
-              <option key={item} value={item}>
-                {workTypeLabels[item]}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Autor" labelFor="library-author">
-          <Select
-            id="library-author"
-            onChange={(event) => setAuthor(event.target.value)}
-            value={author}
-          >
-            <option value="all">Todos los autores</option>
-            {facets.authors.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Género" labelFor="library-genre">
-          <Select
-            id="library-genre"
-            onChange={(event) => setGenre(event.target.value)}
-            value={genre}
-          >
-            <option value="all">Todos los géneros</option>
-            {facets.genres.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Año de publicación" labelFor="library-year">
-          <Select
-            id="library-year"
-            onChange={(event) =>
-              setPublicationYear(event.target.value === "all" ? "all" : Number(event.target.value))
-            }
-            value={publicationYear}
-          >
-            <option value="all">Cualquier año</option>
-            {facets.publicationYears.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <div className={styles.catalogFilterStatus}>
-          <Tag>IA · {catalogedCount}/{allDocuments.length}</Tag>
-          <Link href="/app/ajustes">Configurar proveedor</Link>
-        </div>
-      </fieldset>
-
-      <p aria-live="polite" className={styles.catalogMessage} role="status">
-        {catalogs.error ?? catalogMessage}
-      </p>
-
-      <div
-        aria-label="Cantidad de documentos filtrados"
-        aria-live="polite"
-        className={styles.filterSummary}
-        role="status"
-      >
-        {filteredDocuments.length} de {allDocuments.length} documentos
+            {filter.label}
+            <Icon name="close" size={13} />
+          </button>
+        ))}
+        <span
+          aria-label="Cantidad de documentos filtrados"
+          aria-live="polite"
+          className={libraryStyles.resultCount}
+          role="status"
+        >
+          {filteredDocuments.length} de {allDocuments.length}
+        </span>
       </div>
 
       {storageError ? (
@@ -613,154 +770,211 @@ export function LibraryBrowser() {
           <h2>No pudimos abrir la Biblioteca local</h2>
           <p>{storageError}</p>
         </Card>
-      ) : importedLibrary.status !== "ready" ||
-        linkedFiles.status !== "ready" ||
-        linkedFolders.status !== "ready" ? (
-        <Card as="section" className={styles.emptyState} tone="subtle">
-          <Tag>Preparando</Tag>
-          <h2>Recuperando la Biblioteca local…</h2>
-          <p>Leemos las copias y permisos guardados en este navegador.</p>
-        </Card>
+      ) : libraryLoading ? (
+        <section aria-busy="true" aria-label="Cargando documentos" className={libraryStyles.grid}>
+          {Array.from({ length: 6 }, (_, index) => (
+            <div className={libraryStyles.skeleton} key={index} />
+          ))}
+        </section>
       ) : filteredDocuments.length ? (
-        <section aria-label="Documentos de la biblioteca" className={styles.documentGrid}>
+        <section
+          aria-label="Documentos de la biblioteca"
+          className={view === "grid" ? libraryStyles.grid : libraryStyles.list}
+        >
           {filteredDocuments.map((document) => {
-            const isFavorite = favoriteIds.has(document.id);
             const isCopy = document.reference.kind === "local-copy";
             const isFileReference = document.reference.kind === "local-file";
 
             return (
-              <DocumentCard
-                eyebrow={`${document.format.toUpperCase()} · ${originLabels[document.origin]}`}
-                key={document.id}
-                title={document.catalog?.canonicalTitle ?? document.title}
-              >
-                <p>
-                  {document.catalog?.authors.length
-                    ? document.catalog.authors.join(", ")
-                    : document.author}
-                </p>
-                <p>{document.meta}</p>
-                {document.catalog?.summary ? (
-                  <p className={styles.catalogSummary}>{document.catalog.summary}</p>
-                ) : null}
-                {document.catalog ? (
-                  <div className={styles.catalogMetadata}>
-                    <Tag>{workTypeLabels[document.catalog.workType]}</Tag>
-                    {document.catalog.publicationYear ? (
-                      <Tag>{document.catalog.publicationYear}</Tag>
-                    ) : null}
-                    {document.catalog.genres.slice(0, 2).map((item) => (
-                      <Tag key={item}>{item}</Tag>
-                    ))}
-                    {document.catalog.language ? <Tag>{document.catalog.language}</Tag> : null}
-                  </div>
-                ) : null}
-                <div className={styles.documentMeta}>
-                  <Tag>{availabilityLabels[document.availability]}</Tag>
-                  {document.indexStatus ? <Tag>{indexLabels[document.indexStatus]}</Tag> : null}
-                  {describeCatalogStatus(document) ? (
-                    <Tag>{describeCatalogStatus(document)}</Tag>
-                  ) : null}
-                  <div className={styles.documentActions}>
-                    <Button
-                      aria-label={
-                        isFavorite
-                          ? `Quitar ${document.title} de favoritos`
-                          : `Guardar ${document.title} en favoritos`
+              <LibraryDocumentTile
+                actions={{
+                  ...(document.indexStatus === "indexed"
+                    ? {
+                        analyze: {
+                          disabled: !providerReady || document.catalogStatus === "analyzing",
+                          label:
+                            document.catalogStatus === "analyzing"
+                              ? "Analizando…"
+                              : document.catalogStatus === "analyzed"
+                                ? "Actualizar catálogo IA"
+                                : "Analizar con IA",
+                          onSelect: () => void analyzeOneDocument(document.id),
+                        },
                       }
-                      aria-pressed={isFavorite}
-                      onClick={() => toggleFavorite(document.id)}
-                      size="sm"
-                      variant="quiet"
-                    >
-                      {isFavorite ? "★ Favorito" : "☆ Guardar"}
-                    </Button>
-                    {document.indexStatus === "indexed" ? (
-                      <Button
-                        disabled={!providerReady || document.catalogStatus === "analyzing"}
-                        onClick={() => void analyzeOneDocument(document.id)}
-                        size="sm"
-                        variant="quiet"
-                      >
-                        {document.catalogStatus === "analyzing"
-                          ? "Analizando…"
-                          : document.catalogStatus === "analyzed"
-                            ? "Actualizar catálogo"
-                            : "Analizar con IA"}
-                      </Button>
-                    ) : null}
-                    {isCopy ? (
-                      <>
-                        <Link
-                          className={buttonClassName({ size: "sm", variant: "secondary" })}
-                          href={{ pathname: "/app/lector", query: { document: document.id } }}
-                        >
-                          Leer
-                        </Link>
-                        <Button
-                          onClick={() => void downloadCopy(document.id)}
-                          size="sm"
-                          variant="secondary"
-                        >
-                          Descargar copia
-                        </Button>
-                        <Button
-                          onClick={() => void removeCopy(document.id, document.title)}
-                          size="sm"
-                          variant="quiet"
-                        >
-                          Eliminar copia
-                        </Button>
-                      </>
-                    ) : document.linked ? (
-                      <>
-                        <Link
-                          className={buttonClassName({ size: "sm", variant: "secondary" })}
-                          href={{ pathname: "/app/lector", query: { document: document.id } }}
-                        >
-                          Ver en lector
-                        </Link>
-                        {isFileReference ? (
-                          <Button
-                            onClick={() => void removeFileReference(document.id, document.title)}
-                            size="sm"
-                            variant="quiet"
-                          >
-                            Quitar referencia
-                          </Button>
-                        ) : null}
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-              </DocumentCard>
+                    : {}),
+                  ...(isCopy ? { download: () => void downloadCopy(document.id) } : {}),
+                  ...(isCopy
+                    ? {
+                        remove: {
+                          label: "Eliminar copia",
+                          onSelect: () => void removeCopy(document.id, document.title),
+                        },
+                      }
+                    : isFileReference
+                      ? {
+                          remove: {
+                            label: "Quitar referencia",
+                            onSelect: () => void removeFileReference(document.id, document.title),
+                          },
+                        }
+                      : {}),
+                }}
+                availabilityLabel={availabilityLabels[document.availability]}
+                catalogStatusLabel={describeCatalogStatus(document)}
+                document={document}
+                indexLabel={document.indexStatus ? indexLabels[document.indexStatus] : null}
+                isFavorite={favoriteIds.has(document.id)}
+                key={document.id}
+                onToggleFavorite={() => toggleFavorite(document.id)}
+                originLabel={originLabels[document.origin]}
+                view={view}
+              />
             );
           })}
         </section>
       ) : allDocuments.length ? (
-        <Card as="section" className={styles.emptyState} tone="subtle">
-          <Tag>Sin resultados</Tag>
-          <h2>No encontramos documentos con esos filtros</h2>
-          <p>Prueba otro término o amplía el origen, formato y disponibilidad.</p>
-        </Card>
+        <div className={libraryStyles.empty}>
+          <Icon name="search" size={28} />
+          <h2>Nada coincide con esa búsqueda</h2>
+          <p>Prueba otro término o quita alguno de los filtros activos.</p>
+          <button className={libraryStyles.textButton} onClick={clearFilters} type="button">
+            Limpiar filtros
+          </button>
+        </div>
       ) : (
-        <Card as="section" className={styles.onboardingCard} tone="subtle">
-          <Tag>Biblioteca vacía</Tag>
-          <h2>Añade tu primer documento real</h2>
+        <div className={libraryStyles.empty}>
+          <Icon name="library" size={32} />
+          <h2>Tu biblioteca está vacía</h2>
           <p>
-            No hay datos de demostración. Vincula un archivo o una carpeta compatible para
-            conservar los originales en su ubicación. La copia queda disponible solo como
-            alternativa de compatibilidad.
+            Vincula un archivo o una carpeta: los originales se quedan donde están y Pliegue
+            solo guarda la referencia y un índice para buscar.
           </p>
-          <Button
-            aria-describedby="linked-files-status"
-            disabled={linkingFiles}
-            onClick={() => void handleLinkedFiles()}
-          >
-            {linkingFiles ? "Vinculando y analizando…" : "Vincular un archivo"}
-          </Button>
-        </Card>
+          <div className={libraryStyles.emptyActions}>
+            <Button disabled={linkingFiles} onClick={() => void handleLinkedFiles()}>
+              {linkingFiles ? "Vinculando…" : "Vincular archivos"}
+            </Button>
+            <Button onClick={() => setSourcesOpen(true)} variant="secondary">
+              Vincular carpeta
+            </Button>
+          </div>
+        </div>
       )}
+
+      {/* ---- Hoja de fuentes: todo lo que es gestionar y no leer -------------- */}
+      <Sheet
+        description="De dónde salen tus documentos y cómo se indexan. Nada se sube a ningún servidor."
+        onClose={() => setSourcesOpen(false)}
+        open={sourcesOpen}
+        title="Fuentes"
+        width={520}
+      >
+        <div className={cx(libraryStyles.sourcesBody, styles.sourcesBody)}>
+          <Disclosure
+            defaultOpen
+            icon="link"
+            meta={`${linkedFiles.documents.length} ref. · ${importedLibrary.documents.length} copias`}
+            summary="Referencias a archivos sueltos y copias de compatibilidad"
+            title="Archivos"
+          >
+            <p className={libraryStyles.sourceText}>
+              Pliegue guarda un permiso seguro, metadatos y un índice textual limitado. El archivo
+              completo permanece en su ubicación y se vuelve a leer solo cuando lo abres.
+            </p>
+            <div className={libraryStyles.sourceActions}>
+              <Button
+                aria-describedby="linked-files-status"
+                disabled={linkingFiles}
+                onClick={() => void handleLinkedFiles()}
+                size="sm"
+              >
+                {linkingFiles ? "Vinculando y analizando…" : "Vincular archivos"}
+              </Button>
+              <Button
+                disabled={importing || importedLibrary.status === "error"}
+                onClick={() => fileInputRef.current?.click()}
+                size="sm"
+                variant="secondary"
+              >
+                {importing ? "Importando copia…" : "Importar copia"}
+              </Button>
+              <Button
+                disabled={reindexing || !importedLibrary.documents.length}
+                onClick={() => void handleReindex()}
+                size="sm"
+                variant="quiet"
+              >
+                {reindexing ? "Rehaciendo índice…" : "Actualizar índice"}
+              </Button>
+            </div>
+            <p
+              aria-label="Estado de vinculación o importación"
+              aria-live="polite"
+              className={libraryStyles.sourceStatus}
+              id="linked-files-status"
+              role="status"
+            >
+              {importedLibrary.error ?? importStatus}
+            </p>
+          </Disclosure>
+
+          <Disclosure
+            icon="folder"
+            meta={`${linkedFolders.sources.length} carpeta${linkedFolders.sources.length === 1 ? "" : "s"}`}
+            summary="Carpetas vivas: detecta archivos nuevos o modificados"
+            title="Carpetas"
+          >
+            <LocalSourcesPanel />
+          </Disclosure>
+
+          <Disclosure
+            icon="database"
+            meta={`${importedCatalogs.records.length} fichas`}
+            summary="Crea o corrige fichas sin gastar IA"
+            title="Índice desde JSON"
+          >
+            <CatalogImportPanel documents={allDocuments} />
+          </Disclosure>
+
+          <Disclosure
+            icon="sparkles"
+            meta={`${catalogedCount}/${allDocuments.length}`}
+            summary="Fichas generadas por el proveedor que elijas"
+            title="Catálogo IA"
+          >
+            <p aria-live="polite" className={libraryStyles.sourceText} role="status">
+              {catalogs.error ?? catalogMessage}
+            </p>
+            <div className={libraryStyles.sourceActions}>
+              <Link
+                className={buttonClassName({ size: "sm", variant: "secondary" })}
+                href="/app/ajustes#ia"
+              >
+                Configurar proveedor
+              </Link>
+            </div>
+          </Disclosure>
+
+          <Disclosure
+            icon="cloud"
+            meta="Pendiente"
+            summary="Referencia remota, sin duplicar archivos"
+            title="Google Drive"
+          >
+            <p className={libraryStyles.sourceText}>
+              La capa documental ya contempla <code>fileId</code> y <code>driveId</code>. La
+              autorización OAuth y la renovación segura del acceso siguen pendientes antes de
+              habilitar esta fuente.
+            </p>
+            <div className={libraryStyles.sourceActions}>
+              <Button disabled size="sm" variant="secondary">
+                Conectar Google Drive
+              </Button>
+            </div>
+          </Disclosure>
+        </div>
+      </Sheet>
+
+      <Toast message={toast?.text ?? null} nonce={toast?.nonce ?? 0} />
     </>
   );
 }

@@ -1,0 +1,619 @@
+/* ==========================================================================
+   Piezas de interfaz con comportamiento de app: botones de icono, controles
+   segmentados, desplegables, popovers, hojas y avisos.
+   ========================================================================== */
+
+/* ---- Botón de icono -------------------------------------------------------- */
+
+.iconButton {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--pliegue-radius-sm);
+  color: var(--pliegue-color-text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 40px;
+  justify-content: center;
+  position: relative;
+  transition:
+    background-color var(--pliegue-motion-fast) ease,
+    transform var(--pliegue-motion-fast) ease;
+  width: 40px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.iconButtonSm {
+  height: 34px;
+  width: 34px;
+}
+
+@media (hover: hover) {
+  .iconButton:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--pliegue-color-text-primary) 8%, transparent);
+  }
+}
+
+.iconButton:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.iconButton:focus-visible {
+  outline: 3px solid var(--pliegue-color-accent-warm);
+  outline-offset: 1px;
+}
+
+.iconButtonFilled {
+  background: var(--pliegue-color-action-primary);
+  color: var(--pliegue-color-text-on-action);
+}
+
+.iconButtonFilled:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--pliegue-color-action-primary) 88%, black);
+}
+
+.iconButtonActive,
+.iconButton[aria-expanded="true"],
+.iconButton[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--pliegue-color-action-primary) 16%, transparent);
+  color: var(--pliegue-color-action-primary);
+}
+
+.badge {
+  background: var(--pliegue-color-accent-warm);
+  border-radius: var(--pliegue-radius-full);
+  color: var(--pliegue-ink-950);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.5625rem;
+  line-height: 16px;
+  min-width: 16px;
+  padding: 0 4px;
+  position: absolute;
+  right: 2px;
+  top: 2px;
+}
+
+/* Rótulo emergente: solo con puntero fino, donde existe el «pasar por encima». */
+@media (hover: hover) and (pointer: fine) {
+  .iconButton[data-tooltip]::after {
+    background: var(--pliegue-color-text-primary);
+    border-radius: var(--pliegue-radius-sm);
+    color: var(--pliegue-color-bg-canvas);
+    content: attr(data-tooltip);
+    font-family: var(--pliegue-font-ui);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    left: 50%;
+    opacity: 0;
+    padding: 4px 8px;
+    pointer-events: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    transform: translate(-50%, -2px);
+    transition:
+      opacity var(--pliegue-motion-fast) ease,
+      transform var(--pliegue-motion-fast) ease;
+    white-space: nowrap;
+    z-index: 80;
+  }
+
+  .iconButton[data-tooltip]:hover::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    transition-delay: 450ms;
+  }
+
+  .iconButton[aria-expanded="true"]::after {
+    display: none;
+  }
+}
+
+/* ---- Control segmentado ---------------------------------------------------- */
+
+.segmented {
+  background: var(--pliegue-color-bg-subtle);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  display: grid;
+  gap: 2px;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  padding: 3px;
+}
+
+.segment {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--pliegue-radius-md) - 3px);
+  color: var(--pliegue-color-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  gap: 6px;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 10px;
+  transition:
+    background-color var(--pliegue-motion-fast) ease,
+    color var(--pliegue-motion-fast) ease;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.segmentedSm .segment {
+  font-size: 0.75rem;
+  min-height: 30px;
+  padding: 0 8px;
+}
+
+.segment[aria-checked="true"] {
+  background: var(--pliegue-color-bg-surface);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+  color: var(--pliegue-color-text-primary);
+  font-weight: 600;
+}
+
+.segment:focus-visible {
+  outline: 2px solid var(--pliegue-color-accent-warm);
+  outline-offset: 1px;
+}
+
+/* ---- Desplegable ----------------------------------------------------------- */
+
+.disclosure {
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  overflow: clip;
+}
+
+.disclosure + .disclosure {
+  margin-top: var(--pliegue-spacing-sm);
+}
+
+.disclosureSummary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: var(--pliegue-spacing-sm);
+  list-style: none;
+  min-height: 60px;
+  padding: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.disclosureSummary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosureSummary:hover {
+  background: color-mix(in srgb, var(--pliegue-color-text-primary) 4%, transparent);
+}
+
+.disclosureSummary:focus-visible {
+  outline: 3px solid var(--pliegue-color-accent-warm);
+  outline-offset: -3px;
+}
+
+.disclosureIcon {
+  align-items: center;
+  background: var(--pliegue-color-bg-subtle);
+  border-radius: var(--pliegue-radius-sm);
+  color: var(--pliegue-color-action-primary);
+  display: inline-flex;
+  flex: 0 0 34px;
+  height: 34px;
+  justify-content: center;
+}
+
+.disclosureText {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+}
+
+.disclosureText strong {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.disclosureText small {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.disclosureMeta {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.disclosureChevron {
+  color: var(--pliegue-color-text-secondary);
+  flex: 0 0 auto;
+  transition: transform var(--pliegue-motion-base) ease;
+}
+
+.disclosure[open] .disclosureChevron {
+  transform: rotate(180deg);
+}
+
+.disclosure[open] > .disclosureSummary {
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+}
+
+.disclosureBody {
+  container-type: inline-size;
+  padding: var(--pliegue-spacing-md);
+}
+
+/* ---- Popover --------------------------------------------------------------- */
+
+.popoverAnchor {
+  display: inline-flex;
+  position: relative;
+}
+
+.popover {
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  box-shadow:
+    0 18px 48px rgb(0 0 0 / 18%),
+    0 2px 6px rgb(0 0 0 / 8%);
+  color: var(--pliegue-color-text-primary);
+  max-height: min(70vh, 640px);
+  overflow: auto;
+  padding: var(--pliegue-spacing-xs);
+  position: fixed;
+  right: var(--popover-right, auto);
+  top: var(--popover-top, auto);
+  width: min(var(--popover-width, 300px), calc(100vw - 24px));
+  z-index: 70;
+}
+
+.popover[data-open="true"] {
+  animation: popover-in var(--pliegue-motion-base) cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.popoverStart,
+.popoverCenter {
+  left: var(--popover-left, auto);
+}
+
+.popoverCenter {
+  translate: -50% 0;
+}
+
+.popoverAbove {
+  bottom: var(--popover-bottom, auto);
+}
+
+.popoverScrim {
+  display: none;
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+.menuItem {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--pliegue-radius-sm);
+  color: var(--pliegue-color-text-primary);
+  cursor: pointer;
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: 20px minmax(0, 1fr);
+  min-height: 42px;
+  padding: 6px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.menuItem:hover:not(:disabled),
+.menuItem:focus-visible {
+  background: var(--pliegue-color-bg-subtle);
+  outline: none;
+}
+
+.menuItem:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.menuItem svg {
+  color: var(--pliegue-color-text-secondary);
+}
+
+.menuItemDanger,
+.menuItemDanger svg {
+  color: var(--pliegue-color-status-danger);
+}
+
+.menuItemText {
+  display: grid;
+  font-size: 0.875rem;
+  gap: 1px;
+}
+
+.menuItemText small {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.6875rem;
+  line-height: 1.35;
+}
+
+.menuSeparator {
+  border: 0;
+  border-top: 1px solid var(--pliegue-color-border-default);
+  margin: 4px 6px;
+}
+
+/* ---- Hoja ------------------------------------------------------------------ */
+
+.sheetScrim {
+  background: rgb(15 14 12 / 38%);
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: fixed;
+  transition: opacity var(--pliegue-motion-base) ease;
+  z-index: 60;
+}
+
+.sheetScrim[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sheet {
+  background: var(--pliegue-color-bg-canvas);
+  border-left: 1px solid var(--pliegue-color-border-default);
+  bottom: 0;
+  box-shadow: -24px 0 60px rgb(0 0 0 / 14%);
+  display: flex;
+  flex-direction: column;
+  max-width: 100vw;
+  position: fixed;
+  right: 0;
+  top: 0;
+  transform: translateX(104%);
+  transition:
+    transform 320ms cubic-bezier(0.2, 0.9, 0.3, 1),
+    visibility 0s linear 320ms;
+  visibility: hidden;
+  width: var(--sheet-width, 420px);
+  z-index: 61;
+}
+
+.sheetStart {
+  border-left: 0;
+  border-right: 1px solid var(--pliegue-color-border-default);
+  left: 0;
+  right: auto;
+  transform: translateX(-104%);
+}
+
+.sheet[data-open="true"] {
+  transform: none;
+  transition:
+    transform 320ms cubic-bezier(0.2, 0.9, 0.3, 1),
+    visibility 0s;
+  visibility: visible;
+}
+
+.sheetGrip {
+  display: none;
+}
+
+.sheetHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--pliegue-spacing-sm);
+  justify-content: space-between;
+  padding: calc(var(--pliegue-spacing-md) + env(safe-area-inset-top)) var(--pliegue-spacing-md)
+    var(--pliegue-spacing-sm) var(--pliegue-spacing-lg);
+}
+
+.sheetHeader h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.625rem;
+  font-weight: 600;
+  line-height: 1.1;
+  margin: 4px 0 0;
+}
+
+.sheetHeader p {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  margin: 4px 0 0;
+}
+
+.sheetBody {
+  container-type: inline-size;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: var(--pliegue-spacing-xs) var(--pliegue-spacing-lg) var(--pliegue-spacing-lg);
+}
+
+.sheetFooter {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  padding: var(--pliegue-spacing-sm) var(--pliegue-spacing-lg)
+    calc(var(--pliegue-spacing-sm) + env(safe-area-inset-bottom));
+}
+
+/* ---- Aviso ----------------------------------------------------------------- */
+
+.toastRegion {
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  left: 0;
+  pointer-events: none;
+  position: fixed;
+  right: 0;
+  z-index: 90;
+}
+
+.toast {
+  align-items: center;
+  background: var(--pliegue-color-text-primary);
+  border-radius: var(--pliegue-radius-md);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 22%);
+  color: var(--pliegue-color-bg-canvas);
+  display: flex;
+  font-size: 0.8125rem;
+  gap: var(--pliegue-spacing-sm);
+  line-height: 1.4;
+  max-width: min(560px, calc(100vw - 32px));
+  opacity: 0;
+  padding: 10px 8px 10px 16px;
+  pointer-events: none;
+  transform: translateY(16px);
+  transition:
+    opacity var(--pliegue-motion-base) ease,
+    transform var(--pliegue-motion-base) cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.toast[data-visible="true"] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.toastClose {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--pliegue-radius-sm);
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 28px;
+  height: 28px;
+  justify-content: center;
+  opacity: 0.7;
+}
+
+/* Con la barra de pestañas abajo, el aviso sube por encima de ella. */
+@media (max-width: 800px) {
+  .toastRegion {
+    bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  :global(html[data-immersive="true"]) .toastRegion {
+    bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ---- Móvil: popovers y hojas suben desde abajo ------------------------------ */
+
+@media (max-width: 640px) {
+  .popover {
+    border-radius: var(--pliegue-radius-lg) var(--pliegue-radius-lg) 0 0;
+    bottom: 0;
+    left: 0;
+    max-height: 82vh;
+    padding: var(--pliegue-spacing-xs) var(--pliegue-spacing-sm)
+      calc(var(--pliegue-spacing-lg) + env(safe-area-inset-bottom));
+    position: fixed;
+    right: 0;
+    top: auto;
+    translate: none;
+    width: 100%;
+    z-index: 71;
+  }
+
+  .popover[data-open="true"] {
+    animation: sheet-up 280ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+
+  .popoverScrim {
+    background: rgb(15 14 12 / 38%);
+    display: block;
+    inset: 0;
+    position: fixed;
+    z-index: 70;
+  }
+
+  .sheetGrip {
+    background: var(--pliegue-color-border-default);
+    border-radius: var(--pliegue-radius-full);
+    display: block;
+    height: 5px;
+    margin: 8px auto 4px;
+    width: 40px;
+  }
+
+  .sheet {
+    border-left: 0;
+    border-radius: var(--pliegue-radius-lg) var(--pliegue-radius-lg) 0 0;
+    border-top: 1px solid var(--pliegue-color-border-default);
+    box-shadow: 0 -18px 50px rgb(0 0 0 / 18%);
+    left: 0;
+    max-height: 88dvh;
+    top: auto;
+    transform: translateY(104%);
+    width: 100%;
+  }
+
+  .sheetStart {
+    border-right: 0;
+  }
+
+  .sheetHeader {
+    padding-top: var(--pliegue-spacing-xs);
+  }
+
+  .sheetBody {
+    padding-left: var(--pliegue-spacing-md);
+    padding-right: var(--pliegue-spacing-md);
+  }
+}
+
+/* En escritorio una hoja no modal convive con la lectura: el velo solo aparece en móvil. */
+@media (min-width: 641px) {
+  .sheetScrimMobileOnly {
+    display: none;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popover[data-open="true"],
+  .sheet,
+  .sheet[data-open="true"],
+  .toast,
+  .iconButton,
+  .disclosureChevron {
+    animation: none;
+    transition: none;
+  }
+}

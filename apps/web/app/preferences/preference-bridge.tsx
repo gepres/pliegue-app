@@ -3,9 +3,11 @@
 import { useEffect } from "react";
 
 import { usePreferences } from "./preference-store";
+import { useReaderView } from "./reader-view-store";
 
 export function PreferenceBridge() {
   const { resolved } = usePreferences();
+  const { measure } = useReaderView();
 
   useEffect(() => {
     const root = document.documentElement;
@@ -18,6 +20,10 @@ export function PreferenceBridge() {
     root.dataset.readerScale = String(resolved.readerScale);
     root.lang = resolved.language === "auto" ? "es" : resolved.language;
   }, [resolved]);
+
+  useEffect(() => {
+    document.documentElement.dataset.readerMeasure = measure;
+  }, [measure]);
 
   return null;
 }

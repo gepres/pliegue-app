@@ -1093,3 +1093,43 @@
     width: 100%;
   }
 }
+
+/* ---- Paneles de fuentes dentro de la hoja de la Biblioteca ------------------
+   Los mismos componentes que antes eran tarjetas a todo el ancho viven ahora dentro
+   de un desplegable con su propio título: aquí pierden el marco, la etiqueta y el
+   titular repetidos, y se apilan en una sola columna. */
+
+.sourcesBody .localImportPanel,
+.sourcesBody .linkedFolderPanel {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+}
+
+.sourcesBody .localImportPanel > div:first-child > :global(.pliegue-tag),
+.sourcesBody .localImportPanel > div:first-child > h2,
+.sourcesBody .linkedFolderHeader > div:first-child > :global(.pliegue-tag),
+.sourcesBody .linkedFolderHeader > div:first-child > h2 {
+  display: none;
+}
+
+.sourcesBody .localImportPanel p,
+.sourcesBody .linkedFolderPanel p {
+  font-size: 0.8125rem;
+}
+
+.sourcesBody .linkedFolderHeader {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sourcesBody .linkedFolderActions,
+.sourcesBody .folderSourceControls {
+  justify-content: flex-start;
+}
+
+.sourcesBody .folderSourceItem {
+  grid-template-columns: minmax(0, 1fr);
+}

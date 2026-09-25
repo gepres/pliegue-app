@@ -5,6 +5,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button, Card, Tag, buttonClassName } from "@pliegue/ui";
 
+import { useImmersiveMode } from "../mode/immersive";
+import { IconButton } from "./app-ui/controls";
+import { Icon } from "./app-ui/icons";
+import { Popover, Sheet } from "./app-ui/overlays";
+import type { OutlineItem } from "./reader/outline";
+import { ReaderAppearance } from "./reader/reader-appearance";
+import { ReaderPanel } from "./reader/reader-panel";
+import { isTypingTarget, useFullscreen, useReaderChrome } from "./reader/use-reader-chrome";
+
 import {
   createLocalDocumentPreview,
   readerCountsItsOwnPages,
@@ -43,12 +52,6 @@ import styles from "./local-document-reader.module.css";
 
 type LocalDocument = LocalReaderDocument;
 
-const readerIndexLabels = {
-  error: "No disponible",
-  indexed: "Contenido indexado",
-  "metadata-only": "Solo metadatos",
-  pending: "Pendiente",
-} as const;
 
 type PreviewState =
   | { status: "loading" }
@@ -157,15 +160,23 @@ function StructuredPreview({
 function PreviewCanvas({
   document,
   initialPercent,
+  onKindChange,
+  onOutline,
+  onPageChange,
   onProgressChange,
   onReady,
+  pageRequest,
   restartSignal,
   resumeRequested,
 }: {
   document: LocalDocument;
   initialPercent: number;
+  onKindChange: (kind: LocalDocumentPreview["kind"] | null) => void;
+  onOutline: (items: OutlineItem[]) => void;
+  onPageChange: (page: number, pageCount: number) => void;
   onProgressChange: (percent: number) => void;
   onReady: () => void;
+  pageRequest: { nonce: number; page: number } | null;
   restartSignal: number;
   resumeRequested: boolean;
 }) {
@@ -213,6 +224,26 @@ function PreviewCanvas({
       active = false;
     };
   }, [attempt, documentId, format, onReady, referenceKind, sourceId]);
+
+  // El índice de los formatos que Pliegue compone sale de sus propias secciones; el del PDF
+  // lo aporta el visor al leer los marcadores del archivo.
+  const readyPreview = state.status === "ready" ? state.preview : null;
+  useEffect(() => {
+    onKindChange(readyPreview?.kind ?? null);
+    if (readyPreview?.kind === "structured") {
+      onOutline(
+        readyPreview.sections.map((section) => ({
+          id: section.id,
+          label: section.title,
+          level: 0,
+          meta: section.label,
+          target: { id: `extracted-${section.id}`, kind: "anchor" as const },
+        })),
+      );
+    } else if (readyPreview && readyPreview.kind !== "pdf") {
+      onOutline([]);
+    }
+  }, [onKindChange, onOutline, readyPreview]);
 
   function retryOpening() {
     setShowIndexedFallback(false);
@@ -302,7 +333,10 @@ function PreviewCanvas({
       <PdfReader
         blob={preview.blob}
         initialPercent={initialPercent}
+        onOutline={onOutline}
+        onPageChange={onPageChange}
         onProgressChange={onProgressChange}
+        pageRequest={pageRequest}
         restartSignal={restartSignal}
         resumeRequested={resumeRequested}
         title={document.title}
@@ -392,110 +426,6 @@ function PermissionPanel({
               : "El permiso solo se usa para leer los archivos que elegiste."}
       </p>
     </Card>
-  );
-}
-
-function ReaderDetails({
-  document,
-  onRestart,
-  progressPercent,
-}: {
-  document: LocalDocument;
-  onRestart: () => void;
-  progressPercent: number;
-}) {
-  const countsPages = readerCountsItsOwnPages(document.format);
-  const sourceLabel =
-    document.reference.kind === "local-file"
-      ? "Archivo original"
-      : document.reference.kind === "local-folder"
-        ? "Carpeta vinculada"
-        : "Copia de compatibilidad";
-  const storageLabel =
-    document.reference.kind === "local-copy"
-      ? "Blob en IndexedDB"
-      : "Handle seguro en IndexedDB";
-
-  const availabilityLabel =
-    document.reference.kind === "local-copy"
-      ? "Copia offline"
-      : document.availability === "available"
-        ? "Disponible"
-        : "Permiso requerido";
-
-  return (
-    <aside className={styles.documentDetails}>
-      {/* Un solo panel con secciones separadas por reglas, en lugar de tres tarjetas
-          apiladas: al leer, el documento es lo que manda y esto es su ficha, no tres
-          bloques compitiendo por atención. */}
-      <Card className={styles.detailsPanel}>
-        <section className={styles.detailsSection}>
-          <div className={styles.progressHead}>
-            <span className={styles.detailsLabel}>Progreso local</span>
-            <strong className={styles.progressValue}>{progressPercent} %</strong>
-          </div>
-          <div
-            aria-label={`Progreso de lectura: ${progressPercent} por ciento`}
-            aria-valuemax={100}
-            aria-valuemin={0}
-            aria-valuenow={progressPercent}
-            className={styles.readingProgressBar}
-            role="progressbar"
-          >
-            <div
-              className={styles.readingProgressValue}
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-          <p className={styles.detailsNote}>
-            {countsPages
-              ? "Cuenta las páginas que dejas atrás."
-              : "Se actualiza al desplazarte."}
-          </p>
-          {progressPercent > 0 ? (
-            <Button
-              className={styles.restartButton}
-              onClick={onRestart}
-              size="sm"
-              variant="quiet"
-            >
-              Volver al inicio
-            </Button>
-          ) : null}
-        </section>
-
-        <section className={styles.detailsSection}>
-          <span className={styles.detailsLabel}>{sourceLabel}</span>
-          <dl className={styles.detailsList}>
-            <div>
-              <dt>Formato</dt>
-              <dd>{document.format.toUpperCase()}</dd>
-            </div>
-            <div>
-              <dt>Disponibilidad</dt>
-              <dd>{availabilityLabel}</dd>
-            </div>
-            <div>
-              <dt>Índice</dt>
-              <dd>
-                {document.indexStatus
-                  ? readerIndexLabels[document.indexStatus]
-                  : "Desconocido"}
-              </dd>
-            </div>
-            <div>
-              <dt>Origen</dt>
-              <dd>{storageLabel}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <p className={styles.privacyNote}>
-          <Tag>Local-only</Tag>
-          El documento se abre dentro del navegador y no sale de tu dispositivo.
-        </p>
-      </Card>
-    </aside>
   );
 }
 
@@ -644,8 +574,18 @@ function LocalReaderShell({
   // desplazamiento. `null` es lo que distingue un caso del otro.
   const [reportedPercent, setReportedPercent] = useState<number | null>(null);
   const [restartSignal, setRestartSignal] = useState(0);
+  const [outline, setOutline] = useState<OutlineItem[]>([]);
+  const [pages, setPages] = useState<{ current: number; total: number } | null>(null);
+  const [pageRequest, setPageRequest] = useState<{ nonce: number; page: number } | null>(null);
+  const [previewKind, setPreviewKind] = useState<LocalDocumentPreview["kind"] | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
   const previewRef = useRef<HTMLElement>(null);
   const markContentReady = useCallback(() => setContentReady(true), []);
+  const reportPage = useCallback(
+    (current: number, total: number) => setPages({ current, total }),
+    [],
+  );
   const { progressPercent, restart } = useDocumentProgress(
     document,
     contentReady,
@@ -653,6 +593,12 @@ function LocalReaderShell({
     previewRef,
     reportedPercent,
   );
+  const selfScrolling = readerCountsItsOwnPages(document.format);
+  const position = useScrollPosition(previewRef, contentReady && !selfScrolling);
+  const chrome = useReaderChrome(appearanceOpen);
+  const fullscreen = useFullscreen();
+
+  useImmersiveMode(true);
 
   const restartReading = useCallback(() => {
     restart();
@@ -660,48 +606,213 @@ function LocalReaderShell({
     setRestartSignal((signal) => signal + 1);
   }, [restart]);
 
+  const goToOutlineItem = useCallback((item: OutlineItem) => {
+    if (item.target.kind === "page") {
+      const page = item.target.page;
+      setPageRequest((current) => ({ nonce: (current?.nonce ?? 0) + 1, page }));
+    } else {
+      window.document
+        .getElementById(item.target.id)
+        ?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+    }
+    // En pantallas estrechas el panel tapa el texto: se cierra al elegir un destino.
+    if (window.matchMedia("(max-width: 1100px)").matches) setPanelOpen(false);
+  }, []);
+
+  // ---- Atajos de teclado ---------------------------------------------------
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (isTypingTarget(event.target)) return;
+      const key = event.key.toLowerCase();
+      if (key === "i") {
+        event.preventDefault();
+        setPanelOpen((open) => !open);
+      } else if (key === "a") {
+        event.preventDefault();
+        setAppearanceOpen((open) => !open);
+      } else if (key === "f" && fullscreen.supported) {
+        event.preventDefault();
+        fullscreen.toggle();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [fullscreen]);
+
+  const pageLabel = pages ? `Página ${pages.current} de ${pages.total}` : null;
+
   return (
-    <>
-      <PageHeader
-        actions={
-          <Link
-            className={buttonClassName({ size: "sm", variant: "secondary" })}
-            href="/app/biblioteca"
-          >
-            ← Biblioteca
-          </Link>
-        }
-        compact
-        description={document.meta}
-        eyebrow={`${document.format.toUpperCase()} · Local-only`}
-        title={document.title}
-      />
-      <div className={styles.localReaderLayout}>
-        <main className={styles.previewArea} ref={previewRef}>
-          {permissionRequired && requestPermission ? (
-            <PermissionPanel
-              onRequestPermission={requestPermission}
-              sourceName={sourceName ?? "el origen"}
-            />
-          ) : (
-            <PreviewCanvas
-              document={document}
-              initialPercent={progressPercent}
-              onProgressChange={setReportedPercent}
-              onReady={markContentReady}
-              restartSignal={restartSignal}
-              resumeRequested={resumeRequested}
-            />
-          )}
-        </main>
-        <ReaderDetails
-          document={document}
-          onRestart={restartReading}
-          progressPercent={progressPercent}
-        />
+    <div
+      className={styles.readerApp}
+      data-chrome={chrome.hidden ? "hidden" : "visible"}
+      data-panel={panelOpen ? "open" : "closed"}
+      data-self-scrolling={selfScrolling ? "true" : "false"}
+    >
+      <div aria-hidden="true" className={styles.progressLine}>
+        <span style={{ transform: `scaleX(${(selfScrolling ? progressPercent : position) / 100})` }} />
       </div>
-    </>
+
+      <header className={styles.appBar} onFocus={chrome.show}>
+        <Link
+          aria-label="Volver a la Biblioteca"
+          className={styles.appBarBack}
+          href="/app/biblioteca"
+        >
+          <Icon name="back" />
+          <span>Biblioteca</span>
+        </Link>
+
+        <div className={styles.appBarTitle}>
+          <h1 title={document.title}>{document.title}</h1>
+          <p>
+            <span>{document.format.toUpperCase()}</span>
+            {pageLabel ? <span>{pageLabel}</span> : null}
+            <span>{progressPercent} % leído</span>
+          </p>
+        </div>
+
+        <div className={styles.appBarActions}>
+          <Popover
+            onOpenChange={setAppearanceOpen}
+            open={appearanceOpen}
+            title="Apariencia de lectura"
+            trigger={(props) => (
+              <IconButton {...props} icon="typography" label="Apariencia" shortcut="A" />
+            )}
+            width={340}
+          >
+            {(close) => <ReaderAppearance onDone={close} />}
+          </Popover>
+          <IconButton
+            aria-controls="reader-panel"
+            aria-pressed={panelOpen}
+            icon="panel"
+            label="Índice y detalles"
+            onClick={() => setPanelOpen((open) => !open)}
+            shortcut="I"
+          />
+          {fullscreen.supported ? (
+            <IconButton
+              aria-pressed={fullscreen.active}
+              className={styles.hideOnSmall}
+              icon={fullscreen.active ? "shrink" : "expand"}
+              label={fullscreen.active ? "Salir de pantalla completa" : "Pantalla completa"}
+              onClick={fullscreen.toggle}
+              shortcut="F"
+            />
+          ) : null}
+        </div>
+      </header>
+
+      <main
+        className={styles.stage}
+        id="reader-stage"
+        onPointerUp={chrome.onStagePointerUp}
+        ref={previewRef}
+      >
+        {permissionRequired && requestPermission ? (
+          <PermissionPanel
+            onRequestPermission={requestPermission}
+            sourceName={sourceName ?? "el origen"}
+          />
+        ) : (
+          <PreviewCanvas
+            document={document}
+            initialPercent={progressPercent}
+            onKindChange={setPreviewKind}
+            onOutline={setOutline}
+            onPageChange={reportPage}
+            onProgressChange={setReportedPercent}
+            onReady={markContentReady}
+            pageRequest={pageRequest}
+            restartSignal={restartSignal}
+            resumeRequested={resumeRequested}
+          />
+        )}
+      </main>
+
+      {!selfScrolling && contentReady ? (
+        <div aria-label="Avance del documento" className={styles.textDock} role="toolbar">
+          <input
+            aria-label="Posición en el documento"
+            aria-valuetext={`${position} %`}
+            className={styles.textScrubber}
+            max={100}
+            min={0}
+            onChange={(event) => {
+              const root = previewRef.current;
+              if (root) scrollToReadingPosition(root, Number(event.target.value), "auto");
+            }}
+            style={{ "--scrub": position / 100 } as React.CSSProperties}
+            type="range"
+            value={position}
+          />
+          <span className={styles.textDockValue}>{position} %</span>
+        </div>
+      ) : null}
+
+      <div data-reader-chrome-ignore="" id="reader-panel">
+        <Sheet
+          description={document.meta}
+          modal={false}
+          onClose={() => setPanelOpen(false)}
+          open={panelOpen}
+          title={document.title}
+          width={360}
+        >
+          <ReaderPanel
+            document={document}
+            onNavigate={goToOutlineItem}
+            onRestart={restartReading}
+            outline={outline}
+            pages={pages}
+            previewKind={previewKind}
+            progressPercent={progressPercent}
+          />
+        </Sheet>
+      </div>
+    </div>
   );
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * Posición actual —no el máximo alcanzado— para la barra de avance y la línea superior.
+ * El progreso que se guarda solo crece; la posición sube y baja con la lectura.
+ */
+function useScrollPosition(rootRef: React.RefObject<HTMLElement | null>, active: boolean) {
+  const [position, setPosition] = useState(0);
+
+  useEffect(() => {
+    if (!active) return;
+    let frame = 0;
+    function measure() {
+      frame = 0;
+      const root = rootRef.current;
+      if (!root) return;
+      const rootTop = window.scrollY + root.getBoundingClientRect().top;
+      const readable = Math.max(root.offsetHeight - window.innerHeight * 0.35, 1);
+      const cursor = window.scrollY + window.innerHeight * 0.65;
+      setPosition(Math.min(100, Math.max(0, Math.round(((cursor - rootTop) / readable) * 100))));
+    }
+    function schedule() {
+      if (!frame) frame = window.requestAnimationFrame(measure);
+    }
+    schedule();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+    };
+  }, [active, rootRef]);
+
+  return position;
 }
 
 function ReaderMessage({

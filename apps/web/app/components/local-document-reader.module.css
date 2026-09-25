@@ -1,11 +1,264 @@
-.localReaderLayout {
-  display: grid;
-  gap: var(--pliegue-spacing-lg);
-  grid-template-columns: minmax(0, 1fr) 244px;
+/* ==========================================================================
+   Lector a pantalla completa
+   Con un documento abierto el marco de la aplicación se retira y el lector trae
+   su propia barra (arriba) y su barra de avance (abajo). Las dos se apartan al
+   leer y vuelven al buscarlas: ver `useReaderChrome`.
+   ========================================================================== */
+
+.readerApp {
+  --reader-bar-height: 56px;
+  --reader-panel-width: 360px;
+
+  background: var(--pliegue-color-bg-canvas);
+  min-height: 100dvh;
 }
 
-.previewArea {
+.readerApp[data-self-scrolling="true"] {
+  background: var(--pliegue-color-bg-subtle);
+}
+
+/* Hilo de progreso: siempre visible, incluso con las barras escondidas. */
+.progressLine {
+  height: 3px;
+  left: 0;
+  pointer-events: none;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 32;
+}
+
+.progressLine span {
+  background: var(--pliegue-color-accent-warm);
+  display: block;
+  height: 100%;
+  transform-origin: left;
+  transition: transform 160ms linear;
+}
+
+.appBar {
+  align-items: center;
+  backdrop-filter: saturate(1.4) blur(20px);
+  background: color-mix(in srgb, var(--pliegue-color-bg-canvas) 84%, transparent);
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  display: flex;
+  gap: var(--pliegue-spacing-sm);
+  left: 0;
+  min-height: var(--reader-bar-height);
+  padding: env(safe-area-inset-top) var(--pliegue-spacing-sm) 0;
+  position: fixed;
+  right: 0;
+  top: 0;
+  transition:
+    transform 300ms cubic-bezier(0.2, 0.9, 0.3, 1),
+    opacity var(--pliegue-motion-base) ease;
+  user-select: none;
+  z-index: 30;
+}
+
+.readerApp[data-chrome="hidden"] .appBar {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-100%);
+}
+
+.appBarBack {
+  align-items: center;
+  border-radius: var(--pliegue-radius-sm);
+  color: var(--pliegue-color-action-primary);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.875rem;
+  font-weight: 600;
+  gap: 2px;
+  min-height: 40px;
+  padding: 0 10px 0 4px;
+  text-decoration: none;
+}
+
+.appBarBack:hover {
+  background: color-mix(in srgb, var(--pliegue-color-text-primary) 6%, transparent);
+}
+
+.appBarBack:focus-visible {
+  outline: 3px solid var(--pliegue-color-accent-warm);
+}
+
+.appBarTitle {
+  flex: 1 1 auto;
   min-width: 0;
+  text-align: center;
+}
+
+.appBarTitle h1 {
+  font-family: var(--pliegue-font-ui);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appBarTitle p {
+  color: var(--pliegue-color-text-secondary);
+  display: flex;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  gap: 10px;
+  justify-content: center;
+  letter-spacing: 0.04em;
+  margin: 2px 0 0;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.appBarActions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+/* ---- Escenario ------------------------------------------------------------- */
+
+.stage {
+  margin: 0 auto;
+  max-width: calc(var(--pliegue-reader-measure, 66ch) + 14rem);
+  padding: calc(var(--reader-bar-height) + env(safe-area-inset-top) + var(--pliegue-spacing-lg))
+    clamp(0rem, 3vw, 2rem) calc(120px + env(safe-area-inset-bottom));
+  transition: padding var(--pliegue-motion-base) ease;
+}
+
+/* El PDF trae su propio desplazamiento y sus márgenes: el escenario solo le da la pantalla. */
+.readerApp[data-self-scrolling="true"] .stage {
+  max-width: none;
+  padding: 0;
+}
+
+/* En pantallas anchas, el panel abierto no tapa el texto ni la barra: los desplaza. */
+@media (min-width: 1100px) {
+  .readerApp {
+    transition: padding-right 320ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+
+  .readerApp[data-panel="open"] {
+    padding-right: var(--reader-panel-width);
+  }
+
+  .readerApp[data-panel="open"] .appBar,
+  .readerApp[data-panel="open"] .progressLine {
+    right: var(--reader-panel-width);
+  }
+
+  .readerApp[data-panel="open"] .textDock {
+    left: calc(50% - var(--reader-panel-width) / 2);
+  }
+}
+
+/* ---- Barra de avance de los formatos que no son PDF ------------------------ */
+
+.textDock {
+  align-items: center;
+  backdrop-filter: saturate(1.4) blur(20px);
+  background: color-mix(in srgb, var(--pliegue-color-bg-surface) 88%, transparent);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: 18px;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  box-shadow: 0 16px 40px rgb(0 0 0 / 14%);
+  display: flex;
+  gap: var(--pliegue-spacing-sm);
+  left: 50%;
+  padding: 8px 16px;
+  position: fixed;
+  transform: translateX(-50%);
+  transition:
+    opacity var(--pliegue-motion-base) ease,
+    transform 300ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  width: min(520px, calc(100% - 24px));
+  z-index: 30;
+}
+
+.readerApp[data-chrome="hidden"] .textDock {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, calc(100% + 24px));
+}
+
+.textScrubber {
+  appearance: none;
+  background: linear-gradient(
+    to right,
+    var(--pliegue-color-action-primary) calc(var(--scrub, 0) * 100%),
+    color-mix(in srgb, var(--pliegue-color-text-primary) 14%, transparent)
+      calc(var(--scrub, 0) * 100%)
+  );
+  border-radius: var(--pliegue-radius-full);
+  cursor: pointer;
+  flex: 1 1 auto;
+  height: 4px;
+}
+
+.textScrubber::-webkit-slider-thumb {
+  appearance: none;
+  background: var(--pliegue-color-bg-surface);
+  border: 2px solid var(--pliegue-color-action-primary);
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 25%);
+  height: 16px;
+  width: 16px;
+}
+
+.textScrubber::-moz-range-thumb {
+  background: var(--pliegue-color-bg-surface);
+  border: 2px solid var(--pliegue-color-action-primary);
+  border-radius: 50%;
+  height: 14px;
+  width: 14px;
+}
+
+.textScrubber:focus-visible {
+  outline: 3px solid var(--pliegue-color-accent-warm);
+  outline-offset: 6px;
+}
+
+.textDockValue {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 3.25rem;
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .appBarBack span,
+  .hideOnSmall {
+    display: none;
+  }
+
+  .appBarTitle {
+    text-align: left;
+  }
+
+  .appBarTitle p {
+    justify-content: flex-start;
+  }
+
+  .stage {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .appBar,
+  .textDock,
+  .stage,
+  .progressLine span {
+    transition: none;
+  }
 }
 
 .readerStatus,
@@ -144,7 +397,7 @@
   font-size: var(--pliegue-reader-font-size);
   line-height: var(--pliegue-reader-line-height);
   margin: var(--pliegue-spacing-xl) auto 0;
-  max-width: 72ch;
+  max-width: var(--pliegue-reader-measure, 66ch);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
@@ -213,141 +466,6 @@
   margin: 0;
 }
 
-/* ---- Panel del documento -------------------------------------------------- */
-
-.documentDetails {
-  align-self: start;
-  min-width: 0;
-  position: sticky;
-  top: 96px;
-}
-
-.detailsPanel {
-  display: grid;
-  gap: 0;
-  padding: 0;
-}
-
-.detailsSection {
-  display: grid;
-  gap: var(--pliegue-spacing-xs);
-  padding: var(--pliegue-spacing-md);
-}
-
-.detailsSection + .detailsSection {
-  border-top: 1px solid var(--pliegue-color-border-default);
-}
-
-.detailsLabel {
-  color: var(--pliegue-color-text-secondary);
-  font-family: var(--pliegue-font-data);
-  font-size: 0.625rem;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.progressHead {
-  align-items: baseline;
-  display: flex;
-  gap: var(--pliegue-spacing-sm);
-  justify-content: space-between;
-}
-
-.progressValue {
-  font-family: var(--pliegue-font-brand);
-  font-size: 1.5rem;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  line-height: 1;
-}
-
-.detailsNote {
-  color: var(--pliegue-color-text-secondary);
-  font-size: 0.75rem;
-  line-height: 1.45;
-  margin: 0;
-}
-
-.restartButton {
-  justify-self: start;
-  margin-top: var(--pliegue-spacing-2xs);
-}
-
-/* Pares etiqueta/valor en dos columnas: la ficha cabe de un vistazo en lugar de estirarse
-   por todo el alto de la pantalla. */
-.detailsList {
-  display: grid;
-  gap: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: var(--pliegue-spacing-2xs) 0 0;
-}
-
-.detailsList div {
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-}
-
-.detailsList dt {
-  color: var(--pliegue-color-text-secondary);
-  font-family: var(--pliegue-font-data);
-  font-size: 0.5625rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.detailsList dd {
-  font-size: 0.75rem;
-  line-height: 1.35;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.privacyNote {
-  align-items: center;
-  border-top: 1px solid var(--pliegue-color-border-default);
-  color: var(--pliegue-color-text-secondary);
-  display: flex;
-  flex-wrap: wrap;
-  font-size: 0.6875rem;
-  gap: var(--pliegue-spacing-xs);
-  line-height: 1.45;
-  margin: 0;
-  padding: var(--pliegue-spacing-md);
-}
-
-.readingProgressBar {
-  background: var(--pliegue-color-bg-subtle);
-  border: 1px solid var(--pliegue-color-border-default);
-  border-radius: var(--pliegue-radius-full);
-  height: 8px;
-  margin: var(--pliegue-spacing-2xs) 0 0;
-  overflow: hidden;
-}
-
-.readingProgressValue {
-  background: var(--pliegue-color-action-primary);
-  height: 100%;
-  min-width: 0;
-  transition: width 180ms ease-out;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .readingProgressValue {
-    transition: none;
-  }
-}
-
-@media (max-width: 960px) {
-  .localReaderLayout {
-    grid-template-columns: 1fr;
-  }
-
-  .documentDetails {
-    position: static;
-  }
-}
-
 @media (max-width: 640px) {
   .unsupportedPreview dl {
     grid-template-columns: 1fr;
@@ -378,7 +496,10 @@
 
   .textPreview {
     background-image: none;
-    padding: var(--pliegue-spacing-lg);
+    border-left: 0;
+    border-radius: 0;
+    border-right: 0;
+    padding: var(--pliegue-spacing-lg) var(--pliegue-spacing-md);
   }
 
   .structuredPreview {

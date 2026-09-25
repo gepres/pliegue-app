@@ -4,11 +4,11 @@
  * la página de un documento, y ahí cada píxel que se le quite se nota al leer.
  */
 export const navigationItems = [
-  { code: "IN", href: "/app", label: "Inicio" },
-  { code: "BI", href: "/app/biblioteca", label: "Biblioteca" },
-  { code: "LE", href: "/app/lector", label: "Lector", wide: true },
-  { code: "IA", href: "/app/ia", label: "IA" },
-  { code: "AJ", href: "/app/ajustes", label: "Ajustes" },
+  { code: "IN", href: "/app", icon: "home", label: "Inicio" },
+  { code: "BI", href: "/app/biblioteca", icon: "library", label: "Biblioteca" },
+  { code: "LE", href: "/app/lector", icon: "book", label: "Lector", wide: true },
+  { code: "IA", href: "/app/ia", icon: "sparkles", label: "IA" },
+  { code: "AJ", href: "/app/ajustes", icon: "settings", label: "Ajustes" },
 ] as const;
 
 export function isNavigationItemActive(pathname: string, href: string) {

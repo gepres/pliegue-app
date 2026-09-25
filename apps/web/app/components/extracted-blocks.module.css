@@ -20,7 +20,7 @@
 .blocks h3,
 .blocks h4,
 .blocks p {
-  max-width: 66ch;
+  max-width: var(--pliegue-reader-measure, 66ch);
 }
 
 .blocks h3,

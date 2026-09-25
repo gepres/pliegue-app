@@ -20,6 +20,15 @@ body {
   --pliegue-reader-font-family: var(--pliegue-font-reading);
   --pliegue-reader-font-size: 1.125rem;
   --pliegue-reader-line-height: 1.75;
+  --pliegue-reader-measure: 66ch;
+}
+
+[data-reader-measure="narrow"] {
+  --pliegue-reader-measure: 56ch;
+}
+
+[data-reader-measure="wide"] {
+  --pliegue-reader-measure: 80ch;
 }
 
 [data-reader-font="sans"] {
@@ -51,6 +60,14 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+/* Comportamiento de app: sin destello gris al tocar ni rebote que arrastre la página
+   entera por detrás de las barras fijas. */
+html {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+  text-size-adjust: 100%;
 }
 
 a {

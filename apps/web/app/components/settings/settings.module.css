@@ -1,0 +1,228 @@
+.layout {
+  display: grid;
+  gap: var(--pliegue-spacing-lg) var(--pliegue-spacing-xl);
+  grid-template-areas:
+    "header header"
+    "nav detail";
+  grid-template-columns: 280px minmax(0, 1fr);
+  margin-top: var(--pliegue-spacing-xs);
+}
+
+.header {
+  grid-area: header;
+}
+
+.header h1 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin: 0;
+}
+
+.header p {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  margin: 8px 0 0;
+}
+
+/* ---- Lista de categorías -------------------------------------------------- */
+
+.nav {
+  align-self: start;
+  grid-area: nav;
+  position: sticky;
+  top: 72px;
+}
+
+.nav ul {
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  list-style: none;
+  margin: 0;
+  overflow: hidden;
+  padding: 4px;
+}
+
+.navItem {
+  align-items: center;
+  border-radius: var(--pliegue-radius-sm);
+  color: var(--pliegue-color-text-primary);
+  display: flex;
+  gap: var(--pliegue-spacing-sm);
+  min-height: 56px;
+  padding: 8px 10px;
+  text-decoration: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.navItem:hover {
+  background: var(--pliegue-color-bg-subtle);
+}
+
+.navItem[aria-current="page"] {
+  background: color-mix(in srgb, var(--pliegue-color-action-primary) 14%, transparent);
+}
+
+.navItem:focus-visible {
+  outline: 3px solid var(--pliegue-color-accent-warm);
+  outline-offset: -3px;
+}
+
+.navIcon {
+  align-items: center;
+  background: var(--pliegue-color-action-primary);
+  border-radius: 8px;
+  color: var(--pliegue-color-text-on-action);
+  display: inline-flex;
+  flex: 0 0 32px;
+  height: 32px;
+  justify-content: center;
+}
+
+.navText {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 1px;
+  min-width: 0;
+}
+
+.navText strong {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.navText small {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navChevron {
+  color: var(--pliegue-color-text-secondary);
+  display: none;
+  flex: 0 0 auto;
+}
+
+/* ---- Detalle -------------------------------------------------------------- */
+
+.detail {
+  grid-area: detail;
+  min-width: 0;
+}
+
+.panel {
+  container-type: inline-size;
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+.panelHeader h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.panelHeader p {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  margin: 4px 0 0;
+}
+
+.back {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--pliegue-color-action-primary);
+  cursor: pointer;
+  display: none;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  gap: 2px;
+  margin: 0 0 var(--pliegue-spacing-sm) -6px;
+  min-height: 40px;
+  padding: 0 6px 0 0;
+}
+
+.back:focus-visible {
+  outline: 3px solid var(--pliegue-color-accent-warm);
+}
+
+/* ---- Teléfono: lista → detalle ------------------------------------------- */
+
+@media (max-width: 800px) {
+  .layout {
+    grid-template-areas:
+      "header"
+      "nav"
+      "detail";
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nav {
+    position: static;
+  }
+
+  .navItem {
+    border-radius: 0;
+    min-height: 60px;
+  }
+
+  .nav li + li .navItem {
+    border-top: 1px solid var(--pliegue-color-border-default);
+  }
+
+  .navItem[aria-current="page"] {
+    background: transparent;
+  }
+
+  .navChevron {
+    display: block;
+  }
+
+  .layout[data-detail="closed"] .detail {
+    display: none;
+  }
+
+  .layout[data-detail="open"] {
+    grid-template-areas: "detail";
+  }
+
+  .layout[data-detail="open"] .header,
+  .layout[data-detail="open"] .nav {
+    display: none;
+  }
+
+  .layout[data-detail="open"] .detail {
+    animation: push-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+
+  .back {
+    display: inline-flex;
+  }
+}
+
+@keyframes push-in {
+  from {
+    opacity: 0.4;
+    transform: translateX(24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout[data-detail="open"] .detail {
+    animation: none;
+  }
+}

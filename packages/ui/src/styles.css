@@ -12,6 +12,7 @@
   letter-spacing: 0.01em;
   min-height: 44px;
   text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
   transition:
     background-color var(--pliegue-motion-fast) ease,
     border-color var(--pliegue-motion-fast) ease,
@@ -44,8 +45,21 @@
   color: var(--pliegue-color-text-secondary);
 }
 
-.pliegue-button:hover:not(:disabled) {
-  transform: translateY(-1px);
+/* Respuesta de app al pulsar —se hunde un poco— en lugar del salto hacia arriba de una
+   web al pasar el ratón, que en pantallas táctiles se quedaba «pegado» tras el toque. */
+.pliegue-button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) {
+  .pliegue-button--primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--pliegue-color-action-primary) 88%, black);
+  }
+
+  .pliegue-button--secondary:hover:not(:disabled),
+  .pliegue-button--quiet:hover:not(:disabled) {
+    background: var(--pliegue-color-bg-subtle);
+  }
 }
 
 .pliegue-button:disabled {

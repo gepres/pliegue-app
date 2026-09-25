@@ -3,24 +3,27 @@
   display: flex;
   gap: var(--pliegue-spacing-xl);
   justify-content: space-between;
-  margin-bottom: clamp(2rem, 5vw, 4rem);
+  margin-bottom: var(--pliegue-spacing-lg);
 }
 
 /* El lector usa esta cabecera con el título y la ruta del documento abierto, así que
    arrastra el mismo riesgo de desbordamiento que la tarjeta, agravado por el tamaño. */
 .pageHeader h1 {
   font-family: var(--pliegue-font-brand);
-  font-size: clamp(2.75rem, 7vw, 5.5rem);
+  /* Título grande de app, no titular de portada: ubica sin empujar el contenido fuera
+     de la primera pantalla. */
+  font-size: clamp(2rem, 4vw, 2.75rem);
   font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 0.95;
-  margin: var(--pliegue-spacing-md) 0;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin: var(--pliegue-spacing-xs) 0 var(--pliegue-spacing-xs);
   overflow-wrap: anywhere;
 }
 
 .pageHeader p {
   color: var(--pliegue-color-text-secondary);
-  line-height: 1.55;
+  font-size: 0.875rem;
+  line-height: 1.5;
   margin: 0;
   max-width: 42rem;
   overflow-wrap: anywhere;

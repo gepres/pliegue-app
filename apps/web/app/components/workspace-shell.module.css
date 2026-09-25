@@ -1,78 +1,49 @@
+/**
+ * Marco de la aplicación.
+ *
+ * Se comporta como el de una app de escritorio o móvil y no como el de una página web:
+ * barras finas, iconos, nada de titulares de portada en el marco, pestañas abajo en el
+ * teléfono y márgenes seguros para muescas y barras del sistema.
+ */
 .shell {
+  --shell-sidebar: 232px;
+  --shell-topbar: 56px;
+
   background: var(--pliegue-color-bg-canvas);
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
-  min-height: 100vh;
+  grid-template-columns: var(--shell-sidebar) minmax(0, 1fr);
+  min-height: 100dvh;
   transition: grid-template-columns var(--pliegue-motion-base) ease;
 }
 
 /**
- * Plegada, la navegación no desaparece: se reduce a un carril con los códigos de sección.
- * Esconderla del todo devolvería sesenta píxeles más y a cambio dejaría al lector sin forma
- * de salir del documento salvo el botón de volver.
+ * Plegada, la navegación no desaparece: se reduce a un carril de iconos. Esconderla del
+ * todo devolvería sesenta píxeles más y dejaría sin salida a quien no conoce el atajo.
  */
 .shellCollapsed {
-  grid-template-columns: 68px minmax(0, 1fr);
+  --shell-sidebar: 68px;
 }
+
+/* ---- Barra lateral --------------------------------------------------------- */
 
 .sidebar {
   background: var(--pliegue-color-bg-surface);
   border-right: 1px solid var(--pliegue-color-border-default);
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100dvh;
   overflow: hidden;
-  padding: var(--pliegue-spacing-lg);
+  padding: var(--pliegue-spacing-sm);
   position: sticky;
   top: 0;
+  user-select: none;
 }
 
-.shellCollapsed .sidebar {
-  align-items: center;
-  padding: var(--pliegue-spacing-lg) var(--pliegue-spacing-xs);
-}
-
-.shellCollapsed .brandName,
-.shellCollapsed .areaText,
-.shellCollapsed .navigationLabel,
-.shellCollapsed .sidebarNote {
-  display: none;
-}
-
-.shellCollapsed .areaIdentity {
-  border: 0;
-  margin: var(--pliegue-spacing-lg) 0;
-  padding: 0;
-}
-
-.shellCollapsed .desktopNavigation {
-  align-self: stretch;
-}
-
-.shellCollapsed .navigationLink {
-  gap: 0;
-  justify-content: center;
-  padding: 0;
-}
-
-.shellCollapsed .sidebarFooter {
-  align-self: stretch;
-  text-align: center;
-}
-
-.navigationToggle {
-  display: inline-flex;
-  flex: 0 0 auto;
-  font-family: var(--pliegue-font-data);
-}
-
-/* El control y la ruta viajan juntos por la izquierda: separarlos con `space-between`
-   empujaba la ruta al centro de la barra, lejos de la sección que nombra. */
-.topbarStart {
+.sidebarHead {
   align-items: center;
   display: flex;
-  gap: var(--pliegue-spacing-sm);
-  min-width: 0;
+  min-height: 44px;
+  padding: 0 var(--pliegue-spacing-xs);
 }
 
 .brand,
@@ -85,7 +56,7 @@
 
 .brand {
   font-family: var(--pliegue-font-brand);
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   font-weight: 600;
   gap: var(--pliegue-spacing-sm);
   width: fit-content;
@@ -95,51 +66,14 @@
 .mobileBrand:focus-visible,
 .navigationLink:focus-visible {
   outline: 3px solid var(--pliegue-color-accent-warm);
-  outline-offset: 3px;
-}
-
-.areaIdentity {
-  align-items: center;
-  border: 1px solid var(--pliegue-color-border-default);
-  border-radius: var(--pliegue-radius-md);
-  display: flex;
-  gap: var(--pliegue-spacing-sm);
-  margin: var(--pliegue-spacing-xl) 0;
-  padding: var(--pliegue-spacing-sm);
-}
-
-.areaMark {
-  align-items: center;
-  background: var(--pliegue-color-action-primary);
-  border-radius: var(--pliegue-radius-sm);
-  color: var(--pliegue-color-text-on-action);
-  display: inline-flex;
-  flex: 0 0 36px;
-  font-family: var(--pliegue-font-data);
-  font-size: 0.6875rem;
-  height: 36px;
-  justify-content: center;
-}
-
-.areaIdentity div {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.areaIdentity strong {
-  font-size: 0.8125rem;
-}
-
-.areaIdentity small {
-  color: var(--pliegue-color-text-secondary);
-  font-size: 0.6875rem;
+  outline-offset: 2px;
 }
 
 .desktopNavigation {
   display: flex;
   flex-direction: column;
-  gap: var(--pliegue-spacing-xs);
+  gap: 2px;
+  margin-top: var(--pliegue-spacing-lg);
 }
 
 .navigationLink {
@@ -150,56 +84,103 @@
   font-size: 0.875rem;
   font-weight: 500;
   gap: var(--pliegue-spacing-sm);
-  min-height: 44px;
+  min-height: 40px;
   padding: 0 var(--pliegue-spacing-sm);
+  position: relative;
   text-decoration: none;
   transition:
     background-color var(--pliegue-motion-fast) ease,
     color var(--pliegue-motion-fast) ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .navigationLink:hover {
-  background: var(--pliegue-color-bg-subtle);
+  background: color-mix(in srgb, var(--pliegue-color-text-primary) 6%, transparent);
   color: var(--pliegue-color-text-primary);
 }
 
 .navigationLink[aria-current="page"] {
-  background: var(--pliegue-color-bg-subtle);
+  background: color-mix(in srgb, var(--pliegue-color-action-primary) 14%, transparent);
   color: var(--pliegue-color-text-primary);
   font-weight: 600;
 }
 
-.navigationCode {
-  align-items: center;
-  border: 1px solid var(--pliegue-color-border-default);
-  border-radius: var(--pliegue-radius-sm);
-  display: inline-flex;
-  flex: 0 0 30px;
-  font-family: var(--pliegue-font-data);
-  font-size: 0.625rem;
-  height: 30px;
-  justify-content: center;
-  letter-spacing: 0.04em;
+.navigationLink[aria-current="page"] .navigationIcon {
+  color: var(--pliegue-color-action-primary);
 }
 
-.navigationLink[aria-current="page"] .navigationCode {
-  background: var(--pliegue-color-action-primary);
-  border-color: var(--pliegue-color-action-primary);
-  color: var(--pliegue-color-text-on-action);
+.navigationIcon {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 24px;
+  justify-content: center;
 }
 
 .sidebarFooter {
+  align-items: center;
   border-top: 1px solid var(--pliegue-color-border-default);
+  display: flex;
+  gap: var(--pliegue-spacing-xs);
+  justify-content: space-between;
   margin-top: auto;
-  padding-top: var(--pliegue-spacing-lg);
+  padding-top: var(--pliegue-spacing-sm);
 }
 
-.sidebarFooter p {
+.areaIdentity {
+  align-items: center;
+  display: flex;
+  gap: var(--pliegue-spacing-sm);
+  min-width: 0;
+  padding-left: var(--pliegue-spacing-xs);
+}
+
+.areaDot {
+  background: var(--pliegue-color-action-primary);
+  border-radius: var(--pliegue-radius-full);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--pliegue-color-action-primary) 18%, transparent);
+  flex: 0 0 8px;
+  height: 8px;
+}
+
+.areaText {
+  display: grid;
+  min-width: 0;
+}
+
+.areaText strong {
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.areaText small {
   color: var(--pliegue-color-text-secondary);
   font-size: 0.6875rem;
-  line-height: 1.5;
-  margin: var(--pliegue-spacing-sm) 0 0;
+  white-space: nowrap;
 }
+
+/* Plegada: solo iconos, centrados en el carril. */
+.shellCollapsed .brandName,
+.shellCollapsed .areaText,
+.shellCollapsed .navigationLabel {
+  display: none;
+}
+
+.shellCollapsed .sidebarHead,
+.shellCollapsed .navigationLink {
+  justify-content: center;
+  padding: 0;
+}
+
+.shellCollapsed .sidebarFooter {
+  flex-direction: column;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.shellCollapsed .areaIdentity {
+  padding: 0;
+}
+
+/* ---- Columna de contenido -------------------------------------------------- */
 
 .contentColumn {
   min-width: 0;
@@ -207,128 +188,162 @@
 
 .topbar {
   align-items: center;
-  backdrop-filter: blur(18px);
-  background: color-mix(in srgb, var(--pliegue-color-bg-canvas) 88%, transparent);
-  border-bottom: 1px solid var(--pliegue-color-border-default);
+  backdrop-filter: saturate(1.4) blur(18px);
+  background: color-mix(in srgb, var(--pliegue-color-bg-canvas) 82%, transparent);
+  border-bottom: 1px solid transparent;
   display: flex;
-  gap: var(--pliegue-spacing-md);
-  justify-content: space-between;
-  min-height: 72px;
-  padding: 0 clamp(1rem, 4vw, 3rem);
+  gap: var(--pliegue-spacing-sm);
+  min-height: var(--shell-topbar);
+  padding: env(safe-area-inset-top) clamp(1rem, 3vw, 2rem) 0;
   position: sticky;
   top: 0;
-  z-index: 10;
+  transition: border-color var(--pliegue-motion-base) ease;
+  user-select: none;
+  z-index: 20;
+}
+
+.topbar[data-scrolled="true"] {
+  border-bottom-color: var(--pliegue-color-border-default);
 }
 
 .mobileBrand {
   display: none;
 }
 
-.breadcrumb {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.breadcrumb span {
-  color: var(--pliegue-color-text-secondary);
-  font-size: 0.6875rem;
-}
-
-.breadcrumb strong {
-  font-family: var(--pliegue-font-brand);
-  font-size: 1.25rem;
+.topbarTitle {
+  font-size: 0.9375rem;
   font-weight: 600;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--pliegue-motion-base) ease,
+    transform var(--pliegue-motion-base) ease;
+}
+
+.topbar[data-scrolled="true"] .topbarTitle {
+  opacity: 1;
+  transform: none;
+}
+
+.topbarActions {
+  align-items: center;
+  display: flex;
+  gap: var(--pliegue-spacing-2xs);
+  margin-left: auto;
 }
 
 .content {
   margin: 0 auto;
-  max-width: 1280px;
-  padding: clamp(2rem, 5vw, 4rem) clamp(1rem, 4vw, 3rem) 5rem;
+  max-width: 1240px;
+  padding: var(--pliegue-spacing-sm) clamp(1rem, 3vw, 2rem) 4rem;
 }
 
 /**
- * Sin tope de ancho ni margen superior de portada: es lo que hace que plegar la navegación
- * se traduzca en documento y no en márgenes más anchos. Con el tope de 1280 px, esconder la
- * barra devolvía ciento ochenta píxeles al fondo de la página en vez de a la página leída.
+ * Sin tope de ancho: es lo que hace que plegar la navegación se traduzca en documento y no
+ * en márgenes más anchos.
  */
 .contentWide {
   max-width: none;
-  padding-bottom: 3rem;
-  padding-top: clamp(1.25rem, 2.5vw, 2rem);
+  padding-bottom: 2rem;
 }
 
 .mobileNavigation {
   display: none;
 }
 
+/* ---- Modo inmersivo: con un documento abierto el marco se retira ---------- */
+
+:global(html[data-immersive="true"]) .shell {
+  display: block;
+}
+
+:global(html[data-immersive="true"]) .sidebar,
+:global(html[data-immersive="true"]) .topbar,
+:global(html[data-immersive="true"]) .mobileNavigation {
+  display: none;
+}
+
+:global(html[data-immersive="true"]) .content {
+  max-width: none;
+  padding: 0;
+}
+
+/* ---- Móvil ----------------------------------------------------------------- */
+
 @media (max-width: 800px) {
   .shell,
   .shellCollapsed {
     display: block;
-    padding-bottom: 76px;
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
   }
 
   .sidebar {
     display: none;
   }
 
-  /* Sin barra lateral que plegar, el control sobra: la navegación vive abajo. */
-  .navigationToggle {
-    display: none;
-  }
-
   .topbar {
-    min-height: 64px;
+    min-height: 52px;
   }
 
   .mobileBrand {
     display: inline-flex;
   }
 
-  .topbarStart {
-    margin-right: auto;
-  }
-
-  .breadcrumb span {
-    display: none;
-  }
-
   .content {
-    padding-top: var(--pliegue-spacing-xl);
+    padding-top: var(--pliegue-spacing-xs);
   }
 
   .mobileNavigation {
-    background: var(--pliegue-color-bg-surface);
+    backdrop-filter: saturate(1.4) blur(18px);
+    background: color-mix(in srgb, var(--pliegue-color-bg-surface) 86%, transparent);
     border-top: 1px solid var(--pliegue-color-border-default);
     bottom: 0;
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     left: 0;
-    padding: var(--pliegue-spacing-xs);
+    padding: 4px 4px env(safe-area-inset-bottom);
     position: fixed;
     right: 0;
+    user-select: none;
     z-index: 20;
   }
 
   .navigationLinkCompact {
+    background: transparent;
     flex-direction: column;
     font-size: 0.625rem;
-    gap: 2px;
+    gap: 3px;
     justify-content: center;
-    min-height: 58px;
+    min-height: 56px;
     padding: 0;
   }
 
-  .navigationLinkCompact .navigationCode {
-    border: 0;
-    height: 26px;
+  .navigationLinkCompact:hover,
+  .navigationLinkCompact[aria-current="page"] {
+    background: transparent;
+  }
+
+  /* La pestaña activa se marca con una píldora tras el icono, al estilo de las apps. */
+  .navigationLinkCompact .navigationIcon {
+    border-radius: var(--pliegue-radius-full);
+    height: 30px;
+    transition: background-color var(--pliegue-motion-fast) ease;
+    width: 54px;
+  }
+
+  .navigationLinkCompact[aria-current="page"] .navigationIcon {
+    background: color-mix(in srgb, var(--pliegue-color-action-primary) 18%, transparent);
+  }
+
+  .navigationLinkCompact:active .navigationIcon {
+    transform: scale(0.92);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .navigationLink,
-  .shell {
+  .shell,
+  .topbarTitle {
     transition: none;
   }
 }
