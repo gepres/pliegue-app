@@ -1,11 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button, Card, Tag, buttonClassName } from "@pliegue/ui";
 
+import { useDocumentCatalogs } from "../ai/document-catalog-store";
+import {
+  clearDocumentAnnotations,
+  currentAnnotation,
+  deleteAnnotation,
+  saveAnnotation,
+  useDocumentAnnotations,
+} from "../library/annotation-store";
+import {
+  annotationQuote,
+  annotationsToMarkdown,
+  type AnnotationTarget,
+  type HighlightColor,
+  type NormalizedRect,
+  type ReaderAnnotation,
+} from "../library/annotations";
+import { applyImportedCatalogs } from "../library/catalog-import";
+import { applyDocumentCatalogs } from "../library/documents";
+import { useImportedCatalogs } from "../library/imported-catalog-store";
 import { useImmersiveMode, useReaderScroll } from "../mode/immersive";
+import { annotationAtPoint, useAnnotationHighlights, type SelectionCapture } from "./reader/annotation-highlights";
+import {
+  AnnotationCard,
+  RegionToolbar,
+  SelectionToolbar,
+  type RegionAction,
+  type SelectionAction,
+} from "./reader/annotation-ui";
+import { PostcardEditor } from "./postcard/postcard-editor";
+import type { PostcardContent } from "./postcard/postcard-model";
 import { IconButton } from "./app-ui/controls";
 import { Icon } from "./app-ui/icons";
 import { Popover, Sheet } from "./app-ui/overlays";
@@ -46,7 +75,7 @@ import {
   resolveLocalReaderDocument,
   type LocalReaderDocument,
 } from "../library/local-reader-state";
-import { PdfReader } from "./pdf-reader";
+import { PdfReader, type PdfReaderProps } from "./pdf-reader";
 import { PageHeader } from "./workspace-page";
 import styles from "./local-document-reader.module.css";
 
@@ -134,7 +163,7 @@ function StructuredPreview({
           disponible sin modificar el archivo original.
         </p>
       ) : null}
-      <div className={styles.structuredSections}>
+      <div className={styles.structuredSections} data-annotation-scope="document">
         {preview.sections.map((section) => {
           const headingId = `extracted-${section.id}`;
 
@@ -157,9 +186,16 @@ function StructuredPreview({
   );
 }
 
+/** Lo que el visor de PDF necesita para marcar y recortar zonas. */
+type PdfAnnotationProps = Pick<
+  PdfReaderProps,
+  "cropMode" | "onCropModeChange" | "onRegionClick" | "onRegionSelected" | "onRegionTools" | "pendingRegion" | "regions"
+>;
+
 function PreviewCanvas({
   document,
   initialPercent,
+  pdf,
   onKindChange,
   onOutline,
   onPageChange,
@@ -177,6 +213,7 @@ function PreviewCanvas({
   onProgressChange: (percent: number) => void;
   onReady: () => void;
   pageRequest: { nonce: number; page: number } | null;
+  pdf: PdfAnnotationProps;
   restartSignal: number;
   resumeRequested: boolean;
 }) {
@@ -323,7 +360,7 @@ function PreviewCanvas({
             fue modificado.
           </p>
         ) : null}
-        <pre>{preview.content}</pre>
+        <pre data-annotation-scope="document">{preview.content}</pre>
       </article>
     );
   }
@@ -331,6 +368,7 @@ function PreviewCanvas({
   if (preview.kind === "pdf") {
     return (
       <PdfReader
+        {...pdf}
         blob={preview.blob}
         initialPercent={initialPercent}
         onOutline={onOutline}
@@ -595,8 +633,45 @@ function LocalReaderShell({
   );
   const selfScrolling = readerCountsItsOwnPages(document.format);
   const position = useScrollPosition(previewRef, contentReady && !selfScrolling);
-  const chrome = useReaderChrome(appearanceOpen);
+  const [cropMode, setCropMode] = useState(false);
+  const [pendingRegion, setPendingRegion] = useState<{ anchor: DOMRect; page: number; rect: NormalizedRect } | null>(null);
+  const [openCard, setOpenCard] = useState<{ anchor: DOMRect; focusNote: boolean; id: string } | null>(null);
+  const [postcard, setPostcard] = useState<PostcardContent | null>(null);
+  const regionToolsRef = useRef<Parameters<NonNullable<PdfReaderProps["onRegionTools"]>>[0]>(null);
+  // Mientras se recorta, las barras se quedan: el dock tiene el botón para salir.
+  const chrome = useReaderChrome(appearanceOpen || cropMode);
   const fullscreen = useFullscreen();
+
+  // La ficha del documento, si la tiene: título y autor de verdad para la postal y para la
+  // procedencia de cada nota, en lugar de los que se deducen del nombre del archivo.
+  const aiCatalogs = useDocumentCatalogs();
+  const importedCatalogs = useImportedCatalogs();
+  const catalog = useMemo(
+    () => applyImportedCatalogs(applyDocumentCatalogs([document], aiCatalogs.records), importedCatalogs.records)[0]?.catalog,
+    [aiCatalogs.records, document, importedCatalogs.records],
+  );
+  const displayTitle = catalog?.canonicalTitle ?? document.title;
+  const displayAuthor = catalog?.authors.length ? catalog.authors.join(", ") : null;
+
+  const { annotations } = useDocumentAnnotations(document.id);
+  const rangesRef = useAnnotationHighlights(previewRef, annotations);
+  const regionMarks = useMemo(
+    () =>
+      annotations.flatMap((annotation) =>
+        annotation.target.kind === "region"
+          ? [
+              {
+                color: annotation.color,
+                hasNote: Boolean(annotation.note.trim()),
+                id: annotation.id,
+                page: annotation.target.page,
+                rect: annotation.target.rect,
+              },
+            ]
+          : [],
+      ),
+    [annotations],
+  );
 
   useImmersiveMode(true);
   useReaderScroll(selfScrolling ? "self" : "page");
@@ -626,7 +701,10 @@ function LocalReaderShell({
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       if (isTypingTarget(event.target)) return;
       const key = event.key.toLowerCase();
-      if (key === "i") {
+      if (key === "r" && selfScrolling) {
+        event.preventDefault();
+        setCropMode((active) => !active);
+      } else if (key === "i") {
         event.preventDefault();
         setPanelOpen((open) => !open);
       } else if (key === "a") {
@@ -639,7 +717,120 @@ function LocalReaderShell({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [fullscreen]);
+  }, [fullscreen, selfScrolling]);
+
+  // ---- Marcas ------------------------------------------------------------------------
+  function createAnnotation(target: AnnotationTarget, color: HighlightColor, note = "") {
+    const now = new Date().toISOString();
+    const annotation: ReaderAnnotation = {
+      color,
+      createdAt: now,
+      documentId: document.id,
+      documentTitle: displayTitle,
+      id: crypto.randomUUID(),
+      note,
+      target,
+      updatedAt: now,
+    };
+    void saveAnnotation(annotation);
+    return annotation;
+  }
+
+  function updateAnnotation(id: string, change: Partial<Pick<ReaderAnnotation, "color" | "note">>) {
+    // Del almacén y no del render: cambiar el color y pulsar «Listo» al instante guardaba la
+    // nota sobre la versión anterior y el color se perdía.
+    const current = currentAnnotation(id);
+    if (current) void saveAnnotation({ ...current, ...change, updatedAt: new Date().toISOString() });
+  }
+
+  function postcardFrom(quote: string, page: number | null, image: Blob | null = null): PostcardContent {
+    return { author: displayAuthor, image, page, quote, title: displayTitle };
+  }
+
+  async function openRegionPostcard(page: number, rect: NormalizedRect, fallbackQuote = "") {
+    const tools = regionToolsRef.current;
+    if (!tools) return;
+    // En un PDF con texto, la postal nace con la cita escrita; en un escaneo, solo la imagen.
+    const [image, text] = await Promise.all([tools.render(page, rect), tools.readText(page, rect).catch(() => "")]);
+    setPostcard(postcardFrom(text || fallbackQuote, page, image));
+  }
+
+  function openAnnotationPostcard(annotation: ReaderAnnotation) {
+    if (annotation.target.kind === "region") {
+      void openRegionPostcard(annotation.target.page, annotation.target.rect, annotation.target.quote);
+    } else {
+      setPostcard(postcardFrom(annotationQuote(annotation), annotation.target.page));
+    }
+  }
+
+  function handleSelectionAction(action: SelectionAction, capture: SelectionCapture) {
+    if (action.kind === "copy") {
+      void navigator.clipboard?.writeText(capture.quote).catch(() => undefined);
+      return;
+    }
+    if (action.kind === "postcard") {
+      setPostcard(postcardFrom(capture.quote, capture.page));
+      return;
+    }
+    if (!capture.target) return;
+    if (action.kind === "highlight") {
+      createAnnotation(capture.target, action.color);
+      return;
+    }
+    const annotation = createAnnotation(capture.target, "amber");
+    setOpenCard({ anchor: capture.rect, focusNote: true, id: annotation.id });
+  }
+
+  function handleRegionAction(action: RegionAction) {
+    const region = pendingRegion;
+    setPendingRegion(null);
+    // Descartar deja seguir recortando; cualquier otra acción termina el recorte.
+    if (!region || action.kind === "cancel") return;
+    setCropMode(false);
+    if (action.kind === "postcard") {
+      void openRegionPostcard(region.page, region.rect);
+      return;
+    }
+    void (async () => {
+      const quote = (await regionToolsRef.current?.readText(region.page, region.rect).catch(() => "")) ?? "";
+      const annotation = createAnnotation(
+        { kind: "region", page: region.page, quote, rect: region.rect },
+        action.kind === "highlight" ? action.color : "amber",
+      );
+      if (action.kind === "note") setOpenCard({ anchor: region.anchor, focusNote: true, id: annotation.id });
+    })();
+  }
+
+  function goToAnnotation(annotation: ReaderAnnotation) {
+    const page = annotation.target.page;
+    if (page !== null) {
+      setPageRequest((current) => ({ nonce: (current?.nonce ?? 0) + 1, page }));
+    } else {
+      rangesRef.current
+        .get(annotation.id)
+        ?.startContainer.parentElement?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "center" });
+    }
+    if (window.matchMedia("(max-width: 1100px)").matches) setPanelOpen(false);
+  }
+
+  /** Un toque o un clic sobre un resaltado abre su tarjeta; si no, alterna las barras. */
+  function handleStagePointerUp(event: React.PointerEvent<HTMLElement>) {
+    if (!cropMode && window.getSelection()?.isCollapsed !== false) {
+      const id = annotationAtPoint(rangesRef.current, event.clientX, event.clientY);
+      if (id) {
+        const range = rangesRef.current.get(id);
+        setOpenCard({
+          anchor: range?.getBoundingClientRect() ?? new DOMRect(event.clientX, event.clientY, 0, 0),
+          focusNote: false,
+          id,
+        });
+        return;
+      }
+    }
+    chrome.onStagePointerUp(event);
+  }
+
+  const cardAnnotation = openCard ? annotations.find((annotation) => annotation.id === openCard.id) ?? null : null;
 
   const pageLabel = pages ? `Página ${pages.current} de ${pages.total}` : null;
   // La cápsula dice dónde se está: la página en un PDF, el punto del texto en lo demás.
@@ -671,7 +862,7 @@ function LocalReaderShell({
         </Link>
 
         <div className={styles.appBarTitle}>
-          <h1 title={document.title}>{document.title}</h1>
+          <h1 title={displayTitle}>{displayTitle}</h1>
           <p>
             <span>{document.format.toUpperCase()}</span>
             {pageLabel ? <span>{pageLabel}</span> : null}
@@ -716,21 +907,21 @@ function LocalReaderShell({
           como la barra compacta de los navegadores móviles. Tocarla o hacer clic la
           despliega: no hace falta desplazarse hacia atrás ni perder el sitio. */}
       <button
-        aria-label={`Mostrar los controles de lectura. ${document.title}${pageLabel ? `, ${pageLabel}` : ""}`}
+        aria-label={`Mostrar los controles de lectura. ${displayTitle}${pageLabel ? `, ${pageLabel}` : ""}`}
         className={styles.peek}
         data-reader-peek=""
         inert={!chrome.hidden}
         onClick={chrome.show}
         type="button"
       >
-        <span className={styles.peekTitle}>{document.title}</span>
+        <span className={styles.peekTitle}>{displayTitle}</span>
         {peekPosition ? <span className={styles.peekPosition}>{peekPosition}</span> : null}
       </button>
 
       <main
         className={styles.stage}
         id="reader-stage"
-        onPointerUp={chrome.onStagePointerUp}
+        onPointerUp={handleStagePointerUp}
         ref={previewRef}
       >
         {permissionRequired && requestPermission ? (
@@ -748,11 +939,48 @@ function LocalReaderShell({
             onProgressChange={setReportedPercent}
             onReady={markContentReady}
             pageRequest={pageRequest}
+            pdf={{
+              cropMode,
+              onCropModeChange: (active) => {
+                setCropMode(active);
+                if (!active) setPendingRegion(null);
+              },
+              onRegionClick: (id, rect) => setOpenCard({ anchor: rect, focusNote: false, id }),
+              onRegionSelected: (region, rect) => setPendingRegion({ ...region, anchor: rect }),
+              onRegionTools: (tools) => {
+                regionToolsRef.current = tools;
+              },
+              pendingRegion,
+              regions: regionMarks,
+            }}
             restartSignal={restartSignal}
             resumeRequested={resumeRequested}
           />
         )}
       </main>
+
+      <SelectionToolbar disabled={cropMode || postcard !== null} onAction={handleSelectionAction} rootRef={previewRef} />
+      {pendingRegion ? <RegionToolbar anchor={pendingRegion.anchor} onAction={handleRegionAction} /> : null}
+      {cardAnnotation && openCard ? (
+        <AnnotationCard
+          anchor={openCard.anchor}
+          annotation={cardAnnotation}
+          autoFocusNote={openCard.focusNote}
+          key={cardAnnotation.id}
+          onClose={() => setOpenCard(null)}
+          onColor={(color) => updateAnnotation(cardAnnotation.id, { color })}
+          onDelete={() => {
+            void deleteAnnotation(cardAnnotation.id);
+            setOpenCard(null);
+          }}
+          onNote={(note) => updateAnnotation(cardAnnotation.id, { note })}
+          onPostcard={() => {
+            setOpenCard(null);
+            openAnnotationPostcard(cardAnnotation);
+          }}
+        />
+      ) : null}
+      {postcard ? <PostcardEditor content={postcard} onClose={() => setPostcard(null)} /> : null}
 
       {!selfScrolling && contentReady ? (
         <div aria-label="Avance del documento" className={styles.textDock} role="toolbar">
@@ -785,6 +1013,15 @@ function LocalReaderShell({
         >
           <ReaderPanel
             document={document}
+            notes={{
+              annotations,
+              onClear: () => void clearDocumentAnnotations(document.id),
+              onDelete: (id) => void deleteAnnotation(id),
+              onExport: () =>
+                navigator.clipboard.writeText(annotationsToMarkdown(annotations, { author: displayAuthor, title: displayTitle })),
+              onOpen: goToAnnotation,
+              onPostcard: openAnnotationPostcard,
+            }}
             onNavigate={goToOutlineItem}
             onRestart={restartReading}
             outline={outline}

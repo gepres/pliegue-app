@@ -4,15 +4,16 @@ import { useState } from "react";
 
 import { Tag } from "@pliegue/ui";
 
+import { annotationQuote, sortAnnotations, type ReaderAnnotation } from "../../library/annotations";
 import type { LocalDocumentPreview } from "../../library/local-document-preview";
 import { readerCountsItsOwnPages } from "../../library/local-document-preview";
 import type { LocalReaderDocument } from "../../library/local-reader-state";
-import { Segmented } from "../app-ui/controls";
+import { IconButton, Segmented } from "../app-ui/controls";
 import { Icon } from "../app-ui/icons";
 import type { OutlineItem } from "./outline";
 import styles from "./reader.module.css";
 
-type PanelTab = "outline" | "progress" | "details";
+type PanelTab = "outline" | "notes" | "progress" | "details";
 
 const indexLabels = {
   error: "No disponible",
@@ -27,6 +28,7 @@ const shortcuts = [
   { keys: ["A"], label: "Apariencia de lectura" },
   { keys: ["I"], label: "Índice y detalles" },
   { keys: ["F"], label: "Pantalla completa" },
+  { keys: ["R"], label: "Recortar una zona (PDF)" },
   { keys: ["Esc"], label: "Cerrar menús y paneles" },
 ];
 
@@ -37,8 +39,19 @@ const shortcuts = [
  * restando ancho a la página. Ahora se abre cuando se busca algo en él y, en escritorio,
  * convive con la lectura sin velo.
  */
+/** Lo que el panel puede hacer con las marcas del documento. */
+export interface ReaderPanelNotes {
+  annotations: readonly ReaderAnnotation[];
+  onClear: () => void;
+  onDelete: (id: string) => void;
+  onExport: () => Promise<void>;
+  onOpen: (annotation: ReaderAnnotation) => void;
+  onPostcard: (annotation: ReaderAnnotation) => void;
+}
+
 export function ReaderPanel({
   document,
+  notes,
   onNavigate,
   onRestart,
   outline,
@@ -47,6 +60,7 @@ export function ReaderPanel({
   progressPercent,
 }: {
   document: LocalReaderDocument;
+  notes: ReaderPanelNotes;
   onNavigate: (item: OutlineItem) => void;
   onRestart: () => void;
   outline: readonly OutlineItem[];
@@ -65,6 +79,11 @@ export function ReaderPanel({
         onChange={setTab}
         options={[
           { icon: "toc", label: "Índice", value: "outline" },
+          {
+            icon: "note",
+            label: notes.annotations.length ? `Notas · ${notes.annotations.length}` : "Notas",
+            value: "notes",
+          },
           { icon: "book", label: "Progreso", value: "progress" },
           { icon: "info", label: "Ficha", value: "details" },
         ]}
@@ -80,6 +99,8 @@ export function ReaderPanel({
           pageCount={pages?.total ?? 0}
           previewKind={previewKind}
         />
+      ) : tab === "notes" ? (
+        <NotesView notes={notes} />
       ) : tab === "progress" ? (
         <ProgressView
           document={document}
@@ -157,6 +178,96 @@ function OutlineList({
         ))}
       </ol>
     </nav>
+  );
+}
+
+/**
+ * Resaltados y notas del documento, en orden de lectura. Cada uno lleva a su sitio; desde
+ * aquí también se exportan —citas breves con su página— y se borran todas.
+ */
+function NotesView({ notes }: { notes: ReaderPanelNotes }) {
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [exported, setExported] = useState(false);
+  const { annotations } = notes;
+
+  if (!annotations.length) {
+    return (
+      <div className={styles.notesEmpty}>
+        <Icon name="highlight" size={22} />
+        <p>
+          Selecciona texto para resaltarlo o escribir una nota. En un PDF, «Recortar» (R) marca una
+          zona de la página, también en las escaneadas.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.notesView}>
+      <div className={styles.notesActions}>
+        <button
+          className={styles.panelAction}
+          onClick={() => {
+            void notes
+              .onExport()
+              .then(() => setExported(true))
+              .catch(() => setExported(false));
+          }}
+          type="button"
+        >
+          <Icon name={exported ? "check" : "copy"} size={18} />
+          {exported ? "Copiadas como Markdown" : "Copiar como Markdown"}
+        </button>
+        {confirmClear ? (
+          <div aria-label="Confirmar el borrado" className={styles.confirm} role="group">
+            <span>
+              ¿Borrar {annotations.length === 1 ? "la marca" : `las ${annotations.length} marcas`}?
+            </span>
+            <button
+              className={styles.confirmDanger}
+              onClick={() => {
+                notes.onClear();
+                setConfirmClear(false);
+              }}
+              type="button"
+            >
+              Sí, borrar
+            </button>
+            <button className={styles.confirmCancel} onClick={() => setConfirmClear(false)} type="button">
+              Cancelar
+            </button>
+          </div>
+        ) : (
+          <button className={styles.panelAction} onClick={() => setConfirmClear(true)} type="button">
+            <Icon name="trash" size={18} />
+            Borrar todo
+          </button>
+        )}
+      </div>
+
+      <ol className={styles.notes}>
+        {sortAnnotations(annotations).map((annotation) => {
+          const quote = annotationQuote(annotation);
+          const page = annotation.target.page;
+          return (
+            <li className={styles.noteItem} data-color={annotation.color} key={annotation.id}>
+              <button className={styles.noteMain} onClick={() => notes.onOpen(annotation)} type="button">
+                <span className={styles.noteMeta}>
+                  {annotation.target.kind === "region" ? "Zona" : "Resaltado"}
+                  {page !== null ? ` · página ${page}` : ""}
+                </span>
+                <span className={styles.noteQuote}>{quote || "Zona sin texto"}</span>
+                {annotation.note ? <span className={styles.noteText}>{annotation.note}</span> : null}
+              </button>
+              <div className={styles.noteActions}>
+                <IconButton icon="share" label="Crear postal" onClick={() => notes.onPostcard(annotation)} size="sm" />
+                <IconButton icon="trash" label="Quitar la marca" onClick={() => notes.onDelete(annotation.id)} size="sm" />
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 

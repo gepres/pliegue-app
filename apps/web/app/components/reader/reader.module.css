@@ -355,3 +355,153 @@
     display: none;
   }
 }
+
+/* ---- Notas y resaltados ------------------------------------------------------------ */
+
+.notesView {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+}
+
+.notesActions {
+  display: grid;
+  gap: 6px;
+}
+
+.confirm {
+  align-items: center;
+  background: color-mix(in srgb, var(--pliegue-color-status-danger) 10%, var(--pliegue-color-bg-surface));
+  border-radius: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.8125rem;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.confirm span {
+  flex: 1 1 auto;
+}
+
+.confirmDanger,
+.confirmCancel {
+  background: transparent;
+  border: 0;
+  border-radius: var(--pliegue-radius-full);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 6px 10px;
+}
+
+.confirmDanger {
+  background: var(--pliegue-color-status-danger);
+  color: #fff;
+}
+
+.confirmCancel {
+  color: var(--pliegue-color-text-secondary);
+}
+
+.notes {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.noteItem {
+  --note: #f2b705;
+
+  align-items: start;
+  background: var(--pliegue-color-bg-subtle);
+  border-left: 3px solid var(--note);
+  border-radius: 10px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 4px 4px 4px 0;
+}
+
+.noteItem[data-color="green"] {
+  --note: #5cb85c;
+}
+
+.noteItem[data-color="blue"] {
+  --note: #3b8ee8;
+}
+
+.noteItem[data-color="rose"] {
+  --note: #ec5f8c;
+}
+
+.noteMain {
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 4px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+@media (hover: hover) {
+  .noteMain:hover .noteQuote {
+    text-decoration: underline;
+    text-decoration-color: var(--note);
+    text-underline-offset: 3px;
+  }
+}
+
+.noteMain:focus-visible {
+  outline: 3px solid var(--pliegue-color-focus-ring);
+}
+
+.noteMeta {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.noteQuote {
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.875rem;
+  -webkit-line-clamp: 3;
+  line-height: 1.45;
+  overflow: hidden;
+}
+
+.noteText {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.noteActions {
+  display: grid;
+  gap: 2px;
+}
+
+.notesEmpty {
+  color: var(--pliegue-color-text-secondary);
+  display: grid;
+  font-size: 0.875rem;
+  gap: 10px;
+  justify-items: start;
+  line-height: 1.5;
+  padding: var(--pliegue-spacing-sm) 0;
+}
+
+.notesEmpty p {
+  margin: 0;
+}

@@ -162,6 +162,58 @@ const paths = {
     </>
   ),
   check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
+  highlight: (
+    <>
+      <path d="m9.5 14.5 8-8a2.1 2.1 0 0 0-3-3l-8 8-1 4z" />
+      <path d="M4 20.5h16" />
+    </>
+  ),
+  note: (
+    <>
+      <path d="M5 4.5h14v10.5l-4.5 4.5H5z" />
+      <path d="M14.5 19.5V15H19" />
+      <path d="M8.5 9h7M8.5 12.2h4.5" />
+    </>
+  ),
+  crop: (
+    <>
+      <path d="M7 3v14h14" />
+      <path d="M3 7h14v14" />
+    </>
+  ),
+  share: (
+    <>
+      <path d="M12 14.5V4" />
+      <path d="m8 7.5 4-3.5 4 3.5" />
+      <path d="M6 11v8h12v-8" />
+    </>
+  ),
+  copy: (
+    <>
+      <rect height="11" rx="2" width="11" x="8.5" y="8.5" />
+      <path d="M5.5 15.5V6.5a1 1 0 0 1 1-1h9" />
+    </>
+  ),
+  image: (
+    <>
+      <rect height="14" rx="2" width="16" x="4" y="5" />
+      <circle cx="9" cy="10" r="1.6" />
+      <path d="m20 16-4.5-4.5L7 19" />
+    </>
+  ),
+  mail: (
+    <>
+      <rect height="12" rx="2" width="17" x="3.5" y="6" />
+      <path d="m4.5 7.5 7.5 5.5 7.5-5.5" />
+    </>
+  ),
+  whatsapp: (
+    <>
+      <path d="M5.2 18.8 6 15.6a7.6 7.6 0 1 1 2.6 2.5z" />
+      <path d="M9.4 9.2c.2 1.9 1.6 3.9 3.8 4.8.6.2 1.1 0 1.4-.4l.3-.6-1.4-.8-.6.6c-.8-.3-1.6-1.1-2-2l.6-.6-.8-1.4-.6.3c-.4.2-.7.6-.7 1.1" />
+    </>
+  ),
+  xLogo: <path d="m5 5 14 14M19 5 5 19" />,
 } as const;
 
 export type IconName = keyof typeof paths;

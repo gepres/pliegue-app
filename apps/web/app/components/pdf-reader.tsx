@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   canvasOutputScale,
@@ -18,6 +17,7 @@ import {
   type PdfPagePlacement,
   type PdfPageSize,
 } from "../library/pdf-page-layout";
+import type { HighlightColor, NormalizedRect } from "../library/annotations";
 import { reflowPage, toReflowItems } from "../library/pdf-reflow";
 import { describePdfFailure, openPdfDocument } from "../library/pdf-runtime";
 import type { StructuredDocumentBlock } from "../library/structured-document-extractor";
@@ -74,6 +74,17 @@ type ReaderState =
 
 export interface PdfReaderProps {
   blob: Blob;
+  /** Modo recorte: arrastrar sobre una página dibuja una zona en lugar de seleccionar texto. */
+  cropMode?: boolean;
+  onCropModeChange?: (active: boolean) => void;
+  /** Zona recién recortada, a la espera de que se elija qué hacer con ella. */
+  pendingRegion?: { page: number; rect: NormalizedRect } | null;
+  onRegionSelected?: (region: { page: number; rect: NormalizedRect }, rect: DOMRect) => void;
+  /** Zonas marcadas de todo el documento. */
+  regions?: readonly PdfRegionMark[];
+  onRegionClick?: (id: string, rect: DOMRect) => void;
+  /** Recibe las herramientas de zona cuando el documento está listo, y `null` al cerrarse. */
+  onRegionTools?: (tools: PdfRegionTools | null) => void;
   /** Avance guardado, para retomar en la página que corresponda. */
   initialPercent?: number;
   onError?: (message: string) => void;
@@ -172,15 +183,33 @@ async function readPdfOutline(document: PdfDocument): Promise<OutlineItem[]> {
   return items;
 }
 
-function PdfPage({
+/** Una zona marcada sobre la página, en coordenadas relativas a ella. */
+export interface PdfRegionMark {
+  color: HighlightColor;
+  hasNote: boolean;
+  id: string;
+  page: number;
+  rect: NormalizedRect;
+}
+
+const noRegions: readonly PdfRegionMark[] = [];
+
+const PdfPage = memo(function PdfPage({
+  crop,
   document,
+  onRegionClick,
   placement,
+  regions,
   scale,
   shouldRender,
   title,
 }: {
+  /** Zona que se está recortando o recién recortada en esta página. */
+  crop: NormalizedRect | null;
   document: PdfDocument;
+  onRegionClick?: ((id: string, rect: DOMRect) => void) | undefined;
   placement: PdfPagePlacement;
+  regions: readonly PdfRegionMark[];
   scale: number;
   shouldRender: boolean;
   title: string;
@@ -275,6 +304,7 @@ function PdfPage({
       aria-label={`Página ${pageNumber} de ${title}`}
       className={styles.page}
       data-drawn="false"
+      data-page-number={pageNumber}
       ref={frameRef}
       role="group"
       style={{
@@ -285,12 +315,99 @@ function PdfPage({
       } as React.CSSProperties}
     >
       <canvas className={styles.canvas} ref={canvasRef} />
-      <div className="textLayer" ref={textLayerRef} />
+      <div
+        className="textLayer"
+        data-annotation-page={pageNumber}
+        data-annotation-scope={`pdf-layer:${pageNumber}`}
+        ref={textLayerRef}
+      />
+      {regions.map((region) => (
+        <button
+          aria-label={`Zona marcada${region.hasNote ? " con nota" : ""}`}
+          className={styles.region}
+          data-color={region.color}
+          key={region.id}
+          onClick={(event) => onRegionClick?.(region.id, event.currentTarget.getBoundingClientRect())}
+          style={regionStyle(region.rect)}
+          type="button"
+        >
+          {region.hasNote ? <span aria-hidden="true" className={styles.regionNote} /> : null}
+        </button>
+      ))}
+      {crop ? <span aria-hidden="true" className={styles.cropBox} style={regionStyle(crop)} /> : null}
       <span aria-hidden="true" className={styles.pageNumber}>
         {pageNumber}
       </span>
     </div>
   );
+});
+
+function regionStyle(rect: NormalizedRect): React.CSSProperties {
+  return {
+    height: `${rect.height * 100}%`,
+    left: `${rect.x * 100}%`,
+    top: `${rect.y * 100}%`,
+    width: `${rect.width * 100}%`,
+  };
+}
+
+/**
+ * Dibuja solo una zona de la página, a una resolución pensada para compartir: unos 1600 px de
+ * ancho, sea cual sea el zoom con el que se está leyendo.
+ */
+async function renderRegionImage(pdf: PdfDocument, pageNumber: number, rect: NormalizedRect) {
+  const page = await pdf.getPage(pageNumber);
+  try {
+    const base = page.getViewport({ scale: 1 });
+    const scale = Math.min(6, Math.max(1.5, 1600 / Math.max(1, rect.width * base.width)));
+    const viewport = page.getViewport({ scale });
+    const canvas = window.document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(rect.width * viewport.width));
+    canvas.height = Math.max(1, Math.round(rect.height * viewport.height));
+    await page.render({
+      canvas,
+      transform: [1, 0, 0, 1, -rect.x * viewport.width, -rect.y * viewport.height],
+      viewport,
+    }).promise;
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("No se pudo recortar la página."))), "image/png");
+    });
+  } finally {
+    page.cleanup();
+  }
+}
+
+/** El texto que cae dentro de una zona, en el orden del documento. Vacío en un escaneo. */
+async function readRegionText(pdf: PdfDocument, pageNumber: number, rect: NormalizedRect) {
+  const page = await pdf.getPage(pageNumber);
+  try {
+    const viewport = page.getViewport({ scale: 1 });
+    const content = await page.getTextContent();
+    const parts: string[] = [];
+    for (const item of content.items as { height?: number; str?: string; transform?: number[]; width?: number }[]) {
+      if (!item.str?.trim() || !item.transform) continue;
+      const [x, y] = viewport.convertToViewportPoint(item.transform[4] ?? 0, item.transform[5] ?? 0);
+      const centerX = ((x ?? 0) + (item.width ?? 0) / 2) / viewport.width;
+      const centerY = ((y ?? 0) - (item.height ?? 0) / 2) / viewport.height;
+      if (centerX >= rect.x && centerX <= rect.x + rect.width && centerY >= rect.y && centerY <= rect.y + rect.height) {
+        parts.push(item.str);
+      }
+    }
+    return parts
+      .join(" ")
+      .replaceAll(/\s+/g, " ")
+      // «conoci- miento» al final de un renglón vuelve a ser «conocimiento».
+      .replaceAll(/(\p{L})- (\p{Ll})/gu, "$1$2")
+      .trim();
+  } finally {
+    page.cleanup();
+  }
+}
+
+/** Lo que el lector puede pedir al visor sobre una zona de una página. */
+export interface PdfRegionTools {
+  readText: (page: number, rect: NormalizedRect) => Promise<string>;
+  render: (page: number, rect: NormalizedRect) => Promise<Blob>;
 }
 
 /**
@@ -420,7 +537,9 @@ function PdfReadingView({
             {page.columns > 1 ? <span>Dos columnas</span> : null}
           </header>
           {page.blocks.length > 0 ? (
-            <ExtractedBlocks blocks={page.blocks} sectionTitle={`página ${page.number}`} />
+            <div data-annotation-page={page.number} data-annotation-scope={`pdf-reading:${page.number}`}>
+              <ExtractedBlocks blocks={page.blocks} sectionTitle={`página ${page.number}`} />
+            </div>
           ) : (
             <p className={styles.readingEmpty}>
               Esta página no tiene capa de texto: es una imagen a la espera del OCR. En
@@ -447,17 +566,32 @@ function PdfReadingView({
 
 export function PdfReader({
   blob,
+  cropMode = false,
   initialPercent = 0,
+  onCropModeChange,
   onError,
   onOutline,
   onPageChange,
   onProgressChange,
   onReady,
+  onRegionClick,
+  onRegionSelected,
+  onRegionTools,
   pageRequest = null,
+  pendingRegion = null,
+  regions = noRegions,
   restartSignal = 0,
   resumeRequested = false,
   title,
 }: PdfReaderProps) {
+  // Zona que se está dibujando con el puntero, antes de soltarlo.
+  const [draft, setDraft] = useState<{ page: number; rect: NormalizedRect } | null>(null);
+  const cropStartRef = useRef<{ element: HTMLElement; page: number; x: number; y: number } | null>(null);
+  const regionsByPage = useMemo(() => {
+    const grouped = new Map<number, PdfRegionMark[]>();
+    for (const region of regions) grouped.set(region.page, [...(grouped.get(region.page) ?? []), region]);
+    return grouped;
+  }, [regions]);
   const [state, setState] = useState<ReaderState>({ status: "loading" });
   const [availableWidth, setAvailableWidth] = useState(0);
   const [manualScale, setManualScale] = useState<number | null>(null);
@@ -644,6 +778,8 @@ export function PdfReader({
   /** Cambia de modo sin perder el sitio: el otro abre por la página que se estaba leyendo. */
   const switchMode = useCallback(
     (next: PdfViewMode) => {
+      // En el modo lectura no hay páginas dibujadas que recortar.
+      if (next === "reading") onCropModeChange?.(false);
       setEntryPage(currentPage);
       setMode(next);
       if (next === "original") {
@@ -651,7 +787,7 @@ export function PdfReader({
         window.requestAnimationFrame(() => goToPage(currentPage, "auto"));
       }
     },
-    [currentPage, goToPage],
+    [currentPage, goToPage, onCropModeChange],
   );
 
   /** El modo lectura cuenta sus páginas por su cuenta; el avance se guarda igual. */
@@ -737,6 +873,87 @@ export function PdfReader({
   }, [onOutline]);
 
   const loadedDocument = state.status === "ready" ? state.document : null;
+
+  const regionToolsRef = useRef(onRegionTools);
+  useEffect(() => {
+    regionToolsRef.current = onRegionTools;
+  }, [onRegionTools]);
+  useEffect(() => {
+    if (!loadedDocument) return;
+    regionToolsRef.current?.({
+      readText: (page, rect) => readRegionText(loadedDocument, page, rect),
+      render: (page, rect) => renderRegionImage(loadedDocument, page, rect),
+    });
+    return () => regionToolsRef.current?.(null);
+  }, [loadedDocument]);
+
+  // ---- Recorte: arrastrar sobre una página -------------------------------------
+  function cropPoint(element: HTMLElement, event: React.PointerEvent) {
+    const rect = element.getBoundingClientRect();
+    return {
+      x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
+      y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
+    };
+  }
+
+  function startCrop(event: React.PointerEvent<HTMLDivElement>) {
+    if (!cropMode || event.button !== 0) return;
+    const element = (event.target as HTMLElement).closest<HTMLElement>("[data-page-number]");
+    if (!element) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const page = Number(element.dataset.pageNumber);
+    const point = cropPoint(element, event);
+    cropStartRef.current = { element, page, ...point };
+    setDraft({ page, rect: { height: 0, width: 0, x: point.x, y: point.y } });
+  }
+
+  function moveCrop(event: React.PointerEvent<HTMLDivElement>) {
+    const start = cropStartRef.current;
+    if (!start) return;
+    const point = cropPoint(start.element, event);
+    setDraft({
+      page: start.page,
+      rect: {
+        height: Math.abs(point.y - start.y),
+        width: Math.abs(point.x - start.x),
+        x: Math.min(point.x, start.x),
+        y: Math.min(point.y, start.y),
+      },
+    });
+  }
+
+  function endCrop() {
+    const start = cropStartRef.current;
+    cropStartRef.current = null;
+    const region = draft;
+    setDraft(null);
+    if (!start || !region) return;
+    const pageRect = start.element.getBoundingClientRect();
+    const width = region.rect.width * pageRect.width;
+    const height = region.rect.height * pageRect.height;
+    // Un toque o un arrastre mínimo no es un recorte.
+    if (width < 16 || height < 16) return;
+    onRegionSelected?.(
+      region,
+      new DOMRect(
+        pageRect.left + region.rect.x * pageRect.width,
+        pageRect.top + region.rect.y * pageRect.height,
+        width,
+        height,
+      ),
+    );
+  }
+
+  useEffect(() => {
+    if (!cropMode) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onCropModeChange?.(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [cropMode, onCropModeChange]);
+
   useEffect(() => {
     if (!loadedDocument) return;
     let cancelled = false;
@@ -790,6 +1007,7 @@ export function PdfReader({
         <div
           aria-label={`Páginas de ${title}`}
           className={styles.scroller}
+          data-crop={cropMode && mode === "original" ? "true" : undefined}
           onKeyDown={handleKeyDown}
           ref={scrollerRef}
           role="document"
@@ -809,12 +1027,28 @@ export function PdfReader({
               title={title}
             />
           ) : (
-            <div className={styles.column} style={{ height: `${columnHeight}px` }}>
+            <div
+              className={styles.column}
+              onPointerCancel={endCrop}
+              onPointerDown={startCrop}
+              onPointerMove={moveCrop}
+              onPointerUp={endCrop}
+              style={{ height: `${columnHeight}px` }}
+            >
               {placements.map((placement, index) => (
                 <PdfPage
+                  crop={
+                    draft?.page === placement.number
+                      ? draft.rect
+                      : pendingRegion?.page === placement.number
+                        ? pendingRegion.rect
+                        : null
+                  }
                   document={state.document}
                   key={placement.number}
+                  onRegionClick={cropMode ? undefined : onRegionClick}
                   placement={placement}
+                  regions={regionsByPage.get(placement.number) ?? noRegions}
                   scale={scale}
                   shouldRender={index >= range.first && index <= range.last}
                   title={title}
@@ -824,6 +1058,13 @@ export function PdfReader({
           )}
         </div>
       </div>
+
+      {cropMode && mode === "original" ? (
+        <p className={styles.cropHint} role="status">
+          <Icon name="crop" size={16} />
+          Arrastra sobre la página para recortar · Esc para salir
+        </p>
+      ) : null}
 
       {/* Dock inferior, como en los lectores nativos: el pulgar llega, y la parte de arriba
           queda para el título. Se aparta junto con la barra superior al leer. */}
@@ -889,6 +1130,18 @@ export function PdfReader({
           />
 
           <div className={styles.group}>
+            {mode === "original" && onCropModeChange ? (
+              <IconButton
+                aria-pressed={cropMode}
+                disabled={!ready}
+                icon="crop"
+                label={cropMode ? "Salir del recorte" : "Recortar una zona"}
+                onClick={() => onCropModeChange(!cropMode)}
+                shortcut="R"
+                size="sm"
+                tone={cropMode ? "active" : "plain"}
+              />
+            ) : null}
             {mode === "original" ? (
               <Popover
                 placement="above"
