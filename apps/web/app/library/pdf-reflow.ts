@@ -344,6 +344,46 @@ export interface ReflowResult {
   columns: number;
 }
 
+/** Caja de un bloque sobre la página, en unidades del PDF y con la `y` hacia arriba. */
+export interface LayoutBox {
+  bottom: number;
+  left: number;
+  right: number;
+  top: number;
+}
+
+/** Un bloque recompuesto que además sabe dónde estaba: lo que hace falta para taparlo. */
+export interface LayoutBlock {
+  box: LayoutBox;
+  /** El cuerpo más grande del bloque, en unidades del PDF. */
+  fontHeight: number;
+  kind: "heading" | "paragraph";
+  /** Nivel de título (1 a 6); 0 en un párrafo. */
+  level: number;
+  lines: number;
+  /** El texto de cada renglón, por si hay que traducirlos por separado (un índice, un poema). */
+  lineTexts: string[];
+  text: string;
+}
+
+export interface LayoutResult {
+  blocks: LayoutBlock[];
+  columns: number;
+}
+
+/** Sobre la línea base, las letras suben unos tres cuartos del cuerpo y bajan un cuarto. */
+const ascent = 0.8;
+const descent = 0.25;
+
+function boxOf(lines: readonly ReflowLine[]): LayoutBox {
+  return {
+    bottom: Math.min(...lines.map((line) => line.y - line.fontHeight * descent)),
+    left: Math.min(...lines.map((line) => line.left)),
+    right: Math.max(...lines.map((line) => line.right)),
+    top: Math.max(...lines.map((line) => line.y + line.fontHeight * ascent)),
+  };
+}
+
 /**
  * Recompone una página entera. `pageWidth` viene del viewport de pdf.js a escala 1, en las
  * mismas unidades que las posiciones de los fragmentos.
@@ -352,6 +392,23 @@ export function reflowPage(
   items: readonly ReflowTextItem[],
   pageWidth: number,
 ): ReflowResult {
+  const { blocks, columns } = layoutPage(items, pageWidth);
+  return {
+    blocks: blocks.map<StructuredDocumentBlock>((block) =>
+      block.kind === "heading" ? { kind: "heading", level: block.level, text: block.text } : { kind: "paragraph", text: block.text },
+    ),
+    columns,
+  };
+}
+
+/**
+ * Los mismos bloques que `reflowPage`, en el mismo orden, con su caja y su cuerpo: la
+ * traducción los pinta encima de la página sin tocar imágenes ni gráficos.
+ */
+export function layoutPage(
+  items: readonly ReflowTextItem[],
+  pageWidth: number,
+): LayoutResult {
   const split = detectColumnSplit(items, pageWidth);
 
   // Cada columna se agrupa en renglones por separado y se lee entera antes de pasar a la
@@ -379,19 +436,67 @@ export function reflowPage(
   // El título más grande de la página es el de nivel 1, el siguiente el 2, y así.
   const levels = [...headingSizes].sort((left, right) => right - left);
 
-  const blocks = grouped.flatMap<StructuredDocumentBlock>((group) => {
+  const blocks = grouped.flatMap<LayoutBlock>((group) => {
     const text = joinLineText(group);
     if (!text) return [];
+    const fontHeight = Math.max(...group.map((line) => line.fontHeight));
+    const heading = classify(group, body) === "heading";
 
-    if (classify(group, body) === "heading") {
-      const size = roundSize(Math.max(...group.map((line) => line.fontHeight)));
-      return [{ kind: "heading", level: Math.min(6, levels.indexOf(size) + 1), text }];
-    }
-
-    return [{ kind: "paragraph", text }];
+    return [
+      {
+        box: boxOf(group),
+        fontHeight,
+        kind: heading ? "heading" : "paragraph",
+        level: heading ? Math.min(6, levels.indexOf(roundSize(fontHeight)) + 1) : 0,
+        lineTexts: group.map((line) => line.text),
+        lines: group.length,
+        text,
+      },
+    ];
   });
 
-  return { blocks, columns: split ? 2 : 1 };
+  return { blocks: mergeStackedTitles(blocks, pageWidth), columns: split ? 2 : 1 };
+}
+
+/**
+ * Un título de portada suele componerse en renglones de tamaños distintos —«THE» / «LOST
+ * CONTINENT» / «OF MU»— y cada tamaño salía como un bloque aparte. Leídos o traducidos por
+ * separado pierden el sentido («Los / los Continente / de miu»). Si están centrados en la
+ * página y uno justo debajo del otro, son el mismo título.
+ */
+function mergeStackedTitles(blocks: readonly LayoutBlock[], pageWidth: number) {
+  const centered = (box: LayoutBox) =>
+    pageWidth > 0 && Math.abs((box.left + box.right) / 2 - pageWidth / 2) <= pageWidth * 0.04;
+  const merged: LayoutBlock[] = [];
+
+  for (const block of blocks) {
+    const previous = merged.at(-1);
+    if (previous?.kind === "heading" && block.kind === "heading" && centered(previous.box) && centered(block.box)) {
+      // Con la `y` hacia arriba, el de encima termina por encima de donde empieza el siguiente.
+      const gap = previous.box.bottom - block.box.top;
+      const reference = Math.max(previous.fontHeight, block.fontHeight);
+      if (gap >= -reference * 0.2 && gap <= reference * 1.6) {
+        merged[merged.length - 1] = {
+          box: {
+            bottom: Math.min(previous.box.bottom, block.box.bottom),
+            left: Math.min(previous.box.left, block.box.left),
+            right: Math.max(previous.box.right, block.box.right),
+            top: Math.max(previous.box.top, block.box.top),
+          },
+          fontHeight: reference,
+          kind: "heading",
+          level: Math.min(previous.level, block.level),
+          lineTexts: [...previous.lineTexts, ...block.lineTexts],
+          lines: previous.lines + block.lines,
+          text: `${previous.text} ${block.text}`,
+        };
+        continue;
+      }
+    }
+    merged.push(block);
+  }
+
+  return merged;
 }
 
 /** Convierte los fragmentos crudos de pdf.js a la forma que espera `reflowPage`. */

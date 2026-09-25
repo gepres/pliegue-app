@@ -6,6 +6,7 @@ import {
   groupIntoBlocks,
   groupIntoLines,
   joinLineText,
+  layoutPage,
   reflowPage,
   toReflowItems,
   type ReflowTextItem,
@@ -302,6 +303,51 @@ describe("recomposición de una página", () => {
   it("devuelve vacío en una página sin capa de texto", () => {
     // Los escaneados del corpus: no hay nada que recomponer hasta que llegue el OCR.
     expect(reflowPage([], pageWidth)).toEqual({ blocks: [], columns: 1 });
+  });
+
+  it("lee como un solo título los renglones centrados de distinto tamaño de una portada", () => {
+    // Centrado: la mitad del ancho de cada fragmento a cada lado del centro de la página.
+    const centered = (text: string, y: number, size: number) =>
+      item(text, pageWidth / 2 - (text.length * size * 0.5) / 2, y, size);
+    const { blocks } = layoutPage(
+      [
+        centered("THE", 700, 14),
+        centered("GREEN VALLEY", 670, 28),
+        centered("OF STARS", 645, 14),
+        item("A plain paragraph of body text starts lower on the page", 72, 560, 10),
+        item("and carries on through a second line of body text", 72, 548, 10),
+      ],
+      pageWidth,
+    );
+
+    expect(blocks.map((block) => [block.kind, block.text])).toEqual([
+      ["heading", "THE GREEN VALLEY OF STARS"],
+      ["paragraph", "A plain paragraph of body text starts lower on the page and carries on through a second line of body text"],
+    ]);
+    expect(blocks[0]?.lines).toBe(3);
+  });
+
+  it("da la caja de cada bloque, para tapar solo el texto al pintar su traducción", () => {
+    const first = "El texto corrido de la página, que es lo más frecuente";
+    const items = [
+      item("Capítulo primero", 72, 720, 22),
+      item(first, 72, 660, 10),
+      item("y sigue en el renglón de abajo sin interrupción", 72, 648, 10),
+    ];
+    const { blocks } = layoutPage(items, pageWidth);
+    const [title, paragraph] = blocks;
+
+    expect(blocks.map((block) => [block.kind, block.level])).toEqual([["heading", 1], ["paragraph", 0]]);
+    expect(title?.box.top).toBeCloseTo(720 + 22 * 0.8);
+    expect(paragraph).toMatchObject({ fontHeight: 10, lines: 2 });
+    expect(paragraph?.box.left).toBe(72);
+    // El renglón más largo marca el borde derecho; la base del último, el de abajo.
+    expect(paragraph?.box.right).toBe(72 + first.length * 5);
+    expect(paragraph?.box.top).toBeCloseTo(660 + 10 * 0.8);
+    expect(paragraph?.box.bottom).toBeCloseTo(648 - 10 * 0.25);
+    // Los mismos bloques y en el mismo orden que la vista Lectura.
+    const reflowed = reflowPage(items, pageWidth).blocks.map((block) => ("text" in block ? block.text : ""));
+    expect(reflowed).toEqual(blocks.map((block) => block.text));
   });
 });
 
