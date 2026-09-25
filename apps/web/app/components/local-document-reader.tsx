@@ -154,7 +154,7 @@ function StructuredPreview({
       <div className={styles.previewCaption}>
         <span>{formatLabel} · Extracción local</span>
         <span>
-          {preview.sections.length} sección{preview.sections.length === 1 ? "" : "es"}
+          {preview.sections.length} {preview.sections.length === 1 ? "sección" : "secciones"}
         </span>
       </div>
       {preview.truncated ? (
@@ -166,6 +166,12 @@ function StructuredPreview({
       <div className={styles.structuredSections} data-annotation-scope="document">
         {preview.sections.map((section) => {
           const headingId = `extracted-${section.id}`;
+          // Sin título propio, la sección se nombra solo por su número: «Sección 3» dos veces
+          // no dice más. Y el bloque que ya es el título no se vuelve a pintar debajo.
+          const untitled = section.title === section.label;
+          const [lead, ...rest] = section.blocks;
+          const leadIsTitle =
+            (lead?.kind === "heading" || lead?.kind === "paragraph") && lead.text.trim() === section.title.trim();
 
           return (
             <section
@@ -174,10 +180,10 @@ function StructuredPreview({
               key={section.id}
             >
               <header>
-                <span>{section.label}</span>
-                <h2 id={headingId}>{section.title}</h2>
+                <span id={untitled ? headingId : undefined}>{section.label}</span>
+                {untitled ? null : <h2 id={headingId}>{section.title}</h2>}
               </header>
-              <ExtractedBlocks blocks={section.blocks} sectionTitle={section.title} />
+              <ExtractedBlocks blocks={leadIsTitle ? rest : section.blocks} sectionTitle={section.title} />
             </section>
           );
         })}
@@ -273,7 +279,8 @@ function PreviewCanvas({
           id: section.id,
           label: section.title,
           level: 0,
-          meta: section.label,
+          // Una sección sin título propio ya se llama «Sección 3»: no se repite al lado.
+          ...(section.title === section.label ? {} : { meta: section.label }),
           target: { id: `extracted-${section.id}`, kind: "anchor" as const },
         })),
       );

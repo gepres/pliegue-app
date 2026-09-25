@@ -480,16 +480,32 @@ function extractEpub(entries: Map<string, string>): StructuredDocumentSection[] 
       (block): block is Extract<StructuredDocumentBlock, { kind: "heading" }> =>
         block.kind === "heading",
     );
+    const label = `Sección ${index + 1}`;
 
     return [
       {
         blocks,
         id: `chapter-${index + 1}`,
-        label: `Sección ${index + 1}`,
-        title: firstHeading?.text ?? path.split("/").at(-1)?.replace(/\.[^.]+$/, "") ?? "Sección",
+        label,
+        title: firstHeading?.text ?? leadingTitle(blocks) ?? label,
       },
     ];
   });
+}
+
+/**
+ * Muchos EPUB titulan sus capítulos con un párrafo con estilo («Prólogo») y no con un
+ * encabezado. Si la sección abre con un renglón corto que no acaba en puntuación de frase ni
+ * es un diálogo, ese es su título. Si no, se queda sin título propio: el nombre de su archivo
+ * interno («una_trenza_de_hierba_sagrada-2») no le dice nada a quien lee.
+ */
+function leadingTitle(blocks: readonly StructuredDocumentBlock[]) {
+  const first = blocks[0];
+  if (first?.kind !== "paragraph") return null;
+  const text = first.text.trim();
+  if (!text || text.length > 80 || text.split(/\s+/).length > 10) return null;
+  if (/[.,;:…]$/.test(text) || /^[—–\-«"“¿¡]/.test(text)) return null;
+  return text;
 }
 
 function limitExtraction(
