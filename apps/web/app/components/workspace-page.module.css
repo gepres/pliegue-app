@@ -131,3 +131,36 @@
     gap: var(--pliegue-spacing-sm);
   }
 }
+
+/* En el teléfono cada cifra es una fila: el número a la izquierda y, a su lado, qué cuenta y
+   su detalle. Como tarjetas de 170 px, las tres de Inicio llenaban la primera pantalla. */
+@media (max-width: 640px) {
+  .metricCard {
+    align-items: center;
+    column-gap: var(--pliegue-spacing-md);
+    display: grid;
+    grid-template-areas:
+      "value label"
+      "value detail";
+    grid-template-columns: minmax(3rem, auto) minmax(0, 1fr);
+    min-height: 0;
+    padding: var(--pliegue-spacing-md);
+    row-gap: 2px;
+  }
+
+  .metricCard > span {
+    align-self: end;
+    grid-area: label;
+  }
+
+  .metricCard strong {
+    font-size: 2.25rem;
+    grid-area: value;
+    text-align: center;
+  }
+
+  .metricCard small {
+    align-self: start;
+    grid-area: detail;
+  }
+}

@@ -124,7 +124,8 @@
   grid-column: 1 / -1;
 }
 
-.localImportPanel > .capabilityNote {
+.localImportPanel > .capabilityNote,
+.localImportPanel > details {
   grid-column: 1 / -1;
 }
 
@@ -571,9 +572,17 @@
 }
 
 .aiCatalogQueue,
+/* La tarjeta se estira hasta la altura de su vecina: el contenido va arriba en vez de
+   repartir ese sobrante entre sus filas, que agrandaba la píldora y separaba el título. */
 .aiCatalogRecent {
+  align-content: start;
   display: grid;
   gap: var(--pliegue-spacing-lg);
+}
+
+/* En una rejilla la píldora se estiraba de lado a lado, como una barra. */
+.aiCatalogRecent > :global(.pliegue-tag) {
+  justify-self: start;
 }
 
 .aiCatalogHeader {
@@ -929,10 +938,14 @@
 }
 
 @media (max-width: 960px) {
-  .metricGrid,
-  .documentGrid,
-  .catalogMetricGrid {
+  .documentGrid {
     grid-template-columns: 1fr;
+  }
+
+  /* En la tablet las cifras siguen una junto a otra (las tres de Inicio caben; las cuatro de
+     IA van de dos en dos): apiladas, cuatro tarjetas llenaban una pantalla entera. */
+  .catalogMetricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .continueCard,
@@ -990,11 +1003,13 @@
     grid-column: auto;
   }
 
+  /* A la izquierda al pasar a una columna, pero centrados en su fila: con `flex-start`,
+     el «0 carpetas · 0 archivos» quedaba pegado arriba, junto al botón. */
   .localImportActions,
   .driveReferenceActions,
   .linkedFolderActions,
   .folderSourceControls {
-    align-items: flex-start;
+    align-items: center;
     justify-content: flex-start;
   }
 
@@ -1011,6 +1026,41 @@
   .aiSettingsForm,
   .catalogFilters {
     grid-template-columns: 1fr;
+  }
+
+  .metricGrid,
+  .catalogMetricGrid {
+    gap: var(--pliegue-spacing-sm);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* En el teléfono cada cifra es una fila: el número a la izquierda y, a su lado, qué
+     cuenta y su detalle. Igual que `.metricCard` en workspace-page.module.css. */
+  .catalogMetric {
+    align-items: center;
+    column-gap: var(--pliegue-spacing-md);
+    grid-template-areas:
+      "value label"
+      "value detail";
+    grid-template-columns: minmax(3rem, auto) minmax(0, 1fr);
+    padding: var(--pliegue-spacing-md);
+    row-gap: 2px;
+  }
+
+  .catalogMetric span {
+    align-self: end;
+    grid-area: label;
+  }
+
+  .catalogMetric strong {
+    font-size: 2.25rem;
+    grid-area: value;
+    text-align: center;
+  }
+
+  .catalogMetric small {
+    align-self: start;
+    grid-area: detail;
   }
 
   .aiSecretField,

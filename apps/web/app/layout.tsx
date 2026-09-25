@@ -19,6 +19,10 @@ export const metadata: Metadata = {
     title: "Pliegue",
   },
   applicationName: "Pliegue",
+  // Sin icono declarado, el navegador pedía /favicon.ico en cada carga y recibía un 404.
+  icons: {
+    icon: [{ type: "image/svg+xml", url: "/brand/pliegue-mark.svg" }],
+  },
   title: {
     default: "Pliegue",
     template: "%s · Pliegue",

@@ -201,6 +201,12 @@
   text-transform: uppercase;
 }
 
+/* Sobre una tarjeta de su mismo tono, la píldora desaparecía y su relleno se leía como una
+   sangría: el rótulo quedaba 12 px por dentro del título. Ahí se apoya en el papel. */
+.pliegue-card--subtle .pliegue-tag {
+  background: var(--pliegue-color-bg-surface);
+}
+
 /* ==========================================================================
    Campo: etiqueta, control y ayuda
    ========================================================================== */

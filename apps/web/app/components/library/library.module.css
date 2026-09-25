@@ -777,6 +777,10 @@
 
   .sourcesButton,
   .filterButton {
+    /* Sin texto, el icono va al centro. @pliegue/ui estrecha el lado del icono con
+       `:has(> svg:first-child)`, que pesa más que `padding: 0` y lo dejaba 8 px corrido;
+       con el relleno base en cero, ese ajuste también queda en cero. */
+    --pliegue-button-padding: 0px;
     justify-content: center;
     padding: 0;
     width: var(--pliegue-button-height, 44px);
@@ -802,7 +806,15 @@
   }
 
   .filterGrid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* En el teléfono, a dos columnas cada selector medía 160 px y lo elegido («Todo el espacio
+   de trabajo», un autor) se cortaba contra la flecha. */
+@media (max-width: 480px) {
+  .filterGrid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

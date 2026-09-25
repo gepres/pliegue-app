@@ -324,6 +324,14 @@
     display: none;
   }
 
+  /* Sin «Biblioteca», el relleno pensado para el texto dejaba la flecha 3 px corrida en una
+     caja de 34 px. Sola, va centrada en un objetivo como el de los botones de la barra. */
+  .appBarBack {
+    justify-content: center;
+    padding: 0;
+    width: 40px;
+  }
+
   .appBarTitle {
     text-align: left;
   }

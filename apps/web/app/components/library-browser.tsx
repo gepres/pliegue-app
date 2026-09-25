@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { Button, Card, Field, Select, Switch, Tag, buttonClassName, cx } from "@pliegue/ui";
 
@@ -61,6 +61,26 @@ const sortLabels: Record<DocumentSortOrder, string> = {
 
 /** Cuántas categorías caben como atajo bajo el buscador antes de pedir el panel de filtros. */
 const categoryChipLimit = 8;
+
+/**
+ * En el teléfono el buscador deja unos 170 px para escribir y «Buscar por título, autor o
+ * concepto» se cortaba a media palabra: ahí va una ayuda que cabe entera.
+ */
+const phoneWidthQuery = "(max-width: 640px)";
+
+function subscribeToPhoneWidth(onChange: () => void) {
+  const query = window.matchMedia(phoneWidthQuery);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function usePhoneWidth() {
+  return useSyncExternalStore(
+    subscribeToPhoneWidth,
+    () => window.matchMedia(phoneWidthQuery).matches,
+    () => false,
+  );
+}
 
 const availabilityLabels: Record<AvailabilityState, string> = {
   available: "Disponible",
@@ -126,6 +146,7 @@ function describeFileLinkError(error: unknown) {
 
 export function LibraryBrowser() {
   const router = useRouter();
+  const phoneWidth = usePhoneWidth();
   const [availability, setAvailability] = useState<AvailabilityState | "all">("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [format, setFormat] = useState<DocumentFormat | "all">("all");
@@ -595,7 +616,7 @@ export function LibraryBrowser() {
             id="library-search"
             name="q"
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Buscar por título, autor o concepto"
+            placeholder={phoneWidth ? "Buscar título o autor" : "Buscar por título, autor o concepto"}
             type="search"
             value={query}
           />
