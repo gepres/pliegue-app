@@ -15,6 +15,7 @@ import {
   type LinkedFolderSource,
 } from "../library/local-folder-store";
 import styles from "../(workspace)/app/workspace.module.css";
+import { LinkingUnavailableNotice } from "./library/linking-unavailable-notice";
 
 const scanDateFormatter = new Intl.DateTimeFormat("es-PE", {
   dateStyle: "medium",
@@ -177,7 +178,7 @@ export function LocalSourcesPanel() {
         <div className={styles.linkedFolderActions}>
           <Button
             aria-describedby="linked-folders-status"
-            disabled={isBusy}
+            disabled={isBusy || linkedFolders.supported === false}
             onClick={() => void linkFolder()}
             variant="secondary"
           >
@@ -222,15 +223,7 @@ export function LocalSourcesPanel() {
         </div>
       ) : null}
 
-      {linkedFolders.supported === false ? (
-        <div className={styles.capabilityNote} role="note">
-          <strong>La vinculación de carpetas no está disponible en esta ventana.</strong>
-          <p>
-            Puedes reintentar con el botón. Abre Pliegue mediante HTTPS o localhost en Chrome
-            o Edge; la importación de una copia permanece como alternativa explícita.
-          </p>
-        </div>
-      ) : null}
+      {linkedFolders.supported === false ? <LinkingUnavailableNotice /> : null}
 
       {linkedFolders.sources.length ? (
         <ul aria-label="Carpetas vinculadas" className={styles.folderSourceList}>

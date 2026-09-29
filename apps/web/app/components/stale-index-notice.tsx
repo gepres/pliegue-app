@@ -88,7 +88,7 @@ export function StaleIndexNotice({ documents }: { documents: readonly LibraryDoc
   }
 
   return (
-    <div className={styles.capabilityNote} role="note">
+    <div className={`${styles.capabilityNote} ${styles.capabilityNoteWarn}`} role="note">
       <strong>
         {report.total} documento{report.total === 1 ? "" : "s"} con el índice de una versión
         anterior del extractor.

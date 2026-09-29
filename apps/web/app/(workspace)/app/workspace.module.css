@@ -201,18 +201,72 @@
   text-transform: uppercase;
 }
 
+/* Una nota (progreso, lo que va a pasar, lo que falta): borde continuo y sin márgenes propios
+   en sus párrafos. Antes era un recuadro discontinuo, que se leía como zona para soltar
+   archivos. */
 .capabilityNote {
+  align-items: start;
   background: var(--pliegue-color-bg-surface);
-  border: 1px dashed var(--pliegue-color-border-default);
-  border-radius: var(--pliegue-radius-sm);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
   display: grid;
-  gap: var(--pliegue-spacing-xs);
-  padding: var(--pliegue-spacing-md);
+  gap: var(--pliegue-spacing-xs) var(--pliegue-spacing-md);
+  grid-template-columns: minmax(0, 1fr);
+  padding: var(--pliegue-spacing-md) var(--pliegue-spacing-lg);
+}
+
+/* La que avisa de algo que no funciona aquí (sin vinculación, índice viejo): filete ocre. */
+.capabilityNoteWarn {
+  background: color-mix(in srgb, var(--pliegue-color-accent-warm) 8%, var(--pliegue-color-bg-surface));
+  border-color: color-mix(in srgb, var(--pliegue-color-accent-warm) 35%, var(--pliegue-color-border-default));
+  border-left: 3px solid var(--pliegue-color-accent-warm);
+}
+
+.capabilityNote:has(> .capabilityIcon) {
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
 .capabilityNote strong {
   font-family: var(--pliegue-font-reading);
-  font-size: 1rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.capabilityNote p {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 62rem;
+}
+
+.capabilityIcon {
+  align-items: center;
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: 50%;
+  color: var(--pliegue-color-accent-warm);
+  display: inline-flex;
+  height: 2.25rem;
+  justify-content: center;
+  width: 2.25rem;
+}
+
+.capabilityBody {
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+  min-width: 0;
+}
+
+.capabilityBody .localImportActions {
+  margin-top: var(--pliegue-spacing-xs);
+}
+
+.capabilityLink {
+  color: var(--pliegue-color-action-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
 .driveReferencePanel {
@@ -1029,6 +1083,19 @@
 }
 
 @media (max-width: 640px) {
+  /* En el teléfono el icono le quitaba una columna entera al texto del aviso. */
+  .capabilityIcon {
+    display: none;
+  }
+
+  .capabilityNote:has(> .capabilityIcon) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .capabilityNote {
+    padding: var(--pliegue-spacing-md);
+  }
+
   .settingsGrid,
   .preferenceGrid,
   .preferenceIntro,

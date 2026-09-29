@@ -48,6 +48,7 @@ import {
   type LibraryView,
 } from "./library/library-document-tile";
 import libraryStyles from "./library/library.module.css";
+import { LinkingUnavailableNotice } from "./library/linking-unavailable-notice";
 import { StaleIndexNotice } from "./stale-index-notice";
 import styles from "../(workspace)/app/workspace.module.css";
 
@@ -594,13 +595,7 @@ export function LibraryBrowser() {
       <StaleIndexNotice documents={allDocuments} />
 
       {linkedFiles.supported === false ? (
-        <div className={styles.capabilityNote} role="note">
-          <strong>La vinculación persistente no está disponible en esta ventana.</strong>
-          <p>
-            Abre Pliegue mediante HTTPS o localhost en Chrome o Edge; nunca crearemos una copia
-            automáticamente.
-          </p>
-        </div>
+        <LinkingUnavailableNotice onImport={() => fileInputRef.current?.click()} />
       ) : null}
 
       {/* ---- Barra de búsqueda: buscar, filtrar y cambiar de vista ------------ */}
@@ -1073,21 +1068,36 @@ export function LibraryBrowser() {
         <div className={libraryStyles.empty}>
           <Icon name="library" size={32} />
           <h2>Tu biblioteca está vacía</h2>
-          <p>
-            Vincula un archivo o una carpeta: los originales se quedan donde están y Pliegue
-            solo guarda la referencia y un índice para buscar.
-          </p>
-          <div className={libraryStyles.emptyActions}>
-            <Button disabled={linkingFiles} onClick={() => void handleLinkedFiles()}>
-              {linkingFiles ? "Vinculando…" : "Vincular archivos"}
-            </Button>
-            <Link
-              className={buttonClassName({ variant: "secondary" })}
-              href="/app/biblioteca/fuentes#carpetas"
-            >
-              Vincular carpeta
-            </Link>
-          </div>
+          {/* Donde no se puede vincular, lo que se ofrece es importar: vincular fallaría. */}
+          {linkedFiles.supported === false ? (
+            <>
+              <p>
+                Importa tus archivos: se guarda una copia en este dispositivo y Pliegue la indexa
+                para buscar en ella.
+              </p>
+              <div className={libraryStyles.emptyActions}>
+                <Button onClick={() => fileInputRef.current?.click()}>Importar archivos</Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p>
+                Vincula un archivo o una carpeta: los originales se quedan donde están y Pliegue
+                solo guarda la referencia y un índice para buscar.
+              </p>
+              <div className={libraryStyles.emptyActions}>
+                <Button disabled={linkingFiles} onClick={() => void handleLinkedFiles()}>
+                  {linkingFiles ? "Vinculando…" : "Vincular archivos"}
+                </Button>
+                <Link
+                  className={buttonClassName({ variant: "secondary" })}
+                  href="/app/biblioteca/fuentes#carpetas"
+                >
+                  Vincular carpeta
+                </Link>
+              </div>
+            </>
+          )}
         </div>
       )}
 
