@@ -6,7 +6,10 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* Arriba los dos: la nota «Detectado en el libro» alarga solo el primero, y estirado a su altura
+   el segundo bajaba y engordaba su select. */
 .languages {
+  align-items: start;
   display: grid;
   gap: var(--pliegue-spacing-sm);
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -120,4 +123,34 @@
     opacity: 0.5;
     width: 100%;
   }
+}
+
+/* Motor de traducción: el del navegador o «Tu IA», con lo que implica cada uno. */
+.engine {
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.engine a {
+  color: var(--pliegue-color-action-primary);
+  font-weight: 500;
+  /* «Cambiar en Ajustes» partido en dos renglones parecía dos enlaces. */
+  white-space: nowrap;
+}
+
+.engineNow {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.875rem;
+  gap: var(--pliegue-spacing-sm);
+  margin: 0;
+}
+
+.engineNow span {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }

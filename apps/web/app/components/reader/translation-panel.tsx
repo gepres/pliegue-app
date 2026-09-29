@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { Button, Field, Select } from "@pliegue/ui";
@@ -12,7 +13,7 @@ import {
 import type { TranslationSnapshot } from "../../library/translation-session";
 import { Segmented } from "../app-ui/controls";
 import type { TranslationView } from "./translation-view";
-import type { TranslationPhase } from "./use-book-translation";
+import type { TranslationEngineKind, TranslationPhase } from "./use-book-translation";
 import styles from "./translation-panel.module.css";
 
 /** Idiomas de origen que se ofrecen: los de los libros que suelen llegar a una biblioteca en español. */
@@ -35,8 +36,23 @@ function aheadLabel(count: number, noun: { plural: string; singular: string }) {
   return words[count] ?? `las ${count} ${noun.plural} siguientes`;
 }
 
+/** Lo que el panel cuenta de «Tu IA»: qué proveedor y modelo, y si falta la clave. */
+export interface AiEngineSummary {
+  /** En Ajustes se eligió con qué IA traducir; si no, sigue el traductor del navegador. */
+  configured: boolean;
+  /** «Gemini · gemini-3.5-flash-lite». */
+  label: string;
+  needsKey: boolean;
+  onDevice: boolean;
+  provider: string;
+}
+
 export function TranslationPanel({
   ahead,
+  aiEngine,
+  browserSupported,
+  engineKind,
+  onEngineChange,
   onClear,
   onRetry,
   onStart,
@@ -53,9 +69,14 @@ export function TranslationPanel({
 }: {
   /** Cuántas unidades se preparan por delante de la que se lee. */
   ahead: number;
+  aiEngine: AiEngineSummary;
+  /** Hay traductor integrado en este navegador. */
+  browserSupported: boolean;
+  engineKind: TranslationEngineKind;
+  onEngineChange: (kind: TranslationEngineKind) => void;
   onClear: () => Promise<void>;
   onRetry: () => void;
-  onStart: (pair: TranslationPair) => void;
+  onStart: (pair: TranslationPair, engine: TranslationEngineKind) => void;
   onStop: () => void;
   onViewChange: (view: TranslationView) => void;
   pair: TranslationPair | null;
@@ -76,10 +97,70 @@ export function TranslationPanel({
   const active = phase.kind === "ready";
   const busy = phase.kind === "checking" || phase.kind === "downloading";
   const sameLanguage = source === target;
+  const usingAi = engineKind === "ai";
+  const aiUnset = usingAi && !aiEngine.configured;
+  const aiNeedsKey = usingAi && aiEngine.configured && aiEngine.needsKey;
+  const engineName = usingAi ? `Tu IA · ${aiEngine.label}` : "Traductor del navegador";
   const sources = sourceLanguages.includes(source as (typeof sourceLanguages)[number]) ? sourceLanguages : [source, ...sourceLanguages];
 
   return (
     <div className={styles.panel}>
+      <div className={styles.engine}>
+        {active || busy ? (
+          <p className={styles.engineNow}>
+            <span>Motor</span>
+            <strong>{engineName}</strong>
+          </p>
+        ) : (
+          <Segmented<TranslationEngineKind>
+            label="Motor de traducción"
+            onChange={onEngineChange}
+            options={[
+              { label: "Navegador", value: "browser" },
+              { label: "Tu IA", value: "ai" },
+            ]}
+            size="sm"
+            value={engineKind}
+          />
+        )}
+        <p className={styles.hint}>
+          {aiUnset ? (
+            <>
+              Aún no has elegido con qué IA traducir: Azure, OpenAI, Claude, Gemini u Ollama.{" "}
+              <Link href="/app/ajustes#ia">Elegir y comparar en Ajustes</Link>
+            </>
+          ) : usingAi ? (
+            aiEngine.onDevice ? (
+              <>
+                {aiEngine.label}, en tu equipo: el texto no sale de él.{" "}
+                <Link href="/app/ajustes#ia">Cambiar en Ajustes</Link>
+              </>
+            ) : (
+              <>
+                {aiEngine.label} con tu clave: el texto de cada página va a {aiEngine.provider} y lo
+                factura tu cuenta. <Link href="/app/ajustes#ia">Cambiar en Ajustes</Link>
+              </>
+            )
+          ) : browserSupported ? (
+            <>
+              Gratis y privado: traduce en este dispositivo, con el traductor de Chrome o Edge.{" "}
+              <Link href="/app/ajustes#ia">¿Cuál conviene?</Link>
+            </>
+          ) : (
+            <>
+              Este navegador no trae traductor integrado: solo Chrome y Edge de escritorio. Con «Tu IA» se
+              traduce en cualquiera. <Link href="/app/ajustes#ia">Elegir en Ajustes</Link>
+            </>
+          )}
+        </p>
+        {aiNeedsKey && phase.kind !== "ready" ? (
+          <p className={styles.notice} role="status">
+            Falta la clave de {aiEngine.provider} en esta sesión: se guarda solo mientras la
+            pestaña está abierta. <Link href="/app/ajustes#ia">Ponla en Ajustes</Link>
+          </p>
+        ) : null}
+      </div>
+
       <div className={styles.languages}>
         <Field
           {...(source === sourceGuess ? { description: "Detectado en el libro" } : {})}
@@ -208,13 +289,14 @@ export function TranslationPanel({
         <>
           {phase.kind === "unsupported" ? (
             <p className={styles.notice} role="alert">
-              Este navegador no trae traductor integrado: por ahora funciona en Chrome y Edge de
-              escritorio. Aquí el libro se sigue leyendo en su idioma.
+              Este navegador no trae traductor integrado: funciona en Chrome y Edge de escritorio.
+              Aquí puedes traducir con «Tu IA», usando tu propia clave.
             </p>
           ) : phase.kind === "unavailable" ? (
             <p className={styles.notice} role="alert">
-              El traductor del navegador no ofrece {languageName(source)} → {languageName(target)}.
-              Prueba con otro par de idiomas.
+              {usingAi
+                ? "Elige dos idiomas distintos."
+                : `El traductor del navegador no ofrece ${languageName(source)} → ${languageName(target)}. Prueba con otro par de idiomas o con «Tu IA».`}
             </p>
           ) : phase.kind === "error" ? (
             <p className={styles.notice} role="alert">
@@ -222,22 +304,23 @@ export function TranslationPanel({
             </p>
           ) : null}
           <Button
-            disabled={busy || sameLanguage || unitCount <= 0}
-            onClick={() => onStart({ source, target })}
+            disabled={busy || sameLanguage || unitCount <= 0 || aiUnset || aiNeedsKey || (!usingAi && !browserSupported)}
+            onClick={() => onStart({ source, target }, engineKind)}
           >
             {phase.kind === "checking" ? "Comprobando el traductor…" : pair ? "Seguir traduciendo" : "Traducir este libro"}
           </Button>
           <p className={styles.hint}>
             {sameLanguage
               ? "El libro ya está en ese idioma."
-              : `Se traduce en este dispositivo con el traductor del navegador: el texto no sale del equipo. Primero la ${unitNoun.singular} que lees y, mientras tanto, ${aheadLabel(ahead, unitNoun)}.`}
+              : `${aiUnset ? "Cuando elijas una IA en Ajustes, se traducirá con ella" : usingAi ? `Se traduce con ${aiEngine.label}` : "Se traduce en este dispositivo con el traductor del navegador: el texto no sale del equipo"}. Primero la ${unitNoun.singular} que lees y, mientras tanto, ${aheadLabel(ahead, unitNoun)}.`}
           </p>
         </>
       )}
 
       <p className={styles.rights}>
-        Traducción automática, hecha en tu dispositivo para tu lectura: puede tener errores y se
-        guarda solo aquí.
+        {usingAi && !aiEngine.onDevice
+          ? "Traducción automática para tu lectura: puede tener errores y se guarda solo en este dispositivo."
+          : "Traducción automática, hecha en tu dispositivo para tu lectura: puede tener errores y se guarda solo aquí."}
       </p>
     </div>
   );

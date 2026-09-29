@@ -16,8 +16,13 @@ export interface ProviderFailure {
   status: number;
 }
 
-const providerName: Record<AiProvider, string> = {
+/** Quien responde: un proveedor de IA o Azure Translator, que solo traduce. */
+export type FailingProvider = AiProvider | "azure";
+
+const providerName: Record<FailingProvider, string> = {
   anthropic: "Anthropic",
+  azure: "Azure Translator",
+  gemini: "Gemini",
   ollama: "Ollama",
   openai: "OpenAI",
 };
@@ -40,8 +45,9 @@ function readDetail(payload: unknown) {
   if (typeof error === "string") return { code: "", message: error };
   if (!error || typeof error !== "object") return { code: "", message: "" };
 
-  const detail = error as { code?: unknown; message?: unknown; type?: unknown };
-  const code = [detail.code, detail.type].find((value) => typeof value === "string");
+  // Gemini trae el código numérico en `code` y el nombre en `status` («RESOURCE_EXHAUSTED»).
+  const detail = error as { code?: unknown; message?: unknown; status?: unknown; type?: unknown };
+  const code = [detail.code, detail.type, detail.status].find((value) => typeof value === "string");
   return {
     code: typeof code === "string" ? code : "",
     message: typeof detail.message === "string" ? detail.message : "",
@@ -55,6 +61,11 @@ function kindOf(status: number, code: string, message: string): ProviderFailureK
   if (code === "invalid_api_key" || code === "authentication_error") return "credential";
   if (code === "insufficient_quota" || code === "rate_limit_error") return "quota";
   if (code === "permission_error") return "permission";
+  // Gemini: nombres de gRPC. Una clave mal puesta llega como 400 «API key not valid».
+  if (code === "UNAUTHENTICATED" || /api key not valid/i.test(message)) return "credential";
+  if (code === "RESOURCE_EXHAUSTED") return "quota";
+  if (code === "PERMISSION_DENIED") return "permission";
+  if (code === "NOT_FOUND") return "model";
 
   // Ollama no envía código: nombra el modelo que le falta dentro del texto.
   if (/\bmodel\b.*\b(not found|does not exist)\b/i.test(message)) return "model";
@@ -66,13 +77,15 @@ function kindOf(status: number, code: string, message: string): ProviderFailureK
   return "provider";
 }
 
-function describe(kind: ProviderFailureKind, provider: AiProvider, model: string, raw: string) {
+function describe(kind: ProviderFailureKind, provider: FailingProvider, model: string, raw: string) {
   const name = providerName[provider];
   const quoted = model ? `«${model}»` : "seleccionado";
 
   switch (kind) {
     case "credential":
-      return `${name} no aceptó la API key. No es un problema del modelo: vuelve a pegar la clave en el Panel IA.`;
+      return provider === "azure"
+        ? `${name} no aceptó la clave. Comprueba la clave y la región del recurso en Ajustes: con una región que no es la suya, Azure también la rechaza.`
+        : `${name} no aceptó la API key. No es un problema del modelo: vuelve a pegar la clave en el Panel IA.`;
     case "model":
       return provider === "ollama"
         ? `El modelo ${quoted} no está descargado en Ollama. Ejecuta «ollama pull ${model}» o elige otro en el Panel IA.`
@@ -95,12 +108,13 @@ function describe(kind: ProviderFailureKind, provider: AiProvider, model: string
  * rechazó la solicitud»—.
  */
 export function classifyProviderFailure(
-  provider: AiProvider,
+  provider: FailingProvider,
   status: number,
   payload: unknown,
   model: string,
 ): ProviderFailure {
   const { code, message } = readDetail(payload);
-  const kind = kindOf(status, code, message);
+  // Azure responde 403 cuando se acabó el cupo gratuito del mes: es cupo, no permiso.
+  const kind = provider === "azure" && status === 403 ? "quota" : kindOf(status, code, message);
   return { kind, message: describe(kind, provider, model, message), status: statusByKind[kind] };
 }

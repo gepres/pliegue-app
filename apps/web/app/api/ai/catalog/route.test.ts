@@ -23,7 +23,7 @@ const input = {
 
 const testKey = "sk-test-000000000000000000000000";
 
-function request(provider: "anthropic" | "openai", apiKey = testKey) {
+function request(provider: "anthropic" | "gemini" | "openai", apiKey = testKey) {
   return new Request("http://localhost/api/ai/catalog", {
     body: JSON.stringify({ input, model: "test-model", provider }),
     headers: {
@@ -127,5 +127,29 @@ describe("catalog provider route", () => {
     expect(cuerpoModelo.error).toContain("test-model");
     expect(clave.status).toBe(401);
     expect(cuerpoClave.error).not.toBe(cuerpoModelo.error);
+  });
+
+  it("cataloga con Gemini: esquema JSON completo y sin las partes en las que piensa", async () => {
+    const geminiKey = "AIzaTest000000000000000000000000000000";
+    const providerFetch = vi.fn().mockResolvedValue(
+      Response.json({
+        candidates: [{ content: { parts: [{ text: "…", thought: true }, { text: JSON.stringify(catalog) }] } }],
+        usageMetadata: { candidatesTokenCount: 90, promptTokenCount: 800 },
+      }),
+    );
+    vi.stubGlobal("fetch", providerFetch);
+
+    const response = await POST(request("gemini", geminiKey));
+    const [url, options] = providerFetch.mock.calls[0] as [string, RequestInit];
+    const payload = (await response.json()) as { catalog: { authors: string[] }; usage: unknown };
+
+    expect(response.status).toBe(200);
+    expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/models/test-model:generateContent");
+    expect(payload.catalog.authors).toEqual(["Autora"]);
+    expect(payload.usage).toEqual({ inputTokens: 800, outputTokens: 90 });
+    expect(JSON.parse(options.body as string)).toMatchObject({
+      generationConfig: { responseMimeType: "application/json", responseJsonSchema: { additionalProperties: false } },
+    });
+    expect(options.body).not.toContain(geminiKey);
   });
 });

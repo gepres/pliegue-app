@@ -1,0 +1,233 @@
+/* La comparativa de traductores de Ajustes: una tabla con barras de coste. */
+
+.comparison {
+  background: var(--pliegue-color-bg-subtle);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  grid-column: 1 / -1;
+  padding: clamp(1rem, 3vw, 1.5rem);
+}
+
+.head {
+  display: grid;
+  gap: 2px;
+}
+
+.head h4 {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.head p,
+.sources {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.advice {
+  display: grid;
+  gap: 6px 1.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.advice li {
+  border-left: 2px solid var(--pliegue-color-accent-warm);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  padding-left: 0.75rem;
+}
+
+.table {
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  width: 100%;
+}
+
+.table th,
+.table td {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  padding: 0.6rem 0.5rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table thead th {
+  border-top: 0;
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.table tbody tr[data-chosen="true"] {
+  background: color-mix(in srgb, var(--pliegue-color-action-primary) 9%, transparent);
+}
+
+.name {
+  display: block;
+  font-weight: 600;
+}
+
+.model {
+  color: var(--pliegue-color-text-secondary);
+  display: block;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  font-weight: 400;
+}
+
+/* Coste: la cifra escrita y una barra fina anclada a la izquierda, del color de la acción. */
+.costCell {
+  min-width: 9rem;
+}
+
+.cost {
+  display: block;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+}
+
+.track {
+  background: color-mix(in srgb, var(--pliegue-color-text-primary) 7%, transparent);
+  border-radius: 4px;
+  display: block;
+  height: 6px;
+  overflow: hidden;
+}
+
+.bar {
+  background: var(--pliegue-color-action-primary);
+  border-radius: 0 4px 4px 0;
+  display: block;
+  height: 100%;
+}
+
+.quality {
+  white-space: nowrap;
+}
+
+.quality::before {
+  color: var(--pliegue-color-accent-warm);
+  letter-spacing: 1px;
+  margin-right: 0.35rem;
+}
+
+.quality[data-level="Básica"]::before {
+  content: "●○○";
+}
+
+.quality[data-level="Buena"]::before {
+  content: "●●○";
+}
+
+.quality[data-level="Muy buena"]::before {
+  content: "●●●";
+}
+
+.action {
+  text-align: right;
+}
+
+.choose {
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-control);
+  border-radius: var(--pliegue-radius-full);
+  color: var(--pliegue-color-text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 500;
+  padding: 0.3rem 0.85rem;
+  white-space: nowrap;
+}
+
+.choose:hover:not(:disabled) {
+  border-color: var(--pliegue-color-action-primary);
+}
+
+.choose:disabled {
+  background: transparent;
+  border-color: transparent;
+  color: var(--pliegue-color-action-primary);
+  cursor: default;
+}
+
+.choose:focus-visible {
+  outline: 3px solid var(--pliegue-color-focus-ring);
+  outline-offset: 2px;
+}
+
+.visuallyHidden {
+  clip: rect(0 0 0 0);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/* En pantallas estrechas cada traductor es una tarjeta: nombre arriba y sus datos con etiqueta. */
+@media (max-width: 860px) {
+  .advice {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table,
+  .table tbody,
+  .table tr,
+  .table th,
+  .table td {
+    display: block;
+  }
+
+  .table tr {
+    border-top: 1px solid var(--pliegue-color-border-default);
+    display: grid;
+    gap: 4px 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 0.75rem 0.25rem;
+  }
+
+  .table th,
+  .table td {
+    border-top: 0;
+    padding: 0;
+  }
+
+  .table th[scope="row"] {
+    grid-column: 1 / -1;
+  }
+
+  .table td[data-label]::before {
+    color: var(--pliegue-color-text-secondary);
+    content: attr(data-label);
+    display: block;
+    font-family: var(--pliegue-font-data);
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .costCell {
+    grid-column: 1 / -1;
+  }
+
+  .action {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+}

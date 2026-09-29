@@ -2,6 +2,9 @@ import type { AiProvider } from "./document-catalog";
 
 export type HostedAiProvider = Exclude<AiProvider, "ollama">;
 
+/** Todo lo que pide una clave: los proveedores de IA alojados y Azure Translator. */
+export type KeyProvider = HostedAiProvider | "azure";
+
 export interface ApiKeyCheck {
   /** Bloquea el envío: lo pegado no puede ser una credencial. */
   error: string | null;
@@ -62,13 +65,18 @@ export function normalizeApiKey(value: string): NormalizedApiKey {
   return { key, removed: [...removed] };
 }
 
-const expectedPrefix: Record<HostedAiProvider, string> = {
+/** Azure no tiene prefijo: sus claves son una ristra de letras y cifras. */
+const expectedPrefix: Record<KeyProvider, string | null> = {
   anthropic: "sk-ant-",
+  azure: null,
+  gemini: "AIza",
   openai: "sk-",
 };
 
-const providerLabel: Record<HostedAiProvider, string> = {
+const providerLabel: Record<KeyProvider, string> = {
   anthropic: "Anthropic",
+  azure: "Azure",
+  gemini: "Gemini",
   openai: "OpenAI",
 };
 
@@ -82,7 +90,7 @@ const providerLabel: Record<HostedAiProvider, string> = {
  * El prefijo solo avisa: los proveedores pueden cambiar su formato y bloquear por eso dejaría
  * fuera claves legítimas.
  */
-export function checkApiKey(provider: HostedAiProvider, value: string): ApiKeyCheck {
+export function checkApiKey(provider: KeyProvider, value: string): ApiKeyCheck {
   const trimmed = value.trim();
 
   if (!trimmed) {
@@ -105,10 +113,12 @@ export function checkApiKey(provider: HostedAiProvider, value: string): ApiKeyCh
     };
   }
 
+  const prefix = expectedPrefix[provider];
   return {
     error: null,
-    warning: trimmed.startsWith(expectedPrefix[provider])
-      ? null
-      : `Las claves de ${providerLabel[provider]} suelen empezar por «${expectedPrefix[provider]}». Comprueba que sea la del proveedor seleccionado.`,
+    warning:
+      prefix === null || trimmed.startsWith(prefix)
+        ? null
+        : `Las claves de ${providerLabel[provider]} suelen empezar por «${prefix}». Comprueba que sea la del proveedor seleccionado.`,
   };
 }

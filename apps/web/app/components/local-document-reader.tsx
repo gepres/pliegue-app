@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { Button, Card, Tag, buttonClassName } from "@pliegue/ui";
 
+import { useAiSessionSecrets } from "../ai/ai-session-secret-store";
+import { translationProviderOf } from "../ai/ai-settings";
+import { useAiSettings } from "../ai/ai-settings-store";
 import { useDocumentCatalogs } from "../ai/document-catalog-store";
+import { createAiTranslationEngine, translationProviderNames } from "../ai/translation-ai-engine";
 import {
   clearDocumentAnnotations,
   currentAnnotation,
@@ -25,6 +29,7 @@ import { applyImportedCatalogs } from "../library/catalog-import";
 import { applyDocumentCatalogs } from "../library/documents";
 import { normalizeLanguage } from "../library/language";
 import { defaultPagesAhead } from "../library/translation";
+import { browserEngine, hasBuiltInTranslator } from "../library/translation-engine";
 import { useImportedCatalogs } from "../library/imported-catalog-store";
 import { useImmersiveMode, useReaderScroll } from "../mode/immersive";
 import { annotationAtPoint, useAnnotationHighlights, type SelectionCapture } from "./reader/annotation-highlights";
@@ -101,6 +106,11 @@ type PreviewState =
   | { status: "loading" }
   | { message: string; status: "error" }
   | { preview: LocalDocumentPreview; status: "ready" };
+
+/** Para `useSyncExternalStore` con valores que no cambian mientras la página vive. */
+function subscribeToNothing() {
+  return () => {};
+}
 
 function isFolderDocument(document: LocalDocument): document is LinkedFolderDocument {
   return document.reference.kind === "local-folder";
@@ -900,9 +910,32 @@ function LocalReaderShell({
   // Por delante se preparan cinco páginas, pero solo dos secciones: en un EPUB cada una es un
   // capítulo entero.
   const translationAhead = isPdf ? defaultPagesAhead : 2;
+  // Dos motores: el traductor del navegador —el predeterminado— y «Tu IA», con el proveedor y la
+  // clave que la persona elija en Ajustes. Si eligió una IA, se empieza por ella.
+  const browserSupported = useSyncExternalStore(subscribeToNothing, hasBuiltInTranslator, () => true);
+  const aiSettings = useAiSettings();
+  const aiSecrets = useAiSessionSecrets();
+  const aiProvider = translationProviderOf(aiSettings);
+  const aiApiKey = aiProvider === "ollama" || aiProvider === "browser" ? "" : aiSecrets[aiProvider];
+  const translationEngines = useMemo(
+    () => ({ ai: createAiTranslationEngine(aiSettings, aiApiKey), browser: browserEngine }),
+    [aiApiKey, aiSettings],
+  );
+  const aiEngineSummary = useMemo(
+    () => ({
+      configured: aiProvider !== "browser",
+      label: translationEngines.ai.label,
+      needsKey: aiProvider !== "ollama" && aiProvider !== "browser" && !aiApiKey,
+      onDevice: translationEngines.ai.onDevice,
+      provider: translationProviderNames[aiProvider],
+    }),
+    [aiApiKey, aiProvider, translationEngines.ai],
+  );
   const translation = useBookTranslation<TranslationSourceBlock>({
     currentUnit: isPdf ? (pages?.current ?? 1) : currentSection,
+    defaultEngine: aiProvider === "browser" ? "browser" : "ai",
     documentId: document.id,
+    engines: translationEngines,
     loadUnit: async (unit) => {
       if (!isPdf) {
         const section = structuredSections?.[unit - 1];
@@ -1228,11 +1261,15 @@ function LocalReaderShell({
               {() => (
                 <TranslationPanel
                   ahead={translationAhead}
+                  aiEngine={aiEngineSummary}
+                  browserSupported={browserSupported}
+                  engineKind={translation.engineKind}
                   onClear={translation.clear}
+                  onEngineChange={translation.chooseEngine}
                   onRetry={translation.retry}
-                  onStart={(next) => {
+                  onStart={(next, engine) => {
                     setTranslationVisible(true);
-                    void translation.start(next);
+                    void translation.start(next, engine);
                   }}
                   onStop={translation.stop}
                   onViewChange={changeTranslationView}

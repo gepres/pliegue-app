@@ -26,6 +26,10 @@ describe("comprobación de credenciales antes de enviarlas", () => {
       error: null,
       warning: null,
     });
+    expect(checkApiKey("gemini", `AIza${"a".repeat(35)}`)).toEqual({ error: null, warning: null });
+    expect(checkApiKey("gemini", `sk-${"a".repeat(40)}`).warning).toMatch(/AIza/);
+    // Azure no tiene prefijo: una ristra de letras y cifras no merece aviso.
+    expect(checkApiKey("azure", "0123456789abcdef0123456789abcdef")).toEqual({ error: null, warning: null });
   });
 
   it("avisa del prefijo inesperado sin bloquear el envío", () => {

@@ -33,7 +33,7 @@ export default function SettingsPage() {
         },
         {
           content: <AiSettingsPanel />,
-          description: "Proveedor, credencial y catálogo automático",
+          description: "Proveedor, clave, catálogo y traducción",
           icon: "sparkles",
           id: "ia",
           label: "Inteligencia artificial",

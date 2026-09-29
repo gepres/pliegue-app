@@ -52,6 +52,33 @@ describe("traducir los bloques de una página", () => {
     await expect(translateBlocks(translator, ["Some text"], controller.signal)).rejects.toThrow();
   });
 
+  it("con un motor por lotes, manda la página entera de una vez y devuelve cada bloque a su sitio", async () => {
+    const batches: string[][] = [];
+    const translator: OpenTranslator = {
+      destroy: () => undefined,
+      translate: async () => {
+        throw new Error("no debería traducir de uno en uno");
+      },
+      translateMany: async (texts) => {
+        batches.push([...texts]);
+        // El modelo deja vacío el segundo pasaje: queda el original, no un hueco.
+        return texts.map((text, index) => (index === 1 ? "" : `«${text}»`));
+      },
+    };
+    const long = `${"A long sentence that keeps going. ".repeat(140)}`.trim();
+    const blocks = await translateBlocks(translator, ["The island.", "Plates 12\nMaps 14", "42", long]);
+
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.[0]).toBe("The island.");
+    // Los saltos de renglón viajan con el pasaje; el modelo los respeta.
+    expect(batches[0]?.[1]).toBe("Plates 12\nMaps 14");
+    // Lo que no tiene palabras no se envía, y el bloque larguísimo va partido por frases.
+    expect(batches[0]?.includes("42")).toBe(false);
+    expect(batches[0]?.length).toBeGreaterThan(3);
+    expect(blocks.map((block) => block.text.slice(0, 20))).toEqual(["«The island.»", "Plates 12\nMaps 14", "42", "«A long sentence tha"]);
+    expect(blocks[3]?.hash).toBe(hashText(long));
+  });
+
   it("dice que no está disponible donde el navegador no trae traductor", async () => {
     expect(await browserEngine.availability({ source: "en", target: "es" })).toBe("unsupported");
   });

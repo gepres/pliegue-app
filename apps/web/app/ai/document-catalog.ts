@@ -1,6 +1,6 @@
 import type { LibraryDocument } from "../library/documents";
 
-export const aiProviders = ["openai", "anthropic", "ollama"] as const;
+export const aiProviders = ["openai", "anthropic", "gemini", "ollama"] as const;
 export const documentWorkTypes = [
   "book",
   "essay",
@@ -65,13 +65,13 @@ export const emptyCatalogUsage: CatalogUsage = { inputTokens: 0, outputTokens: 0
 
 /**
  * Cada proveedor nombra sus contadores de otra forma y los coloca donde quiere: OpenAI y
- * Anthropic bajo `usage`, Ollama en la raíz de la respuesta. Se buscan en ambos sitios para no
+ * Anthropic bajo `usage`, Gemini bajo `usageMetadata`, Ollama en la raíz de la respuesta. Se buscan en ambos sitios para no
  * repetir esta lógica en cada adaptador. Un proveedor que no informe deja el consumo en cero,
  * que es preferible a estimarlo y presentar un número inventado como si fuera medido.
  */
 export function readCatalogUsage(source: unknown): CatalogUsage {
   const root = (source ?? {}) as Record<string, unknown>;
-  const nested = (root.usage ?? {}) as Record<string, unknown>;
+  const nested = (root.usage ?? root.usageMetadata ?? {}) as Record<string, unknown>;
   const read = (...keys: string[]) => {
     for (const key of keys) {
       for (const scope of [nested, root]) {
@@ -83,8 +83,11 @@ export function readCatalogUsage(source: unknown): CatalogUsage {
   };
 
   return {
-    inputTokens: read("input_tokens", "prompt_tokens", "prompt_eval_count"),
-    outputTokens: read("output_tokens", "completion_tokens", "eval_count"),
+    inputTokens: read("input_tokens", "prompt_tokens", "promptTokenCount", "prompt_eval_count"),
+    // Gemini cuenta aparte lo que piensa, y también se factura como salida.
+    outputTokens:
+      read("output_tokens", "completion_tokens", "candidatesTokenCount", "eval_count") +
+      read("thoughtsTokenCount"),
   };
 }
 

@@ -1207,3 +1207,39 @@
   line-height: 1.5;
   margin: 0;
 }
+
+/* Los dos apartados del formulario de IA: catalogar y traducir, cada uno con su proveedor. */
+.aiGroupHead {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: var(--pliegue-spacing-2xs, 4px);
+  grid-column: 1 / -1;
+  padding-top: var(--pliegue-spacing-md);
+  scroll-margin-top: 96px;
+}
+
+.aiGroupHead:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.aiGroupHead h3 {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.aiGroupHead p,
+.aiGroupNote {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 52rem;
+}
+
+.aiGroupNote {
+  align-self: end;
+  grid-column: 1 / -1;
+}
