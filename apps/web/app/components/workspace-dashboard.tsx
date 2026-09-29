@@ -86,17 +86,9 @@ export function WorkspaceDashboard() {
     <>
       <PageHeader
         actions={
-          <>
-            <Link
-              className={buttonClassName({ variant: "secondary" })}
-              href="/design-system"
-            >
-              Sistema visual
-            </Link>
-            <Link className={buttonClassName()} href="/app/biblioteca#importar-archivos">
-              Añadir documentos
-            </Link>
-          </>
+          <Link className={buttonClassName()} href="/app/biblioteca#importar-archivos">
+            Añadir documentos
+          </Link>
         }
         description="Vincula archivos o carpetas; Pliegue conserva referencias e índices derivados y abre el original desde su ubicación."
         eyebrow="Área local · Datos reales"
