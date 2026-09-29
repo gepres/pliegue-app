@@ -67,7 +67,7 @@ function scopeOf(node: Node | null) {
 }
 
 /** Caracteres de `scope` que hay antes de un punto del DOM. */
-function offsetWithin(scope: Element, node: Node, offset: number) {
+export function offsetWithin(scope: Element, node: Node, offset: number) {
   const range = document.createRange();
   range.setStart(scope, 0);
   range.setEnd(node, offset);

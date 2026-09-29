@@ -355,6 +355,8 @@ export interface LayoutBox {
 /** Un bloque recompuesto que además sabe dónde estaba: lo que hace falta para taparlo. */
 export interface LayoutBlock {
   box: LayoutBox;
+  /** Compuesto al centro, como un título, una dedicatoria o un poema. */
+  centered: boolean;
   /** El cuerpo más grande del bloque, en unidades del PDF. */
   fontHeight: number;
   kind: "heading" | "paragraph";
@@ -374,6 +376,32 @@ export interface LayoutResult {
 /** Sobre la línea base, las letras suben unos tres cuartos del cuerpo y bajan un cuarto. */
 const ascent = 0.8;
 const descent = 0.25;
+
+/** Centrado en la página: su eje cae a un 4 % del centro. */
+function onPageAxis(left: number, right: number, pageWidth: number) {
+  return pageWidth > 0 && Math.abs((left + right) / 2 - pageWidth / 2) <= pageWidth * 0.04;
+}
+
+/**
+ * Compuesto al centro. En un libro la caja de texto suele estar centrada en la página, así que
+ * un párrafo justificado también cae en su eje: lo que lo distingue es que sus renglones
+ * arrancan todos en el mismo margen. Uno al centro tiene los bordes a distintas alturas y los
+ * centros alineados. Un título, o un renglón suelto, basta con que caiga en el eje sin ocupar
+ * todo el ancho.
+ */
+function isCentered(lines: readonly ReflowLine[], heading: boolean, pageWidth: number) {
+  if (lines.length === 0) return false;
+  const left = Math.min(...lines.map((line) => line.left));
+  const right = Math.max(...lines.map((line) => line.right));
+  if (!onPageAxis(left, right, pageWidth)) return false;
+  if (heading || lines.length === 1) return right - left < pageWidth * 0.8;
+  const size = Math.max(...lines.map((line) => line.fontHeight));
+  const spread = (values: readonly number[]) => Math.max(...values) - Math.min(...values);
+  return (
+    spread(lines.map((line) => line.left)) > size &&
+    spread(lines.map((line) => (line.left + line.right) / 2)) <= size * 0.75
+  );
+}
 
 function boxOf(lines: readonly ReflowLine[]): LayoutBox {
   return {
@@ -445,6 +473,7 @@ export function layoutPage(
     return [
       {
         box: boxOf(group),
+        centered: isCentered(group, heading, pageWidth),
         fontHeight,
         kind: heading ? "heading" : "paragraph",
         level: heading ? Math.min(6, levels.indexOf(roundSize(fontHeight)) + 1) : 0,
@@ -465,8 +494,7 @@ export function layoutPage(
  * página y uno justo debajo del otro, son el mismo título.
  */
 function mergeStackedTitles(blocks: readonly LayoutBlock[], pageWidth: number) {
-  const centered = (box: LayoutBox) =>
-    pageWidth > 0 && Math.abs((box.left + box.right) / 2 - pageWidth / 2) <= pageWidth * 0.04;
+  const centered = (box: LayoutBox) => onPageAxis(box.left, box.right, pageWidth);
   const merged: LayoutBlock[] = [];
 
   for (const block of blocks) {
@@ -483,6 +511,7 @@ function mergeStackedTitles(blocks: readonly LayoutBlock[], pageWidth: number) {
             right: Math.max(previous.box.right, block.box.right),
             top: Math.max(previous.box.top, block.box.top),
           },
+          centered: true,
           fontHeight: reference,
           kind: "heading",
           level: Math.min(previous.level, block.level),

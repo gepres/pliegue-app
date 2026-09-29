@@ -9,6 +9,8 @@ import {
   pageGap,
   pageProgressPercent,
   placePages,
+  readingAnchor,
+  scrollTopForAnchor,
   scrollTopForPage,
   totalHeight,
   visiblePageRange,
@@ -174,5 +176,36 @@ describe("nitidez y zoom", () => {
     }
 
     expect(steps).toEqual([1.25, 1.5, 2, 3, 4, 4]);
+  });
+});
+
+describe("punto de lectura al cambiar la escala", () => {
+  const sizes = Array.from({ length: 40 }, () => ({ height: 800, width: 600 }));
+
+  it("vuelve a la misma página y al mismo punto de ella con otro zoom", () => {
+    const before = placePages(sizes, 1);
+    // A media página 34.
+    const anchor = readingAnchor(before, before[33]!.top + 400);
+    expect(anchor).toEqual({ fraction: 0.5, page: 34 });
+
+    const after = placePages(sizes, 3);
+    const scrollTop = scrollTopForAnchor(after, anchor);
+    expect(scrollTop).toBe(after[33]!.top + 1200);
+    expect(readingAnchor(after, scrollTop)).toEqual(anchor);
+    // Sin conservarlo, el mismo desplazamiento caía en la página 12.
+    expect(currentPageNumber(after, before[33]!.top + 400, 900)).toBe(12);
+  });
+
+  it("en el hueco de encima de una página cuenta esa página, con el hueco a escala", () => {
+    const placements = placePages(sizes, 1);
+    const anchor = readingAnchor(placements, scrollTopForPage(placements, 5));
+    expect(anchor.page).toBe(5);
+    expect(anchor.fraction).toBeCloseTo(-pageGap / 800);
+    expect(scrollTopForAnchor(placePages(sizes, 2), anchor)).toBe(placePages(sizes, 2)[4]!.top - pageGap * 2);
+  });
+
+  it("sin páginas se queda al principio", () => {
+    expect(readingAnchor([], 300)).toEqual({ fraction: 0, page: 1 });
+    expect(scrollTopForAnchor([], { fraction: 0.5, page: 3 })).toBe(0);
   });
 });

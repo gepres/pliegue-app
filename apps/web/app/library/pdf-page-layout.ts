@@ -165,6 +165,40 @@ export function scrollTopForPage(
   return Math.max(0, placement.top - gap);
 }
 
+/** Por dónde va la lectura: la página que pasa por lo alto de la ventana y cuánto de ella queda arriba. */
+export interface ReadingAnchor {
+  /** De 0 a 1; algo menos de 0 en el hueco de encima de la página. */
+  fraction: number;
+  page: number;
+}
+
+/**
+ * El punto de lectura de un desplazamiento. Es lo que se conserva al cambiar la escala: con
+ * el zoom todo cambia de alto y el mismo desplazamiento en píxeles caería en otra página.
+ */
+export function readingAnchor(placements: readonly PdfPagePlacement[], scrollTop: number): ReadingAnchor {
+  if (placements.length === 0) return { fraction: 0, page: 1 };
+  // La primera página cuyo borde inferior queda por debajo de lo alto de la ventana.
+  let low = 0;
+  let high = placements.length - 1;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    const placement = placements[middle]!;
+    if (placement.top + placement.height <= scrollTop) low = middle + 1;
+    else high = middle;
+  }
+  const placement = placements[low]!;
+  const fraction = (scrollTop - placement.top) / Math.max(1, placement.height);
+  return { fraction: Math.min(1, Math.max(-0.25, fraction)), page: placement.number };
+}
+
+/** El desplazamiento que devuelve a un punto de lectura con la disposición actual. */
+export function scrollTopForAnchor(placements: readonly PdfPagePlacement[], anchor: ReadingAnchor) {
+  const placement = placements[anchor.page - 1];
+  if (!placement) return 0;
+  return Math.max(0, placement.top + anchor.fraction * placement.height);
+}
+
 /**
  * Avance de lectura, contado en páginas terminadas: estar en la última significa haber
  * llegado al final. Es la única medida que un lector puede comprobar de un vistazo, y la

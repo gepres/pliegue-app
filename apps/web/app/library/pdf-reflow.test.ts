@@ -327,6 +327,38 @@ describe("recomposición de una página", () => {
     expect(blocks[0]?.lines).toBe(3);
   });
 
+  it("distingue un párrafo justificado en el eje de la página de uno compuesto al centro", () => {
+    // La caja de texto de un libro suele estar centrada: el párrafo cae en el eje, pero todos
+    // sus renglones salen del mismo margen, salvo la sangría. Antes se tomaba por centrado y
+    // la traducción se pintaba al centro.
+    const margin = (pageWidth - 400) / 2;
+    // Renglones llenos de 400 de ancho (80 caracteres de 5) y el último, corto.
+    const full = (text: string) => text.padEnd(80, " ");
+    const justified = layoutPage(
+      [
+        item(full("Some studies of mast fruiting have suggested that the mechanism for"), margin, 500),
+        item(full("synchrony comes not through the air, but underground. The trees in a"), margin, 488),
+        item("forest are often connected.", margin, 476),
+      ],
+      pageWidth,
+    ).blocks[0];
+    expect(justified?.kind).toBe("paragraph");
+    expect(justified && Math.abs((justified.box.left + justified.box.right) / 2 - pageWidth / 2)).toBeLessThan(1);
+    expect(justified?.centered).toBe(false);
+
+    // Una dedicatoria o un poema: renglones de largos distintos alrededor del mismo eje.
+    const centeredLine = (text: string, y: number) => item(text, pageWidth / 2 - (text.length * 5) / 2, y);
+    const poem = layoutPage(
+      [centeredLine("For my daughters,", 500), centeredLine("who walk with the plants and remember", 488), centeredLine("everything", 476)],
+      pageWidth,
+    ).blocks[0];
+    expect(poem?.centered).toBe(true);
+
+    // Un título suelto al centro, y el mismo título contra el margen.
+    expect(layoutPage([item("Skywoman Falling", pageWidth / 2 - 80, 700, 20)], pageWidth).blocks[0]?.centered).toBe(true);
+    expect(layoutPage([item("Skywoman Falling", 72, 700, 20)], pageWidth).blocks[0]?.centered).toBe(false);
+  });
+
   it("da la caja de cada bloque, para tapar solo el texto al pintar su traducción", () => {
     const first = "El texto corrido de la página, que es lo más frecuente";
     const items = [

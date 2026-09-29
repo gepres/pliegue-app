@@ -1,4 +1,5 @@
 import type { StructuredDocumentBlock } from "../library/structured-document-extractor";
+import { readingAnchorProps } from "./reader/reading-anchor";
 import styles from "./extracted-blocks.module.css";
 
 /**
@@ -10,20 +11,26 @@ import styles from "./extracted-blocks.module.css";
  * formato no se note al leer.
  */
 export function ExtractedBlock({
+  anchor,
   block,
   sectionTitle,
 }: {
+  /** Punto de lectura del bloque, el mismo en todas las vistas: ver `useReadingPlace`. */
+  anchor?: string | undefined;
   block: StructuredDocumentBlock;
   sectionTitle: string;
 }) {
+  const anchorProps = readingAnchorProps(anchor);
+
   if (block.kind === "heading") {
-    return block.level <= 2 ? <h3>{block.text}</h3> : <h4>{block.text}</h4>;
+    return block.level <= 2 ? <h3 {...anchorProps}>{block.text}</h3> : <h4 {...anchorProps}>{block.text}</h4>;
   }
 
-  if (block.kind === "paragraph") return <p>{block.text}</p>;
+  if (block.kind === "paragraph") return <p {...anchorProps}>{block.text}</p>;
 
   return (
     <div
+      {...anchorProps}
       aria-label={`Tabla extraída de ${sectionTitle}`}
       className={styles.tableViewport}
       role="region"
@@ -45,9 +52,15 @@ export function ExtractedBlock({
 }
 
 export function ExtractedBlocks({
+  anchorPrefix,
+  anchorOffset = 0,
   blocks,
   sectionTitle,
 }: {
+  /** Prefijo de los puntos de lectura (`s3`, `p60`); sin él, los bloques no llevan. */
+  anchorPrefix?: string | undefined;
+  /** Posición del primer bloque en su sección, si se ha quitado alguno delante (el título). */
+  anchorOffset?: number;
   blocks: readonly StructuredDocumentBlock[];
   sectionTitle: string;
 }) {
@@ -55,6 +68,7 @@ export function ExtractedBlocks({
     <div className={styles.blocks}>
       {blocks.map((block, index) => (
         <ExtractedBlock
+          anchor={anchorPrefix ? `${anchorPrefix}:${index + anchorOffset}` : undefined}
           block={block}
           key={`${sectionTitle}-${block.kind}-${index}`}
           sectionTitle={sectionTitle}

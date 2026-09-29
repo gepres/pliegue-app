@@ -79,7 +79,17 @@ import {
 } from "../library/local-reader-state";
 import { PdfReader, type PdfLayoutBlock, type PdfPageTranslationView, type PdfReaderProps } from "./pdf-reader";
 import type { StructuredDocumentBlock, StructuredDocumentSection } from "../library/structured-document-extractor";
+import { ParallelBlocks } from "./reader/parallel-blocks";
+import { useParallelLink } from "./reader/parallel-link";
+import { useReadingPlace } from "./reader/reading-place";
 import { TranslationPanel } from "./reader/translation-panel";
+import {
+  readTranslationLayout,
+  useParallelWidth,
+  writeTranslationLayout,
+  type TranslationLayout,
+  type TranslationView,
+} from "./reader/translation-view";
 import { useBookTranslation } from "./reader/use-book-translation";
 import { PageHeader } from "./workspace-page";
 import styles from "./local-document-reader.module.css";
@@ -149,15 +159,21 @@ export interface SectionTranslationView {
 
 function StructuredPreview({
   onSectionChange,
+  parallel = false,
   preview,
   translation,
 }: {
   onSectionChange?: ((section: number) => void) | undefined;
+  /** Original y traducción en dos columnas, en lugar de la traducción sola. */
+  parallel?: boolean | undefined;
   preview: Extract<LocalDocumentPreview, { kind: "structured" }>;
   /** Por número de sección (desde 1); `null` muestra el original. */
   translation?: ReadonlyMap<number, SectionTranslationView> | null | undefined;
 }) {
+  const sideBySide = parallel && Boolean(translation);
   const sectionsRef = useRef<HTMLDivElement>(null);
+  // Al pasar a la traducción, al original o a las dos, se sigue en el mismo párrafo.
+  useReadingPlace(sectionsRef, sideBySide ? "parallel" : translation ? "translated" : "original");
 
   // Qué sección se está leyendo: la que más pantalla ocupa, como las páginas de la vista
   // Lectura del PDF. La traducción la usa para ir primero por ella y después por las siguientes.
@@ -201,11 +217,12 @@ function StructuredPreview({
           disponible sin modificar el archivo original.
         </p>
       ) : null}
-      {/* Con la traducción a la vista no se resalta: una marca guardaría un texto que no es el
-          del libro y ya no se encontraría al volver al original. */}
+      {/* Con la traducción en lugar del original no se resalta: una marca guardaría un texto
+          que no es el del libro y ya no se encontraría al volver al original. En paralelo el
+          original sigue a la vista y se marca; la columna traducida lo impide por su cuenta. */}
       <div
         className={styles.structuredSections}
-        data-annotation-scope={translation ? undefined : "document"}
+        data-annotation-scope={translation && !sideBySide ? undefined : "document"}
         ref={sectionsRef}
       >
         {preview.sections.map((section, sectionIndex) => {
@@ -223,8 +240,52 @@ function StructuredPreview({
           const titleIndex = section.blocks.findIndex(
             (block) => (block.kind === "heading" || block.kind === "paragraph") && block.text.trim() === section.title.trim(),
           );
-          const title = texts && titleIndex >= 0 ? texts[titleIndex] || section.title : section.title;
+          const translatedTitle = texts && titleIndex >= 0 ? texts[titleIndex] || null : null;
+          const title = translatedTitle ?? section.title;
           const [, ...rest] = blocks;
+
+          if (sideBySide) {
+            // El título del original manda; su traducción va debajo, enlazada como un bloque más.
+            const titleKey = `sec:${section.id}:title`;
+            return (
+              <section
+                aria-labelledby={headingId}
+                className={styles.structuredSection}
+                data-section-index={sectionIndex + 1}
+                key={section.id}
+              >
+                <header>
+                  <span id={untitled ? headingId : undefined}>{section.label}</span>
+                  {untitled ? null : (
+                    <h2 data-parallel-key={titleKey} data-parallel-side="source" id={headingId}>
+                      {section.title}
+                    </h2>
+                  )}
+                  {!untitled && translatedTitle ? (
+                    <p
+                      className={styles.sectionTranslatedTitle}
+                      data-annotation-scope=""
+                      data-parallel-key={titleKey}
+                      data-parallel-side="target"
+                      lang={view?.language}
+                    >
+                      {translatedTitle}
+                    </p>
+                  ) : null}
+                </header>
+                <ParallelBlocks
+                  anchorOffset={titleIndex === 0 ? 1 : 0}
+                  anchorPrefix={`s${sectionIndex + 1}`}
+                  blocks={titleIndex === 0 ? section.blocks.slice(1) : section.blocks}
+                  keyPrefix={`sec:${section.id}`}
+                  language={view?.language}
+                  pending={Boolean(view?.pending)}
+                  sectionTitle={section.title}
+                  translations={texts ? (titleIndex === 0 ? rest : blocks) : null}
+                />
+              </section>
+            );
+          }
 
           return (
             <section
@@ -243,7 +304,12 @@ function StructuredPreview({
                   Traduciendo esta sección…
                 </p>
               ) : null}
-              <ExtractedBlocks blocks={titleIndex === 0 ? rest : blocks} sectionTitle={section.title} />
+              <ExtractedBlocks
+                anchorOffset={titleIndex === 0 ? 1 : 0}
+                anchorPrefix={`s${sectionIndex + 1}`}
+                blocks={titleIndex === 0 ? rest : blocks}
+                sectionTitle={section.title}
+              />
             </section>
           );
         })}
@@ -260,6 +326,7 @@ type PdfAnnotationProps = Pick<
   | "onRegionClick"
   | "onRegionSelected"
   | "onRegionTools"
+  | "parallel"
   | "pendingRegion"
   | "regions"
   | "translation"
@@ -269,6 +336,7 @@ type PdfAnnotationProps = Pick<
 interface StructuredTranslationProps {
   onSectionChange: (section: number) => void;
   onSections: (sections: readonly StructuredDocumentSection[] | null) => void;
+  parallel: boolean;
   translation: ReadonlyMap<number, SectionTranslationView> | null;
 }
 
@@ -477,6 +545,7 @@ function PreviewCanvas({
     return (
       <StructuredPreview
         onSectionChange={structured.onSectionChange}
+        parallel={structured.parallel}
         preview={preview}
         translation={structured.translation}
       />
@@ -783,6 +852,10 @@ function LocalReaderShell({
   const [translationOpen, setTranslationOpen] = useState(false);
   // Con la traducción en marcha, «Original» la esconde sin detenerla: sigue preparando páginas.
   const [translationVisible, setTranslationVisible] = useState(true);
+  // Encima del original o a su lado. A su lado solo en pantallas anchas: en el teléfono la
+  // preferencia se guarda, pero se lee como siempre.
+  const [translationLayout, setTranslationLayout] = useState<TranslationLayout>(readTranslationLayout);
+  const parallelFits = useParallelWidth();
   const previewRef = useRef<HTMLElement>(null);
   const markContentReady = useCallback(() => setContentReady(true), []);
   const reportPage = useCallback(
@@ -851,6 +924,20 @@ function LocalReaderShell({
     ("detectedLanguage" in document && typeof document.detectedLanguage === "string" ? document.detectedLanguage : null);
   const { pair: translationPair, snapshot: translationSnapshot, unit: translatedUnit } = translation;
   const showTranslation = translatable && translationActive && translationVisible;
+  const parallel = showTranslation && parallelFits && translationLayout === "parallel";
+  const translationView: TranslationView = !translationVisible
+    ? "original"
+    : parallelFits && translationLayout === "parallel"
+      ? "parallel"
+      : "translated";
+  const changeTranslationView = useCallback((view: TranslationView) => {
+    setTranslationVisible(view !== "original");
+    if (view === "original") return;
+    const layout: TranslationLayout = view === "parallel" ? "parallel" : "overlay";
+    setTranslationLayout(layout);
+    writeTranslationLayout(layout);
+  }, []);
+  useParallelLink(previewRef, parallel ? translationPair : null);
   const pdfTranslation = useMemo(
     () =>
       showTranslation && isPdf && translationPair && pages
@@ -946,6 +1033,10 @@ function LocalReaderShell({
         // En marcha, alterna traducción y original; si no, abre el panel para empezar.
         if (translationActive) setTranslationVisible((visible) => !visible);
         else setTranslationOpen((open) => !open);
+      } else if (key === "p" && translatable && translationActive && parallelFits) {
+        // En pantallas anchas, la traducción al lado del original o en su lugar.
+        event.preventDefault();
+        changeTranslationView(translationView === "parallel" ? "translated" : "parallel");
       } else if (key === "f" && fullscreen.supported) {
         event.preventDefault();
         fullscreen.toggle();
@@ -953,7 +1044,15 @@ function LocalReaderShell({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [fullscreen, selfScrolling, translatable, translationActive]);
+  }, [
+    changeTranslationView,
+    fullscreen,
+    parallelFits,
+    selfScrolling,
+    translatable,
+    translationActive,
+    translationView,
+  ]);
 
   // ---- Marcas ------------------------------------------------------------------------
   function createAnnotation(target: AnnotationTarget, color: HighlightColor, note = "") {
@@ -1081,6 +1180,7 @@ function LocalReaderShell({
       className={styles.readerApp}
       data-chrome={chrome.hidden ? "hidden" : "visible"}
       data-panel={panelOpen ? "open" : "closed"}
+      data-parallel={parallel ? "true" : undefined}
       data-self-scrolling={selfScrolling ? "true" : "false"}
     >
       <div aria-hidden="true" className={styles.progressLine}>
@@ -1135,14 +1235,15 @@ function LocalReaderShell({
                     void translation.start(next);
                   }}
                   onStop={translation.stop}
-                  onVisibleChange={setTranslationVisible}
+                  onViewChange={changeTranslationView}
                   pair={translationPair}
+                  parallelAvailable={parallelFits}
                   phase={translation.phase}
                   snapshot={translationSnapshot}
                   sourceGuess={sourceLanguageGuess}
                   unitCount={isPdf ? (pages?.total ?? 0) : (structuredSections?.length ?? 0)}
                   unitNoun={isPdf ? { plural: "páginas", singular: "página" } : { plural: "secciones", singular: "sección" }}
-                  visible={translationVisible}
+                  view={translationView}
                 />
               )}
             </Popover>
@@ -1226,6 +1327,7 @@ function LocalReaderShell({
               onRegionTools: (tools) => {
                 regionToolsRef.current = tools;
               },
+              parallel,
               pendingRegion,
               regions: regionMarks,
               translation: pdfTranslation,
@@ -1235,6 +1337,7 @@ function LocalReaderShell({
             structured={{
               onSectionChange: setCurrentSection,
               onSections: setStructuredSections,
+              parallel,
               translation: sectionTranslation,
             }}
           />

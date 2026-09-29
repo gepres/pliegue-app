@@ -11,6 +11,7 @@ import {
 } from "../../library/translation";
 import type { TranslationSnapshot } from "../../library/translation-session";
 import { Segmented } from "../app-ui/controls";
+import type { TranslationView } from "./translation-view";
 import type { TranslationPhase } from "./use-book-translation";
 import styles from "./translation-panel.module.css";
 
@@ -40,14 +41,15 @@ export function TranslationPanel({
   onRetry,
   onStart,
   onStop,
-  onVisibleChange,
+  onViewChange,
   pair,
+  parallelAvailable,
   phase,
   snapshot,
   sourceGuess,
   unitCount,
   unitNoun,
-  visible,
+  view,
 }: {
   /** Cuántas unidades se preparan por delante de la que se lee. */
   ahead: number;
@@ -55,15 +57,17 @@ export function TranslationPanel({
   onRetry: () => void;
   onStart: (pair: TranslationPair) => void;
   onStop: () => void;
-  onVisibleChange: (visible: boolean) => void;
+  onViewChange: (view: TranslationView) => void;
   pair: TranslationPair | null;
+  /** La pantalla es ancha: cabe la traducción al lado del original. */
+  parallelAvailable: boolean;
   phase: TranslationPhase;
   snapshot: TranslationSnapshot;
   sourceGuess: string | null;
   unitCount: number;
   /** «páginas» o «secciones». */
   unitNoun: { plural: string; singular: string };
-  visible: boolean;
+  view: TranslationView;
 }) {
   const initialSource = pair?.source ?? sourceGuess ?? "en";
   const [source, setSource] = useState(initialSource);
@@ -138,16 +142,24 @@ export function TranslationPanel({
               </Button>
             ) : null}
           </div>
-          <Segmented<"translated" | "original">
+          <Segmented<TranslationView>
             label="Qué se muestra"
-            onChange={(value) => onVisibleChange(value === "translated")}
+            onChange={onViewChange}
             options={[
               { label: "Traducción", value: "translated" },
+              ...(parallelAvailable ? [{ label: "En paralelo", value: "parallel" as const }] : []),
               { label: "Original", value: "original" },
             ]}
             size="sm"
-            value={visible ? "translated" : "original"}
+            value={view}
           />
+          {view === "parallel" ? (
+            <p className={styles.hint}>
+              El original a la izquierda y la traducción a la derecha. Pasa el ratón por una frase
+              o selecciónala y se resalta su pareja en el otro lado. La tecla P vuelve a la
+              traducción sola.
+            </p>
+          ) : null}
           <div className={styles.actions}>
             <Button onClick={onStop} size="sm" variant="secondary">
               Detener

@@ -218,6 +218,11 @@
   transition: padding var(--pliegue-motion-base) ease;
 }
 
+/* Con la traducción al lado caben dos medidas de lectura, una por columna. */
+.readerApp[data-parallel="true"] .stage {
+  max-width: calc(2 * var(--pliegue-reader-measure, 66ch) + 16rem);
+}
+
 /* El PDF trae su propio desplazamiento y sus márgenes: el escenario solo le da la pantalla. */
 .readerApp[data-self-scrolling="true"] .stage {
   max-width: none;
@@ -461,6 +466,16 @@
   font-size: clamp(1.75rem, 4vw, 2.5rem);
   font-weight: 600;
   line-height: 1.05;
+  margin: var(--pliegue-spacing-xs) 0 0;
+}
+
+/* En paralelo, el título traducido va bajo el del original, en segundo plano. */
+.sectionTranslatedTitle {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(1.125rem, 2.4vw, 1.5rem);
+  font-weight: 500;
+  line-height: 1.15;
   margin: var(--pliegue-spacing-xs) 0 0;
 }
 

@@ -11,22 +11,34 @@ import {
   pageGap,
   pageProgressPercent,
   placePages,
+  readingAnchor,
+  scrollTopForAnchor,
   scrollTopForPage,
   totalHeight,
   visiblePageRange,
   type PdfPagePlacement,
   type PdfPageSize,
+  type ReadingAnchor,
 } from "../library/pdf-page-layout";
 import type { HighlightColor, NormalizedRect } from "../library/annotations";
 import { layoutPage, reflowPage, toReflowItems } from "../library/pdf-reflow";
 import { describePdfFailure, openPdfDocument } from "../library/pdf-runtime";
-import { dominantColor, fitFontSize, inkFor, isListLike, originalLeading } from "../library/translation";
+import {
+  dominantColor,
+  fitFontSize,
+  inkFor,
+  isListLike,
+  languageName,
+  originalLeading,
+} from "../library/translation";
 import type { StructuredDocumentBlock } from "../library/structured-document-extractor";
 import { ExtractedBlocks } from "./extracted-blocks";
 import { IconButton, Segmented } from "./app-ui/controls";
 import { Icon } from "./app-ui/icons";
 import { Popover } from "./app-ui/overlays";
 import type { OutlineItem } from "./reader/outline";
+import { ParallelBlocks } from "./reader/parallel-blocks";
+import { useReadingPlace } from "./reader/reading-place";
 import styles from "./pdf-reader.module.css";
 
 type PdfDocument = Awaited<ReturnType<typeof openPdfDocument>>["document"];
@@ -39,6 +51,14 @@ const comfortablePageWidth = 1040;
 
 /** Páginas que se recomponen de una tanda en el modo lectura. */
 const reflowBatch = 8;
+
+/** Medianil entre la página original y su traducción cuando se leen enfrentadas. */
+const facingGap = 32;
+
+/** Une un bloque de la página original con su traducción, para resaltar uno desde el otro. */
+function pdfBlockKey(page: number, index: number) {
+  return `pdf:${page}:${index}`;
+}
 
 export type PdfViewMode = "original" | "reading";
 
@@ -98,6 +118,11 @@ export interface PdfReaderProps {
   onReady?: () => void;
   /** Petición de salto desde fuera (el índice); `nonce` permite repetir la misma página. */
   pageRequest?: { nonce: number; page: number } | null;
+  /**
+   * La traducción al lado del original en lugar de encima: páginas enfrentadas en el modo
+   * Original y dos columnas en el modo Lectura. Solo tiene efecto con `translation`.
+   */
+  parallel?: boolean;
   /** Cambia de valor para pedir la vuelta a la primera página. */
   restartSignal?: number;
   /** Solo salta a la posición guardada cuando el usuario lo ha pedido. */
@@ -207,6 +232,7 @@ const PdfPage = memo(function PdfPage({
   shouldRender,
   title,
   translation,
+  twin,
 }: {
   /** Zona que se está recortando o recién recortada en esta página. */
   crop: NormalizedRect | null;
@@ -218,27 +244,35 @@ const PdfPage = memo(function PdfPage({
   shouldRender: boolean;
   title: string;
   translation: PdfPageTranslationView | null;
+  /** La traducción va en una página gemela al lado, no encima de esta. */
+  twin: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
+  const twinCanvasRef = useRef<HTMLCanvasElement>(null);
+  const twinFrameRef = useRef<HTMLDivElement>(null);
   const pageNumber = placement.number;
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const textContainer = textLayerRef.current;
+    const twinCanvas = twin ? twinCanvasRef.current : null;
     // Que la página esté dibujada es un hecho del DOM, no estado de React: nada del árbol
     // depende de él salvo el fondo de espera, así que se marca en el propio elemento.
     const markDrawn = (value: boolean) => {
-      if (frameRef.current) frameRef.current.dataset.drawn = value ? "true" : "false";
+      const state = value ? "true" : "false";
+      if (frameRef.current) frameRef.current.dataset.drawn = state;
+      if (twin && twinFrameRef.current) twinFrameRef.current.dataset.drawn = state;
     };
 
     if (!shouldRender) {
       // Al alejarse, soltar el mapa de bits: un canvas de página completa a densidad doble
       // ocupa varios megas y el navegador no lo recupera solo mientras el nodo siga vivo.
-      if (canvas) {
-        canvas.width = 0;
-        canvas.height = 0;
+      for (const bitmap of [canvas, twinCanvas]) {
+        if (!bitmap) continue;
+        bitmap.width = 0;
+        bitmap.height = 0;
       }
       if (textContainer) textContainer.replaceChildren();
       markDrawn(false);
@@ -258,10 +292,11 @@ const PdfPage = memo(function PdfPage({
       const viewport = page.getViewport({ scale });
       const outputScale = canvasOutputScale(window.devicePixelRatio, scale);
 
+      // Solo el mapa de bits lleva medida; en pantalla el canvas ocupa su página (`.canvas`, al
+      // 100 %). Con una medida en línea, la página que se dibujó a otra escala y luego quedó
+      // fuera de la ventana conservaba su ancho viejo y desbordaba el visor de lado.
       targetCanvas.width = Math.floor(viewport.width * outputScale);
       targetCanvas.height = Math.floor(viewport.height * outputScale);
-      targetCanvas.style.width = `${Math.floor(viewport.width)}px`;
-      targetCanvas.style.height = `${Math.floor(viewport.height)}px`;
 
       // En la versión 6 se dibuja pasando el canvas; `canvasContext` sigue aceptándose solo
       // por compatibilidad. El `transform` es lo que aprovecha los píxeles de más.
@@ -273,6 +308,14 @@ const PdfPage = memo(function PdfPage({
 
       await renderTask.promise;
       if (cancelled) return;
+
+      // La gemela es la misma página, con la traducción encima: se copia el dibujo en lugar de
+      // pedirle a pdf.js que lo repita, que es lo caro.
+      if (twinCanvas) {
+        twinCanvas.width = targetCanvas.width;
+        twinCanvas.height = targetCanvas.height;
+        twinCanvas.getContext("2d")?.drawImage(targetCanvas, 0, 0);
+      }
 
       const { TextLayer } = await import("pdfjs-dist/legacy/build/pdf.mjs");
       if (cancelled) return;
@@ -302,9 +345,17 @@ const PdfPage = memo(function PdfPage({
       renderTask?.cancel();
       textLayer?.cancel();
     };
-  }, [document, pageNumber, scale, shouldRender]);
+  }, [document, pageNumber, scale, shouldRender, twin]);
 
-  return (
+  const frameStyle = {
+    "--scale-factor": scale,
+    height: `${placement.height}px`,
+    top: `${placement.top}px`,
+    width: `${placement.width}px`,
+  } as React.CSSProperties;
+  const translated = translation && !translation.pending ? translation : null;
+
+  const original = (
     <div
       aria-label={`Página ${pageNumber} de ${title}`}
       className={styles.page}
@@ -312,14 +363,27 @@ const PdfPage = memo(function PdfPage({
       data-page-number={pageNumber}
       ref={frameRef}
       role="group"
-      style={{
-        "--scale-factor": scale,
-        height: `${placement.height}px`,
-        top: `${placement.top}px`,
-        width: `${placement.width}px`,
-      } as React.CSSProperties}
+      style={frameStyle}
     >
       <canvas className={styles.canvas} ref={canvasRef} />
+      {/* Enfrentada a su traducción, cada bloque de la página tiene su caja: por ella se sabe
+          qué texto de la capa es de qué bloque y, si no se encuentra, es lo que se resalta. */}
+      {twin && translated ? (
+        <div aria-hidden="true" className={styles.parallelBoxes}>
+          {translated.blocks.map((block, index) =>
+            block.translated ? (
+              <span
+                className={styles.parallelBox}
+                data-parallel-key={pdfBlockKey(pageNumber, index)}
+                data-parallel-side="source"
+                data-parallel-text={block.text}
+                key={index}
+                style={regionStyle(block.box)}
+              />
+            ) : null,
+          )}
+        </div>
+      ) : null}
       <div
         className="textLayer"
         data-annotation-page={pageNumber}
@@ -340,11 +404,45 @@ const PdfPage = memo(function PdfPage({
         </button>
       ))}
       {crop ? <span aria-hidden="true" className={styles.cropBox} style={regionStyle(crop)} /> : null}
-      {translation ? <PageTranslationLayer page={pageNumber} view={translation} /> : null}
+      {translation && !twin ? <PageTranslationLayer page={pageNumber} view={translation} /> : null}
       <span aria-hidden="true" className={styles.pageNumber}>
         {pageNumber}
       </span>
     </div>
+  );
+
+  if (!twin) return original;
+
+  // La página gemela: el mismo dibujo, con la traducción donde estaba el texto. Sin
+  // `data-page-number`, porque no es otra página del documento: ni se recorta ni cuenta al leer.
+  return (
+    <>
+      {original}
+      <div
+        aria-label={`Página ${pageNumber} traducida`}
+        className={`${styles.page} ${styles.twin}`}
+        data-drawn="false"
+        data-translation={translation ? (translation.pending ? "pending" : "done") : "none"}
+        ref={twinFrameRef}
+        role="group"
+        style={frameStyle}
+      >
+        <canvas className={styles.canvas} ref={twinCanvasRef} />
+        {/* Solo en las páginas que se dibujan: las gemelas lejanas son huecos, y cientos de
+            avisos iguales no le dicen nada a un lector de pantalla. */}
+        {translation ? (
+          <PageTranslationLayer linked page={pageNumber} view={translation} />
+        ) : shouldRender ? (
+          <span className={styles.translationPending} role="status">
+            Esta página aún no está traducida
+          </span>
+        ) : null}
+        <span aria-hidden="true" className={styles.pageNumber}>
+          {pageNumber}
+          {translation ? ` · ${languageName(translation.language)}` : ""}
+        </span>
+      </div>
+    </>
   );
 });
 
@@ -352,8 +450,18 @@ const PdfPage = memo(function PdfPage({
  * La traducción encima de la página. Cada bloque tapa solo la caja de su texto original, con
  * el color del papel, así que imágenes, gráficos y filetes siguen a la vista. La letra se
  * ajusta a la caja: se estima por superficie y, si aun así no cabe, se encoge al pintarse.
+ *
+ * `linked` la une con la página original de al lado, bloque a bloque.
  */
-function PageTranslationLayer({ page, view }: { page: number; view: PdfPageTranslationView }) {
+function PageTranslationLayer({
+  linked = false,
+  page,
+  view,
+}: {
+  linked?: boolean;
+  page: number;
+  view: PdfPageTranslationView;
+}) {
   const layerRef = useRef<HTMLDivElement>(null);
 
   // El color del papel solo se puede leer con la página ya dibujada: se toma al montar si ya
@@ -381,7 +489,7 @@ function PageTranslationLayer({ page, view }: { page: number; view: PdfPageTrans
     >
       {view.blocks.map((block, index) =>
         block.translated ? (
-          <FittedTranslation block={block} key={index} />
+          <FittedTranslation block={block} key={index} linkKey={linked ? pdfBlockKey(page, index) : null} />
         ) : null,
       )}
       {view.pending ? (
@@ -425,7 +533,14 @@ function paintOnPaper(layer: HTMLElement, canvas: HTMLCanvasElement | null) {
   }
 }
 
-function FittedTranslation({ block }: { block: PdfLayoutBlock & { translated: string } }) {
+function FittedTranslation({
+  block,
+  linkKey,
+}: {
+  block: PdfLayoutBlock & { translated: string };
+  /** Clave que lo une con su bloque en la página original, si se lee enfrentada. */
+  linkKey: string | null;
+}) {
   const ref = useRef<HTMLParagraphElement>(null);
   const leading = originalLeading(block.size.height, block.lines, block.fontHeight);
   const estimate = fitFontSize(block.size, block.translated.length, block.fontHeight, leading);
@@ -447,6 +562,8 @@ function FittedTranslation({ block }: { block: PdfLayoutBlock & { translated: st
       data-box={`${block.box.x},${block.box.y},${block.box.width},${block.box.height}`}
       data-centered={block.centered ? "true" : undefined}
       data-kind={block.kind}
+      data-parallel-key={linkKey ?? undefined}
+      data-parallel-side={linkKey ? "target" : undefined}
       ref={ref}
       style={{
         ...regionStyle(block.box),
@@ -556,7 +673,6 @@ async function readPageLayout(pdf: PdfDocument, pageNumber: number) {
       const right = Math.min(viewport.width, Math.max(x1, x2));
       const top = Math.max(0, Math.min(y1, y2));
       const bottom = Math.min(viewport.height, Math.max(y1, y2));
-      const center = (left + right) / 2 / viewport.width;
       return {
         box: {
           height: (bottom - top) / viewport.height,
@@ -564,7 +680,7 @@ async function readPageLayout(pdf: PdfDocument, pageNumber: number) {
           x: left / viewport.width,
           y: top / viewport.height,
         },
-        centered: Math.abs(center - 0.5) < 0.04 && right - left < viewport.width * 0.8,
+        centered: block.centered,
         fontHeight: block.fontHeight,
         kind: block.kind,
         lines: block.lines,
@@ -606,6 +722,7 @@ function PdfReadingView({
   initialPage,
   onPageChange,
   pageCount,
+  parallel,
   title,
   translation,
 }: {
@@ -613,6 +730,8 @@ function PdfReadingView({
   initialPage: number;
   onPageChange: (page: number) => void;
   pageCount: number;
+  /** Original y traducción en dos columnas, bloque a bloque. */
+  parallel: boolean;
   title: string;
   translation: ReadonlyMap<number, PdfPageTranslationView> | null;
 }) {
@@ -622,6 +741,14 @@ function PdfReadingView({
   );
   const [failure, setFailure] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const articleRef = useRef<HTMLElement>(null);
+  // Al pasar a la traducción, al original o a las dos, se sigue en el mismo párrafo. Aquí se
+  // desplaza el visor, que envuelve al artículo.
+  useReadingPlace(
+    articleRef,
+    parallel ? "parallel" : translation ? "translated" : "original",
+    (root) => root.parentElement,
+  );
   const loadedRef = useRef(0);
   const jumpedRef = useRef(false);
 
@@ -710,7 +837,7 @@ function PdfReadingView({
   }, [initialPage, pages.length]);
 
   return (
-    <article className={styles.reading}>
+    <article className={styles.reading} data-parallel={parallel ? "true" : undefined} ref={articleRef}>
       {pages.map((page) => {
         // Los bloques traducidos salen del mismo recompositor y en el mismo orden: casan uno a
         // uno. Si no casan (otra extracción), se lee el original antes que mezclar.
@@ -733,19 +860,30 @@ function PdfReadingView({
             {page.columns > 1 ? <span>Dos columnas</span> : null}
             {translated ? <span>Traducida</span> : null}
           </header>
-          {view?.pending ? (
+          {view?.pending && !parallel ? (
             <p className={styles.readingTranslating} role="status">
               <span aria-hidden="true" className={styles.translationSpinner} />
               Traduciendo esta página…
             </p>
           ) : null}
-          {translated ? (
+          {parallel && page.blocks.length > 0 ? (
+            <ParallelBlocks
+              blocks={page.blocks}
+              anchorPrefix={`p${page.number}`}
+              keyPrefix={`pdfr:${page.number}`}
+              language={view?.language}
+              pending={Boolean(view?.pending)}
+              sectionTitle={`página ${page.number}`}
+              sourceScope={{ page: page.number, scope: `pdf-reading:${page.number}` }}
+              translations={translated}
+            />
+          ) : translated ? (
             <div lang={view?.language}>
-              <ExtractedBlocks blocks={translated} sectionTitle={`página ${page.number}`} />
+              <ExtractedBlocks anchorPrefix={`p${page.number}`} blocks={translated} sectionTitle={`página ${page.number}`} />
             </div>
           ) : page.blocks.length > 0 ? (
             <div data-annotation-page={page.number} data-annotation-scope={`pdf-reading:${page.number}`}>
-              <ExtractedBlocks blocks={page.blocks} sectionTitle={`página ${page.number}`} />
+              <ExtractedBlocks anchorPrefix={`p${page.number}`} blocks={page.blocks} sectionTitle={`página ${page.number}`} />
             </div>
           ) : (
             <p className={styles.readingEmpty}>
@@ -786,6 +924,7 @@ export function PdfReader({
   onRegionSelected,
   onRegionTools,
   pageRequest = null,
+  parallel = false,
   pendingRegion = null,
   regions = noRegions,
   restartSignal = 0,
@@ -802,7 +941,7 @@ export function PdfReader({
     return grouped;
   }, [regions]);
   const [state, setState] = useState<ReaderState>({ status: "loading" });
-  const [availableWidth, setAvailableWidth] = useState(0);
+  const [frameWidth, setFrameWidth] = useState(0);
   const [manualScale, setManualScale] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [range, setRange] = useState({ first: 0, last: 0 });
@@ -819,6 +958,11 @@ export function PdfReader({
   // en llegar, y sin esto tres pulsaciones seguidas de «siguiente» acabarían las tres en la
   // página dos.
   const requestedPageRef = useRef(1);
+  // Punto exacto de la lectura —página y cuánto de ella queda arriba—, para volver a él cuando
+  // cambia la escala.
+  const anchorRef = useRef<ReadingAnchor>({ fraction: 0, page: 1 });
+  // La disposición vigente, para saber si un aviso de desplazamiento llega con una ya vieja.
+  const placementsRef = useRef<readonly PdfPagePlacement[]>([]);
   // El modo lectura no tiene disposición de páginas de la que sacar el total.
   const pageCountRef = useRef(0);
 
@@ -874,16 +1018,22 @@ export function PdfReader({
     if (!frame) return;
 
     const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width ?? 0;
-      // Se descuenta el margen lateral para que la página no toque los bordes, y se pone
-      // techo: a pantalla completa en un monitor ancho, «ajustar al ancho» llevaba la página
-      // al 235 % y cada renglón pedía mover la cabeza. Más allá, el zoom es manual.
-      setAvailableWidth(Math.min(comfortablePageWidth, Math.max(0, width - pageGap * 2)));
+      setFrameWidth(entries[0]?.contentRect.width ?? 0);
     });
 
     observer.observe(frame);
     return () => observer.disconnect();
   }, []);
+
+  // Enfrentada a su traducción, cada página se ajusta a la mitad del ancho.
+  const facing = parallel && translation !== null && mode === "original";
+  // Se descuenta el margen lateral para que la página no toque los bordes, y se pone techo: a
+  // pantalla completa en un monitor ancho, «ajustar al ancho» llevaba la página al 235 % y cada
+  // renglón pedía mover la cabeza. Más allá, el zoom es manual.
+  const availableWidth = Math.min(
+    comfortablePageWidth,
+    Math.max(0, facing ? (frameWidth - pageGap * 2 - facingGap) / 2 : frameWidth - pageGap * 2),
+  );
 
   const fitScale = useMemo(
     () => (sizes && availableWidth > 0 ? fitToWidthScale(sizes, availableWidth) : 1),
@@ -897,6 +1047,10 @@ export function PdfReader({
   );
   const pageCount = placements.length;
   const columnHeight = useMemo(() => totalHeight(placements), [placements]);
+  const widestPage = useMemo(
+    () => placements.reduce((widest, placement) => Math.max(widest, placement.width), 0),
+    [placements],
+  );
 
   useEffect(() => {
     pageCountRef.current = pageCount;
@@ -911,6 +1065,10 @@ export function PdfReader({
 
     const { clientHeight, scrollTop } = scroller;
     setRange(visiblePageRange(placements, scrollTop, clientHeight));
+    // Mientras la escala cambia varias veces seguidas —el panel se abre con una transición—, el
+    // aviso de un desplazamiento puede llegar con la disposición anterior: medido con ella, el
+    // punto de lectura derivaba unas páginas en cada paso.
+    if (placements === placementsRef.current) anchorRef.current = readingAnchor(placements, scrollTop);
 
     const page = currentPageNumber(placements, scrollTop, clientHeight);
     setCurrentPage(page);
@@ -973,10 +1131,25 @@ export function PdfReader({
         return;
       }
 
-      scroller.scrollTo({ behavior: applied, top: scrollTopForPage(placements, target) });
+      const top = scrollTopForPage(placements, target);
+      // El destino ya es el punto de lectura, aunque el desplazamiento suave aún no haya llegado.
+      anchorRef.current = readingAnchor(placements, top);
+      scroller.scrollTo({ behavior: applied, top });
     },
     [mode, placements],
   );
+
+  // Con el zoom, el ajuste al ancho, otro tamaño de ventana o la traducción enfrentada cambia la
+  // escala y con ella la altura de todo: el mismo desplazamiento en píxeles caería en otra
+  // página (del 150 al 300 %, de la 34 a la 18). Se vuelve al mismo punto de la misma página.
+  useLayoutEffect(() => {
+    const previous = placementsRef.current;
+    placementsRef.current = placements;
+    const scroller = scrollerRef.current;
+    if (previous === placements || previous.length === 0 || placements.length === 0 || !scroller) return;
+    if (mode === "reading") return;
+    scroller.scrollTop = scrollTopForAnchor(placements, anchorRef.current);
+  }, [mode, placements]);
 
   /** Avanza o retrocede desde la última página pedida, no desde la que se ve. */
   const stepPage = useCallback(
@@ -1234,17 +1407,30 @@ export function PdfReader({
               key={`reading-${entryPage}`}
               onPageChange={reportReadingPage}
               pageCount={pageCount}
+              parallel={parallel && translation !== null}
               title={title}
               translation={translation}
             />
           ) : (
             <div
               className={styles.column}
+              data-facing={facing ? "true" : undefined}
               onPointerCancel={endCrop}
               onPointerDown={startCrop}
               onPointerMove={moveCrop}
               onPointerUp={endCrop}
-              style={{ height: `${columnHeight}px` }}
+              // Enfrentadas, las dos páginas han de caber: con zoom, la columna crece y se
+              // desplaza de lado en lugar de dejar la original fuera por la izquierda. Sin
+              // margen: ajustadas al ancho ya lo traen, y contarlo otra vez desbordaba la barra.
+              style={
+                facing
+                  ? ({
+                      "--facing-gap": `${facingGap}px`,
+                      height: `${columnHeight}px`,
+                      minWidth: `${widestPage * 2 + facingGap}px`,
+                    } as React.CSSProperties)
+                  : { height: `${columnHeight}px` }
+              }
             >
               {placements.map((placement, index) => (
                 <PdfPage
@@ -1264,6 +1450,7 @@ export function PdfReader({
                   shouldRender={index >= range.first && index <= range.last}
                   translation={translation?.get(placement.number) ?? null}
                   title={title}
+                  twin={facing}
                 />
               ))}
             </div>

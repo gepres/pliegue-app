@@ -100,6 +100,50 @@
   width: 100%;
 }
 
+/* ---- Original y traducción enfrentados -----------------------------------------------
+   Como un libro abierto: la página original a la izquierda del medianil y su gemela
+   traducida a la derecha, a la misma altura. */
+.column[data-facing="true"] .page {
+  left: calc(50% - var(--facing-gap) / 2);
+  transform: translateX(-100%);
+}
+
+.column[data-facing="true"] .twin {
+  left: calc(50% + var(--facing-gap) / 2);
+  transform: none;
+}
+
+/* Mientras la página no está traducida, la gemela no enseña el original como si lo fuera. */
+.twin[data-translation="pending"] .canvas,
+.twin[data-translation="none"] .canvas {
+  filter: grayscale(1);
+  opacity: 0.25;
+}
+
+.twin .translationBlock {
+  cursor: text;
+}
+
+/* Las cajas de los bloques del original: no se ven ni estorban a la selección; solo se pintan
+   cuando su texto no se encuentra en la capa y hay que resaltar el bloque entero. */
+.parallelBoxes {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+
+.parallelBox {
+  border-radius: 3px;
+  position: absolute;
+}
+
+.parallelBox[data-parallel-active="true"] {
+  background: rgb(124 92 224 / 18%);
+  box-shadow: 0 0 0 2px rgb(124 92 224 / 18%);
+  mix-blend-mode: multiply;
+}
+
 /* ---- Modo lectura --------------------------------------------------------- */
 
 .modeHint {
@@ -118,6 +162,16 @@
   margin: 0 auto;
   max-width: calc(var(--pliegue-reader-measure, 66ch) + 8rem);
   padding: 0 clamp(0rem, 3vw, 2rem);
+}
+
+/* Con la traducción al lado caben dos medidas de lectura, una por columna. */
+.reading[data-parallel="true"] {
+  max-width: calc(2 * var(--pliegue-reader-measure, 66ch) + 12rem);
+}
+
+.reading[data-parallel="true"] .readingPageMark {
+  max-width: none;
+  padding-inline: clamp(1.25rem, 5vw, 3rem);
 }
 
 /**
