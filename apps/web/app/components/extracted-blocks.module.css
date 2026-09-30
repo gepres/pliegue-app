@@ -1,0 +1,94 @@
+.blocks {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  padding: clamp(1.25rem, 5vw, 3rem);
+}
+
+.blocks h3,
+.blocks h4,
+.blocks p {
+  margin: 0 auto;
+  width: 100%;
+}
+
+/**
+ * La medida de lectura, no el ancho de la caja. Entre 45 y 75 caracteres por línea es donde
+ * el ojo encuentra el principio del renglón siguiente sin perderse; el criterio 1.4.8 de
+ * WCAG pone el techo en 80. Con la ventana ancha, el texto se queda en su medida y lo que
+ * crece es el margen.
+ */
+.blocks h3,
+.blocks h4,
+.blocks p {
+  max-width: var(--pliegue-reader-measure, 66ch);
+}
+
+.blocks h3,
+.blocks h4 {
+  font-family: var(--pliegue-font-brand);
+  font-weight: 600;
+  line-height: 1.08;
+}
+
+.blocks h3 {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  padding-top: var(--pliegue-spacing-sm);
+}
+
+.blocks h4 {
+  font-size: clamp(1.35rem, 3vw, 1.75rem);
+  padding-top: var(--pliegue-spacing-xs);
+}
+
+.blocks p {
+  font-family: var(--pliegue-reader-font-family);
+  font-size: var(--pliegue-reader-font-size);
+  line-height: var(--pliegue-reader-line-height);
+  white-space: pre-wrap;
+}
+
+.tableViewport {
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-sm);
+  margin: var(--pliegue-spacing-sm) auto;
+  max-width: 100%;
+  overflow: auto;
+}
+
+.tableViewport:focus-visible {
+  outline: 3px solid var(--pliegue-color-focus-ring);
+  outline-offset: 3px;
+}
+
+.tableViewport table {
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  min-width: 100%;
+}
+
+.tableViewport td {
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  border-right: 1px solid var(--pliegue-color-border-default);
+  min-width: 9rem;
+  padding: var(--pliegue-spacing-sm);
+  vertical-align: top;
+}
+
+.tableViewport tr:first-child td {
+  background: var(--pliegue-color-bg-subtle);
+  font-weight: 600;
+}
+
+.tableViewport tr:last-child td {
+  border-bottom: 0;
+}
+
+.tableViewport td:last-child {
+  border-right: 0;
+}
+
+@media (max-width: 640px) {
+  .blocks {
+    padding: var(--pliegue-spacing-lg);
+  }
+}

@@ -1,0 +1,61 @@
+/**
+ * Dos columnas que comparten filas: el original a la izquierda y la traducción a la derecha,
+ * cada bloque a la altura de su pareja.
+ */
+.parallel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  row-gap: var(--pliegue-spacing-md);
+}
+
+.column {
+  align-content: start;
+  grid-template-rows: subgrid;
+  min-width: 0;
+}
+
+.column:first-child {
+  grid-column: 1;
+}
+
+.translation {
+  border-left: 1px solid var(--pliegue-color-border-default);
+  grid-column: 2;
+}
+
+.cell {
+  min-width: 0;
+}
+
+.pending {
+  align-items: center;
+  color: var(--pliegue-color-text-secondary);
+  display: inline-flex;
+  font-family: var(--pliegue-font-ui);
+  font-size: 0.8125rem;
+  gap: 8px;
+  margin: 0;
+}
+
+.spinner {
+  animation: parallelSpin 0.9s linear infinite;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  border-right-color: transparent;
+  display: inline-block;
+  flex: none;
+  height: 12px;
+  width: 12px;
+}
+
+@keyframes parallelSpin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

@@ -1,20 +1,38 @@
+import type { HostedAiProvider } from "../../../ai/api-key";
 import {
   catalogSystemPrompt,
   createCatalogPrompt,
   documentCatalogJsonSchema,
+  maxKnownAuthorsInPrompt,
+  maxKnownCategoriesInPrompt,
+  parseCatalogExtras,
   parseDocumentCatalog,
   type CatalogDocumentInput,
 } from "../../../ai/document-catalog";
+import {
+  apiKeyFrom,
+  hostedProviders,
+  looksLikeApiKey,
+  providerErrorResponse,
+  requestStructuredJson,
+} from "../../../ai/hosted-json";
 
 interface CatalogRouteRequest {
   input?: CatalogDocumentInput;
   model?: string;
-  provider?: "anthropic" | "openai";
+  provider?: HostedAiProvider;
 }
 
-function apiKeyFrom(request: Request) {
-  const authorization = request.headers.get("authorization") ?? "";
-  return authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
+/** Holgura para la ficha completa: la sinopsis y, desde la v4, los datos de la edición. */
+const catalogMaxOutputTokens = 2_000;
+
+function validNames(names: string[] | undefined, maxItems: number, maxLength: number) {
+  if (names === undefined) return true;
+  return (
+    Array.isArray(names) &&
+    names.length <= maxItems &&
+    names.every((name) => typeof name === "string" && name.length <= maxLength)
+  );
 }
 
 function validInput(input: CatalogDocumentInput | undefined) {
@@ -25,88 +43,12 @@ function validInput(input: CatalogDocumentInput | undefined) {
       typeof input.format === "string" &&
       input.format.length <= 24 &&
       (input.path === null || (typeof input.path === "string" && input.path.length <= 1000)) &&
+      validNames(input.knownAuthors, maxKnownAuthorsInPrompt, 120) &&
+      validNames(input.knownCategories, maxKnownCategoriesInPrompt, 200) &&
       typeof input.excerpt === "string" &&
       input.excerpt.length > 0 &&
       input.excerpt.length <= 24_100,
   );
-}
-
-function providerMessage(payload: unknown) {
-  if (!payload || typeof payload !== "object") return "El proveedor rechazó la solicitud.";
-  const error = (payload as { error?: { message?: unknown } }).error;
-  return typeof error?.message === "string"
-    ? error.message.slice(0, 280)
-    : "El proveedor rechazó la solicitud.";
-}
-
-async function callOpenAi(apiKey: string, model: string, input: CatalogDocumentInput) {
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    body: JSON.stringify({
-      input: [
-        { content: catalogSystemPrompt, role: "system" },
-        { content: createCatalogPrompt(input), role: "user" },
-      ],
-      max_output_tokens: 800,
-      model,
-      store: false,
-      text: {
-        format: {
-          name: "pliegue_document_catalog",
-          schema: documentCatalogJsonSchema,
-          strict: true,
-          type: "json_schema",
-        },
-      },
-    }),
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
-    },
-    method: "POST",
-    signal: AbortSignal.timeout(60_000),
-  });
-  const payload = (await response.json()) as {
-    error?: { message?: string };
-    output?: Array<{ content?: Array<{ text?: string; type?: string }> }>;
-    output_text?: string;
-  };
-  if (!response.ok) throw new Error(providerMessage(payload));
-  const text =
-    payload.output_text ??
-    payload.output
-      ?.flatMap((item) => item.content ?? [])
-      .find((item) => item.type === "output_text")?.text;
-  if (!text) throw new Error("OpenAI no devolvió contenido catalogable.");
-  return parseDocumentCatalog(JSON.parse(text));
-}
-
-async function callAnthropic(apiKey: string, model: string, input: CatalogDocumentInput) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    body: JSON.stringify({
-      max_tokens: 800,
-      messages: [{ content: createCatalogPrompt(input), role: "user" }],
-      model,
-      output_config: {
-        format: { schema: documentCatalogJsonSchema, type: "json_schema" },
-      },
-      system: catalogSystemPrompt,
-    }),
-    headers: {
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-    },
-    method: "POST",
-    signal: AbortSignal.timeout(60_000),
-  });
-  const payload = (await response.json()) as {
-    content?: Array<{ text?: string; type?: string }>;
-    error?: { message?: string };
-  };
-  if (!response.ok) throw new Error(providerMessage(payload));
-  const text = payload.content?.find((item) => item.type === "text")?.text;
-  if (!text) throw new Error("Anthropic no devolvió contenido catalogable.");
-  return parseDocumentCatalog(JSON.parse(text));
 }
 
 export async function POST(request: Request) {
@@ -118,6 +60,15 @@ export async function POST(request: Request) {
   const apiKey = apiKeyFrom(request);
   if (!apiKey) return Response.json({ error: "Falta la API key de la sesión." }, { status: 401 });
 
+  // Segunda barrera: esta ruta es la que habla con el proveedor, así que es la última
+  // oportunidad de no reenviar algo que no es una credencial.
+  if (!looksLikeApiKey(apiKey)) {
+    return Response.json(
+      { error: "La credencial recibida no tiene formato de API key." },
+      { status: 400 },
+    );
+  }
+
   let body: CatalogRouteRequest;
   try {
     body = (await request.json()) as CatalogRouteRequest;
@@ -126,7 +77,7 @@ export async function POST(request: Request) {
   }
 
   const model = body.model?.trim() ?? "";
-  if (!body.provider || !(["anthropic", "openai"] as string[]).includes(body.provider)) {
+  if (!body.provider || !hostedProviders.includes(body.provider)) {
     return Response.json({ error: "Proveedor no compatible en esta ruta." }, { status: 400 });
   }
   if (!model || model.length > 120 || !validInput(body.input)) {
@@ -134,16 +85,23 @@ export async function POST(request: Request) {
   }
 
   try {
-    const catalog =
-      body.provider === "openai"
-        ? await callOpenAi(apiKey, model, body.input!)
-        : await callAnthropic(apiKey, model, body.input!);
-    return Response.json({ catalog });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "El proveedor no respondió.";
-    const timeout = error instanceof DOMException && error.name === "TimeoutError";
-    return Response.json({ error: timeout ? "El proveedor agotó el tiempo de espera." : message }, {
-      status: timeout ? 504 : 502,
+    const { json, usage } = await requestStructuredJson({
+      apiKey,
+      maxOutputTokens: catalogMaxOutputTokens,
+      model,
+      provider: body.provider,
+      schema: documentCatalogJsonSchema,
+      schemaName: "pliegue_document_catalog",
+      system: catalogSystemPrompt,
+      user: createCatalogPrompt(body.input!),
     });
+    // Una sola ficha plana, como la devolvió el modelo: el navegador lee de ella la parte
+    // básica y la de la edición con los mismos lectores que usa con Ollama.
+    return Response.json({
+      catalog: { ...parseDocumentCatalog(json), ...parseCatalogExtras(json) },
+      usage,
+    });
+  } catch (error) {
+    return providerErrorResponse(error);
   }
 }

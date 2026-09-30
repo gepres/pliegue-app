@@ -12,6 +12,7 @@ import { useLinkedFolders } from "../library/local-folder-store";
 import { useImportedDocuments } from "../library/local-library-store";
 import { useReadingProgressEntries } from "../library/reading-progress-store";
 import styles from "../(workspace)/app/workspace.module.css";
+import { FirstSteps } from "./guide/first-steps";
 import { DocumentCard, MetricCard, PageHeader } from "./workspace-page";
 
 const readingDateFormatter = new Intl.DateTimeFormat("es-PE", {
@@ -86,17 +87,9 @@ export function WorkspaceDashboard() {
     <>
       <PageHeader
         actions={
-          <>
-            <Link
-              className={buttonClassName({ variant: "secondary" })}
-              href="/design-system"
-            >
-              Sistema visual
-            </Link>
-            <Link className={buttonClassName()} href="/app/biblioteca#importar-archivos">
-              Añadir documentos
-            </Link>
-          </>
+          <Link className={buttonClassName()} href="/app/biblioteca#importar-archivos">
+            Añadir documentos
+          </Link>
         }
         description="Vincula archivos o carpetas; Pliegue conserva referencias e índices derivados y abre el original desde su ubicación."
         eyebrow="Área local · Datos reales"
@@ -120,6 +113,8 @@ export function WorkspaceDashboard() {
           value={loading ? "—" : String(activeReadings)}
         />
       </section>
+
+      <FirstSteps />
 
       {storageError ? (
         <Card className={styles.emptyState} role="alert" tone="subtle">
@@ -177,20 +172,7 @@ export function WorkspaceDashboard() {
             {recentDocuments[0]?.title}
           </div>
         </Card>
-      ) : (
-        <Card as="section" className={styles.onboardingCard} tone="subtle">
-          <Tag>Biblioteca vacía</Tag>
-          <h2>Prueba Pliegue con uno de tus archivos</h2>
-          <p>
-            No cargamos documentos de muestra ni duplicamos tus archivos por defecto.
-            Vincula un PDF, EPUB, DOCX, PPTX, XLSX, TXT, Markdown, PNG o JPG y aparecerá
-            aquí con su índice derivado.
-          </p>
-          <Link className={buttonClassName()} href="/app/biblioteca#importar-archivos">
-            Vincular mi primer archivo
-          </Link>
-        </Card>
-      )}
+      ) : null}
 
       {recentDocuments.length ? (
         <section className={styles.section}>

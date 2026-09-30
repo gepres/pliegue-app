@@ -1,0 +1,507 @@
+/* ---- Menú «Aa» ------------------------------------------------------------- */
+
+.appearance {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  padding: var(--pliegue-spacing-sm);
+}
+
+.appearanceRow {
+  display: grid;
+  gap: 6px;
+}
+
+.appearanceLabel {
+  align-items: center;
+  color: var(--pliegue-color-text-secondary);
+  display: inline-flex;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  gap: 6px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.fontSampleSerif,
+.fontSampleSans {
+  font-size: 0.9375rem;
+}
+
+.fontSampleSerif {
+  font-family: var(--pliegue-font-reading);
+}
+
+.fontSampleSans {
+  font-family: var(--pliegue-font-ui);
+}
+
+.stepper {
+  align-items: center;
+  background: var(--pliegue-color-bg-subtle);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  padding: 3px;
+}
+
+.stepper button {
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--pliegue-radius-md) - 3px);
+  color: var(--pliegue-color-text-primary);
+  cursor: pointer;
+  font-family: var(--pliegue-font-reading);
+  min-height: 38px;
+}
+
+.stepper button:hover:not(:disabled) {
+  background: var(--pliegue-color-bg-surface);
+}
+
+.stepper button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.stepper button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.stepper button:focus-visible {
+  outline: 2px solid var(--pliegue-color-focus-ring);
+}
+
+.stepper output {
+  font-family: var(--pliegue-font-data);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 4.5rem;
+  text-align: center;
+}
+
+.stepperSmallA {
+  font-size: 0.875rem;
+}
+
+.stepperLargeA {
+  font-size: 1.375rem;
+}
+
+.appearanceProfiles {
+  display: grid;
+  gap: 6px;
+}
+
+.appearanceProfiles > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.profileChip {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-full);
+  color: var(--pliegue-color-text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.75rem;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+.profileChip[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--pliegue-color-action-primary) 14%, transparent);
+  border-color: var(--pliegue-color-action-primary);
+  font-weight: 600;
+}
+
+.profileChip:focus-visible {
+  outline: 2px solid var(--pliegue-color-focus-ring);
+}
+
+.appearanceMore {
+  align-items: center;
+  border-top: 1px solid var(--pliegue-color-border-default);
+  color: var(--pliegue-color-action-primary);
+  display: flex;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  justify-content: space-between;
+  padding-top: var(--pliegue-spacing-sm);
+  text-decoration: none;
+}
+
+/* ---- Panel del documento --------------------------------------------------- */
+
+.panel {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+}
+
+.panelEmpty {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin: var(--pliegue-spacing-md) 0;
+}
+
+.panelLabel {
+  align-items: center;
+  color: var(--pliegue-color-text-secondary);
+  display: inline-flex;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  gap: 6px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.outline {
+  display: grid;
+  gap: 1px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.outlineItem {
+  align-items: baseline;
+  background: transparent;
+  border: 0;
+  border-radius: var(--pliegue-radius-sm);
+  color: var(--pliegue-color-text-primary);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.875rem;
+  gap: var(--pliegue-spacing-sm);
+  justify-content: space-between;
+  line-height: 1.35;
+  min-height: 38px;
+  padding: 8px 10px 8px calc(10px + var(--level, 0) * 16px);
+  text-align: left;
+  width: 100%;
+}
+
+.outlineItem:hover {
+  background: var(--pliegue-color-bg-subtle);
+}
+
+.outlineItem:focus-visible {
+  outline: 2px solid var(--pliegue-color-focus-ring);
+  outline-offset: -2px;
+}
+
+.outlineItem[aria-current="location"] {
+  background: color-mix(in srgb, var(--pliegue-color-action-primary) 14%, transparent);
+  font-weight: 600;
+}
+
+.outlineItem small {
+  color: var(--pliegue-color-text-secondary);
+  flex: 0 0 auto;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+}
+
+.progressView,
+.detailsView {
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+}
+
+.progressRing {
+  display: grid;
+  justify-items: center;
+  margin-top: var(--pliegue-spacing-sm);
+  position: relative;
+}
+
+.progressRing svg {
+  transform: rotate(-90deg);
+}
+
+.progressRing circle {
+  fill: none;
+  stroke: var(--pliegue-color-bg-subtle);
+  stroke-width: 8;
+}
+
+.progressRing circle + circle {
+  stroke: var(--pliegue-color-action-primary);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 400ms ease-out;
+}
+
+.progressRing > div {
+  display: grid;
+  inset: 0;
+  justify-items: center;
+  place-content: center;
+  position: absolute;
+}
+
+.progressRing strong {
+  font-family: var(--pliegue-font-brand);
+  font-size: 2.25rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.progressRing span {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.6875rem;
+}
+
+.statList {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.statList div {
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  display: flex;
+  gap: var(--pliegue-spacing-md);
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+.statList dt {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+}
+
+.statList dd {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  margin: 0;
+  text-align: right;
+}
+
+.panelAction {
+  align-items: center;
+  background: var(--pliegue-color-bg-subtle);
+  border: 0;
+  border-radius: var(--pliegue-radius-md);
+  color: var(--pliegue-color-text-primary);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.875rem;
+  font-weight: 600;
+  gap: 8px;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.panelAction:hover {
+  background: color-mix(in srgb, var(--pliegue-color-action-primary) 14%, transparent);
+}
+
+.panelAction:focus-visible {
+  outline: 3px solid var(--pliegue-color-focus-ring);
+}
+
+.shortcuts {
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.shortcuts ul {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.shortcuts li {
+  align-items: center;
+  color: var(--pliegue-color-text-secondary);
+  display: flex;
+  font-size: 0.75rem;
+  gap: var(--pliegue-spacing-sm);
+  justify-content: space-between;
+}
+
+.shortcuts kbd {
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  color: var(--pliegue-color-text-primary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  margin-left: 4px;
+  padding: 2px 6px;
+}
+
+.privacyNote {
+  align-items: center;
+  color: var(--pliegue-color-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  gap: var(--pliegue-spacing-xs);
+  line-height: 1.45;
+  margin: 0;
+}
+
+@media (hover: none) {
+  .shortcuts {
+    display: none;
+  }
+}
+
+/* ---- Notas y resaltados ------------------------------------------------------------ */
+
+.notesView {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+}
+
+.notesActions {
+  display: grid;
+  gap: 6px;
+}
+
+.confirm {
+  align-items: center;
+  background: color-mix(in srgb, var(--pliegue-color-status-danger) 10%, var(--pliegue-color-bg-surface));
+  border-radius: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.8125rem;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.confirm span {
+  flex: 1 1 auto;
+}
+
+.confirmDanger,
+.confirmCancel {
+  background: transparent;
+  border: 0;
+  border-radius: var(--pliegue-radius-full);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 6px 10px;
+}
+
+.confirmDanger {
+  background: var(--pliegue-color-status-danger);
+  color: #fff;
+}
+
+.confirmCancel {
+  color: var(--pliegue-color-text-secondary);
+}
+
+.notes {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.noteItem {
+  --note: #f2b705;
+
+  align-items: start;
+  background: var(--pliegue-color-bg-subtle);
+  border-left: 3px solid var(--note);
+  border-radius: 10px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 4px 4px 4px 0;
+}
+
+.noteItem[data-color="green"] {
+  --note: #5cb85c;
+}
+
+.noteItem[data-color="blue"] {
+  --note: #3b8ee8;
+}
+
+.noteItem[data-color="rose"] {
+  --note: #ec5f8c;
+}
+
+.noteMain {
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 4px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+@media (hover: hover) {
+  .noteMain:hover .noteQuote {
+    text-decoration: underline;
+    text-decoration-color: var(--note);
+    text-underline-offset: 3px;
+  }
+}
+
+.noteMain:focus-visible {
+  outline: 3px solid var(--pliegue-color-focus-ring);
+}
+
+.noteMeta {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.noteQuote {
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.875rem;
+  -webkit-line-clamp: 3;
+  line-height: 1.45;
+  overflow: hidden;
+}
+
+.noteText {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.noteActions {
+  display: grid;
+  gap: 2px;
+}
+
+.notesEmpty {
+  color: var(--pliegue-color-text-secondary);
+  display: grid;
+  font-size: 0.875rem;
+  gap: 10px;
+  justify-items: start;
+  line-height: 1.5;
+  padding: var(--pliegue-spacing-sm) 0;
+}
+
+.notesEmpty p {
+  margin: 0;
+}

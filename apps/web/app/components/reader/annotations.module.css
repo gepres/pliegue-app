@@ -1,0 +1,225 @@
+/* ==========================================================================
+   Marcas del lector: barra de la selección, tarjeta de una marca y zonas
+   ========================================================================== */
+
+.toolbar {
+  align-items: center;
+  animation: float-in 160ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  backdrop-filter: saturate(1.4) blur(18px);
+  background: color-mix(in srgb, var(--pliegue-color-bg-surface) 92%, transparent);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-full);
+  box-shadow: var(--pliegue-elevation-overlay);
+  display: flex;
+  gap: 2px;
+  padding: 5px 6px;
+  position: fixed;
+  user-select: none;
+  z-index: 60;
+}
+
+.toolbar:not([data-placed]),
+.card:not([data-placed]) {
+  visibility: hidden;
+}
+
+@keyframes float-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+}
+
+.swatch {
+  --swatch: #f2b705;
+
+  background: var(--swatch);
+  border: 2px solid var(--pliegue-color-bg-surface);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 12%);
+  cursor: pointer;
+  height: 26px;
+  margin: 0 2px;
+  padding: 0;
+  transition: transform 120ms ease;
+  width: 26px;
+}
+
+.swatch[data-color="green"] {
+  --swatch: #5cb85c;
+}
+
+.swatch[data-color="blue"] {
+  --swatch: #3b8ee8;
+}
+
+.swatch[data-color="rose"] {
+  --swatch: #ec5f8c;
+}
+
+@media (hover: hover) {
+  .swatch:hover {
+    transform: scale(1.12);
+  }
+}
+
+.swatch[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 12%),
+    0 0 0 3px var(--pliegue-color-text-primary);
+}
+
+.swatch:focus-visible,
+.toolbarButton:focus-visible {
+  outline: 3px solid var(--pliegue-color-focus-ring);
+  outline-offset: 2px;
+}
+
+.divider {
+  align-self: stretch;
+  background: var(--pliegue-color-border-default);
+  margin: 4px 4px;
+  width: 1px;
+}
+
+.toolbarButton {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--pliegue-radius-full);
+  color: var(--pliegue-color-text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .toolbarButton:hover {
+    background: color-mix(in srgb, var(--pliegue-color-text-primary) 8%, transparent);
+  }
+}
+
+.toolbarPrimary {
+  background: var(--pliegue-color-action-primary);
+  color: var(--pliegue-color-text-on-action);
+}
+
+@media (hover: hover) {
+  .toolbarPrimary:hover {
+    background: color-mix(in srgb, var(--pliegue-color-action-primary) 88%, #000);
+  }
+}
+
+.toolbarHint {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.75rem;
+  padding: 0 8px;
+}
+
+/* ---- Tarjeta de una marca --------------------------------------------------------------- */
+
+.card {
+  animation: float-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: 18px;
+  box-shadow: var(--pliegue-elevation-overlay);
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  position: fixed;
+  width: min(340px, calc(100vw - 16px));
+  z-index: 60;
+}
+
+.cardHeader {
+  align-items: center;
+  color: var(--pliegue-color-text-secondary);
+  display: flex;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  gap: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cardDot {
+  background: #f2b705;
+  border-radius: 50%;
+  height: 10px;
+  width: 10px;
+}
+
+.cardDot[data-color="green"] {
+  background: #5cb85c;
+}
+
+.cardDot[data-color="blue"] {
+  background: #3b8ee8;
+}
+
+.cardDot[data-color="rose"] {
+  background: #ec5f8c;
+}
+
+.cardQuote {
+  -webkit-box-orient: vertical;
+  border-left: 3px solid var(--pliegue-color-border-control);
+  color: var(--pliegue-color-text-primary);
+  display: -webkit-box;
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.9375rem;
+  -webkit-line-clamp: 3;
+  line-height: 1.45;
+  margin: 0;
+  overflow: hidden;
+  padding-left: 10px;
+}
+
+.cardSwatches {
+  display: flex;
+  gap: 4px;
+}
+
+.cardNote {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  min-height: 5.5rem;
+  resize: vertical;
+}
+
+.cardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* En el móvil la tarjeta sube desde abajo, al alcance del pulgar y del teclado. */
+@media (max-width: 640px) {
+  .card {
+    border-radius: 20px 20px 0 0;
+    bottom: 0;
+    left: 0 !important;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    top: auto !important;
+    width: 100vw;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar,
+  .card {
+    animation: none;
+  }
+
+  .swatch {
+    transition: none;
+  }
+}

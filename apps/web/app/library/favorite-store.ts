@@ -56,6 +56,19 @@ export function toggleFavorite(documentId: string) {
   window.dispatchEvent(new Event(changeEvent));
 }
 
+/** Marca o desmarca sin alternar: lo que llega de otro equipo dice el estado, no el gesto. */
+export function setFavorite(documentId: string, favorite: boolean) {
+  const favorites = readFavorites();
+  if (favorites.includes(documentId) === favorite) return;
+  const next = favorite ? [...favorites, documentId] : favorites.filter((id) => id !== documentId);
+  const serialized = JSON.stringify(next);
+
+  cachedSerialized = serialized;
+  cachedFavorites = next;
+  window.localStorage.setItem(storageKey, serialized);
+  window.dispatchEvent(new Event(changeEvent));
+}
+
 export function useFavorites() {
   return useSyncExternalStore(subscribe, readFavorites, () => emptyFavorites);
 }

@@ -7,8 +7,13 @@
 
 Después de vincular un archivo o una carpeta, Pliegue puede enriquecer cada documento con
 una capa local y filtrable: título canónico, autores, año de publicación, géneros, tipo de
-obra, idioma, temas, resumen y confianza. Esta capa no reemplaza el manifiesto ni modifica
+obra, idioma, temas, sinopsis y confianza. Esta capa no reemplaza el manifiesto ni modifica
 el original.
+
+La ficha se deriva del **contenido** del documento, no de su nombre: el extracto es la
+evidencia principal y el título y la ruta solo actúan como pistas secundarias. Biblioteca
+filtra por autor, género, tipo de obra y año a partir de esa capa, y la confianza declarada
+permite revisar los casos dudosos.
 
 ## Flujo eficiente
 
@@ -21,9 +26,23 @@ el original.
    normalizar el resultado.
 6. IndexedDB guarda la ficha, proveedor, modelo, fecha, estado y fingerprint de entrada.
 
-El fingerprint incorpora versión del documento, proveedor, modelo y extracto. Una versión
-ya catalogada se omite; cambiar el archivo, modelo o proveedor crea trabajo nuevo. La
-concurrencia se limita a 1–3 solicitudes y el valor recomendado es 2.
+El fingerprint incorpora versión del documento, proveedor, modelo, **versión del prompt** y
+extracto. Una versión ya catalogada se omite; cambiar el archivo, modelo, proveedor o el
+contrato de ficha crea trabajo nuevo. La concurrencia admite de 1 a 6 solicitudes y el valor
+recomendado sigue siendo 2.
+
+### Versión del contrato de ficha
+
+`catalogPromptVersion` versiona las instrucciones y la forma de la ficha, como exige
+ADR-0002 al pedir que los prompts se versionen aparte del binario. Subirla invalida los
+fingerprints anteriores, de modo que los documentos ya catalogados se vuelven a analizar en
+lugar de conservar fichas creadas con instrucciones antiguas. **Tiene coste**: un cambio de
+versión implica volver a pagar el análisis de toda la biblioteca.
+
+| Versión | Cambio |
+| --- | --- |
+| 1 | ficha inicial con síntesis factual de 280 caracteres |
+| 2 | sinopsis de hasta 700 caracteres centrada en de qué trata la obra; se prioriza el extracto del documento sobre el nombre del archivo |
 
 ## Activación y estados
 
@@ -39,7 +58,7 @@ Estados visibles:
 | --- | --- |
 | `analyzing` | existe una solicitud activa para esa versión |
 | `analyzed` | ficha estructurada disponible para búsqueda y filtros |
-| `needs-content` | PDF o imagen sin texto local; requiere extracción PDF/OCR |
+| `needs-content` | imagen o PDF escaneado sin capa de texto; requiere OCR |
 | `error` | credencial, red, modelo o respuesta inválida; se puede reintentar |
 
 ## Proveedores y credenciales
@@ -76,7 +95,8 @@ visibles asociadas. El archivo original nunca se borra.
 
 ## Límites actuales
 
-- PDF e imágenes todavía no generan texto para este flujo; quedan `needs-content`.
+- Las imágenes y los PDF escaneados sin capa de texto no generan contenido para este flujo;
+  quedan `needs-content` a la espera del OCR de `03.5`. Un PDF con texto sí se cataloga.
 - No hay cola durable entre recargas, presupuesto, límites por proveedor ni estimación de
   costo antes de ejecutar.
 - No hay embeddings ni búsqueda semántica global.
@@ -84,5 +104,5 @@ visibles asociadas. El archivo original nunca se borra.
   requiere una instancia que acepte el esquema estructurado y CORS.
 - La bóveda persistente y el shell nativo siguen pendientes.
 
-El siguiente bloque recomendado es extracción PDF/OCR con consentimiento y después una
+El siguiente bloque recomendado es OCR con consentimiento y después una
 cola durable con presupuesto, reintentos e idempotencia compartida.

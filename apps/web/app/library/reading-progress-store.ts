@@ -14,6 +14,21 @@ const changeEvent = "pliegue-reading-progress-change";
 const emptyProgress: ReadingProgressRecord[] = [];
 const supportedFormats = new Set<string>(documentFormats);
 
+/**
+ * La versión 2 corrige un avance que nunca fue cierto.
+ *
+ * Hasta ella el PDF se mostraba con el visor del navegador, que se desplaza por dentro y no
+ * dice por dónde va. El avance se calculaba entonces con el desplazamiento de la página de
+ * la aplicación, así que bastaba bajar hasta el pie para que un documento de cuarenta y nueve
+ * páginas quedara marcado como leído entero sin haber pasado de la primera.
+ *
+ * Esas cifras no se pueden reinterpretar —no guardan relación con el documento—, y como el
+ * avance no admite retrocesos se quedarían ahí para siempre. Se descartan una vez: los PDF
+ * vuelven a cero y se recuentan solos, ahora en páginas. El resto de formatos se medía sobre
+ * contenido que Pliegue compone él mismo, donde la medición sí era correcta, y se conserva.
+ */
+const currentVersion = 2;
+
 export interface ReadingProgressRecord {
   documentId: string;
   format: DocumentFormat;
@@ -25,7 +40,18 @@ export interface ReadingProgressRecord {
 
 interface StoredProgress {
   entries: ReadingProgressRecord[];
-  version: 1;
+  version: number;
+}
+
+/** Descarta el avance de los PDF medido antes de que el visor contara páginas. */
+export function migrateProgressEntries(
+  entries: readonly ReadingProgressRecord[],
+  storedVersion: number,
+) {
+  if (storedVersion >= currentVersion) return [...entries];
+  return entries.map((entry) =>
+    entry.format === "pdf" ? { ...entry, percent: 0 } : { ...entry },
+  );
 }
 
 let cachedSerialized: string | null | undefined;
@@ -97,12 +123,18 @@ function parseProgress(serialized: string | null) {
     const parsed: unknown = JSON.parse(serialized);
     if (!parsed || typeof parsed !== "object") return emptyProgress;
     const stored = parsed as Partial<StoredProgress>;
-    if (stored.version !== 1 || !Array.isArray(stored.entries)) return emptyProgress;
+    const version = typeof stored.version === "number" ? stored.version : 0;
+    if (version < 1 || version > currentVersion || !Array.isArray(stored.entries)) {
+      return emptyProgress;
+    }
 
-    return stored.entries
+    const entries = stored.entries
       .filter(isProgressRecord)
-      .map((entry) => ({ ...entry, percent: normalizePercent(entry.percent) }))
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+      .map((entry) => ({ ...entry, percent: normalizePercent(entry.percent) }));
+
+    return migrateProgressEntries(entries, version).sort((left, right) =>
+      right.updatedAt.localeCompare(left.updatedAt),
+    );
   } catch {
     return emptyProgress;
   }
@@ -125,7 +157,10 @@ function writeProgress(entries: ReadingProgressRecord[]) {
   const next = [...entries].sort((left, right) =>
     right.updatedAt.localeCompare(left.updatedAt),
   );
-  const serialized = JSON.stringify({ entries: next, version: 1 } satisfies StoredProgress);
+  const serialized = JSON.stringify({
+    entries: next,
+    version: currentVersion,
+  } satisfies StoredProgress);
 
   try {
     window.localStorage.setItem(storageKey, serialized);

@@ -9,7 +9,7 @@ import styles from "../workspace.module.css";
 
 export const metadata: Metadata = {
   title: "Panel de IA",
-  description: "Consultas trazables sobre los documentos guardados en Pliegue.",
+  description: "Cataloga la biblioteca con la IA que elijas: ficha, categoría y datos de la edición.",
 };
 
 export default function AiPage() {
@@ -36,8 +36,8 @@ export default function AiPage() {
   return (
     <>
       <PageHeader
-        description="Consulta tus documentos con respuestas trazables y control sobre el proveedor."
-        eyebrow="BYOK · Evidencia primero"
+        description="Cataloga la biblioteca con la IA que elijas, con tu clave. Cada ficha —autor, categoría, editorial, serie…— se guarda en este dispositivo."
+        eyebrow="BYOK · Catálogo"
         title="Panel de IA"
       />
 

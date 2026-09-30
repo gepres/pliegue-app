@@ -1,0 +1,58 @@
+.card {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+}
+
+.head {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.head > :global(.pliegue-tag) {
+  justify-self: start;
+}
+
+.head h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.head p,
+.state p {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 44rem;
+}
+
+.benefits {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.benefits li {
+  align-items: center;
+  display: flex;
+  font-size: 0.9375rem;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.benefits svg {
+  color: var(--pliegue-color-action-primary);
+  flex: none;
+}
+
+.state {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  justify-items: start;
+}
+
+.state p {
+  font-size: 0.875rem;
+}

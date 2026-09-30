@@ -28,6 +28,18 @@
   --pliegue-color-icon-default: var(--pliegue-forest-500);
   --pliegue-color-status-danger: var(--pliegue-danger-500);
 
+  /*
+   * Controles de formulario. Se derivan de los primitivos en lugar de añadir colores:
+   * - border/control llega a 3:1 sobre blanco y sobre papel, el mínimo de WCAG 1.4.11 para
+   *   el borde que delimita un campo. El borde de tarjeta (paper/200) se queda en 1,6:1.
+   * - focus/ring es el ocre de la marca oscurecido hasta 3,7:1 sobre papel; el ocre puro
+   *   se queda en 2,5:1 y el foco dejaba de distinguirse sobre fondos claros.
+   */
+  --pliegue-color-bg-field: var(--pliegue-white-1000);
+  --pliegue-color-border-control: color-mix(in srgb, var(--pliegue-paper-200) 62%, var(--pliegue-ink-900));
+  --pliegue-color-border-strong: color-mix(in srgb, var(--pliegue-paper-200) 42%, var(--pliegue-ink-900));
+  --pliegue-color-focus-ring: color-mix(in srgb, var(--pliegue-ochre-500) 78%, var(--pliegue-ink-950));
+
   --pliegue-spacing-2xs: 4px;
   --pliegue-spacing-xs: 8px;
   --pliegue-spacing-sm: 12px;
@@ -42,6 +54,10 @@
 
   --pliegue-elevation-paper: 0 1px 2px rgb(37 35 31 / 8%);
   --pliegue-elevation-focus: 0 12px 30px rgb(37 35 31 / 14%);
+  /* Un control que se puede pulsar se separa del papel lo justo para invitar al toque. */
+  --pliegue-elevation-raised: 0 1px 2px rgb(37 35 31 / 7%), 0 2px 6px -2px rgb(37 35 31 / 10%);
+  /* Menús, hojas y listas desplegables: flotan sobre la página, no sobre la tarjeta. */
+  --pliegue-elevation-overlay: 0 1px 3px rgb(37 35 31 / 8%), 0 18px 44px -12px rgb(37 35 31 / 30%);
 
   --pliegue-font-brand: "Cormorant Garamond", Georgia, serif;
   --pliegue-font-reading: "Source Serif 4", Georgia, serif;
@@ -50,6 +66,8 @@
 
   --pliegue-motion-fast: 140ms;
   --pliegue-motion-base: 220ms;
+  /* Arranca rápido y se posa despacio: la respuesta se nota al instante y termina suave. */
+  --pliegue-ease-standard: cubic-bezier(0.2, 0, 0, 1);
 }
 
 [data-theme="dark"] {
@@ -65,8 +83,14 @@
   --pliegue-color-border-default: var(--pliegue-forest-300);
   --pliegue-color-icon-default: var(--pliegue-paper-100);
   --pliegue-color-status-danger: var(--pliegue-terracotta-500);
+  --pliegue-color-bg-field: color-mix(in srgb, var(--pliegue-ink-950) 55%, var(--pliegue-ink-800));
+  --pliegue-color-border-control: color-mix(in srgb, var(--pliegue-paper-100) 38%, var(--pliegue-ink-800));
+  --pliegue-color-border-strong: color-mix(in srgb, var(--pliegue-paper-100) 55%, var(--pliegue-ink-800));
+  --pliegue-color-focus-ring: var(--pliegue-ochre-500);
   --pliegue-elevation-paper: 0 1px 2px rgb(0 0 0 / 28%);
   --pliegue-elevation-focus: 0 12px 32px rgb(0 0 0 / 36%);
+  --pliegue-elevation-raised: 0 1px 2px rgb(0 0 0 / 36%);
+  --pliegue-elevation-overlay: 0 1px 3px rgb(0 0 0 / 32%), 0 20px 48px -12px rgb(0 0 0 / 62%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -83,5 +107,15 @@
     --pliegue-color-border-default: var(--pliegue-forest-300);
     --pliegue-color-icon-default: var(--pliegue-paper-100);
     --pliegue-color-status-danger: var(--pliegue-terracotta-500);
+    --pliegue-color-bg-field: color-mix(in srgb, var(--pliegue-ink-950) 55%, var(--pliegue-ink-800));
+    --pliegue-color-border-control: color-mix(in srgb, var(--pliegue-paper-100) 38%, var(--pliegue-ink-800));
+    --pliegue-color-border-strong: color-mix(in srgb, var(--pliegue-paper-100) 55%, var(--pliegue-ink-800));
+    --pliegue-color-focus-ring: var(--pliegue-ochre-500);
+    /* Faltaban aquí: con el tema del sistema en oscuro, las sombras seguían siendo las del
+       tema claro y las tarjetas no se separaban del fondo. */
+    --pliegue-elevation-paper: 0 1px 2px rgb(0 0 0 / 28%);
+    --pliegue-elevation-focus: 0 12px 32px rgb(0 0 0 / 36%);
+    --pliegue-elevation-raised: 0 1px 2px rgb(0 0 0 / 36%);
+    --pliegue-elevation-overlay: 0 1px 3px rgb(0 0 0 / 32%), 0 20px 48px -12px rgb(0 0 0 / 62%);
   }
 }

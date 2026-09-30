@@ -2,7 +2,11 @@
 
 import { useSyncExternalStore } from "react";
 
-import { createLocalContentIndex } from "./local-content-index";
+import {
+  carriedIndexFields,
+  createLocalContentIndex,
+  isCurrentContentIndex,
+} from "./local-content-index";
 import {
   createLinkedFileDocument,
   type LinkedFileDocument,
@@ -254,11 +258,16 @@ export async function linkLocalFiles(): Promise<LinkLocalFilesResult> {
         );
         const existing = previous.find((_, index) => matches[index]);
         const fingerprint = `${file.name.toLocaleLowerCase("en")}::${file.size}::${file.lastModified}`;
+        // Mismo criterio que en las carpetas: un índice de una versión anterior del
+        // extractor se rehace aunque el archivo no haya cambiado.
         const index =
-          existing?.fingerprint === fingerprint
+          existing?.fingerprint === fingerprint &&
+          isCurrentContentIndex(existing.indexVersion)
             ? {
+                ...carriedIndexFields(existing),
                 indexedAt: existing.indexedAt ?? new Date().toISOString(),
                 indexStatus: existing.indexStatus ?? ("pending" as const),
+                indexVersion: existing.indexVersion,
                 searchText: existing.searchText ?? "",
               }
             : await createLocalContentIndex(validation.format, file);
@@ -323,17 +332,23 @@ export async function readLinkedFile(documentId: string) {
   return { document, file: await handle.getFile() };
 }
 
-export async function unlinkLocalFile(documentId: string) {
+export async function unlinkLocalFiles(documentIds: readonly string[]) {
+  if (!documentIds.length) return;
   const database = await openDatabase();
 
   try {
     const transaction = database.transaction(documentStoreName, "readwrite");
-    transaction.objectStore(documentStoreName).delete(documentId);
+    const store = transaction.objectStore(documentStoreName);
+    for (const documentId of documentIds) store.delete(documentId);
     await transactionComplete(transaction);
   } finally {
     database.close();
   }
 
-  fileHandles.delete(documentId);
+  for (const documentId of documentIds) fileHandles.delete(documentId);
   await loadLinkedFiles();
+}
+
+export function unlinkLocalFile(documentId: string) {
+  return unlinkLocalFiles([documentId]);
 }

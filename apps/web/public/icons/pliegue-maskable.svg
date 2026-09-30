@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Versión «maskable»: el sistema la recorta en círculo, gota o cuadrado, así que el papel
+       llega a los bordes y la marca queda dentro de la zona segura (el 80 % central). -->
+  <rect width="512" height="512" fill="#FBF6EC"/>
+  <g transform="translate(94 97.6) scale(3.6)">
+    <path d="M16 10H54C65 10 74 19 74 30V78H16V10ZM29 22V65C37 60 45 58 53 58V30C53 25 50 22 45 22H29ZM56 24V58C60 59 63 60 66 62V30C66 27 62 24 56 24Z" fill="#365B48"/>
+    <path d="M29 22H45C50 22 53 25 53 30V58C45 58 37 60 29 65V22Z" fill="#FBF6EC"/>
+  </g>
+</svg>

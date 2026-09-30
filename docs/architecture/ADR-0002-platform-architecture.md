@@ -1,7 +1,7 @@
 # ADR-0002 · Arquitectura multiplataforma, datos, colas e IA
 
-- Estado: Propuesto — requiere aprobación humana
-- Fecha: 2026-07-31
+- Estado: Aceptado — los cinco gates se resolvieron el 14 de agosto de 2026
+- Fecha: 2026-07-31 · aprobado el 2026-08-14
 - Foundry: `01.3 · Aprobar arquitectura y ADR multiplataforma`
 - Diagrama editable: `docs/architecture/platform-overview.mmd`
 
@@ -55,9 +55,9 @@ tareas; este ADR no autoriza todavía dependencias o builds nativos.
 
 - **Postgres** es la fuente de verdad de cuentas, Áreas, fuentes, documentos,
   procedencia, derivados, progreso, notas, favoritos, preferencias y trabajos.
-- **Supabase** es la opción inicial propuesta para Postgres, Auth, RLS y Storage por
-  ofrecer esas piezas sobre servicios abiertos y separables. Se conserva una capa de
-  repositorios para permitir despliegue administrado o self-hosted.
+- **Supabase administrado en `sa-east-1` (São Paulo)** provee Postgres, Auth, RLS y
+  Storage sobre servicios abiertos y separables (gate 2). Se conserva una capa de
+  repositorios para poder pasar a self-hosted sin reescribir el dominio.
 - Los **originales locales** no se suben por defecto. Los originales de Drive permanecen
   en Drive; Pliegue guarda identificadores, permisos y versiones. Derivados solo se
   sincronizan con consentimiento explícito y política de retención.
@@ -91,10 +91,10 @@ exactly-once, sino procesamiento idempotente y al-menos-una-vez.
 - El router elige proveedor por flujo, política, presupuesto, idioma y disponibilidad.
 - Escritorio/móvil guardan secretos en una bóveda respaldada por el sistema. Para Tauri
   se evaluará Stronghold con una clave derivada y permisos restringidos.
-- Web usa claves de sesión por defecto. El incremento de catálogo las mantiene en memoria
-  de la pestaña y las transmite en headers únicamente a una ruta fija de proveedor. Una
-  bóveda web persistente requerirá cifrado
-  cliente, autenticación reciente y una decisión explícita de recuperación; nunca se
+- Web usa claves de sesión y no recuperables (gate 3). El incremento de catálogo las
+  mantiene en memoria de la pestaña y las transmite en headers únicamente a una ruta fija
+  de proveedor. Una bóveda web persistente requeriría cifrado cliente, autenticación
+  reciente y una decisión explícita de recuperación, y queda fuera del MVP; nunca se
   guardan claves en `localStorage`, variables `NEXT_PUBLIC_`, logs o telemetría.
 - Las respuestas conservan citas a fragmentos, versión del documento y proveedor/modelo.
 - Ollama puede operar localmente sin enviar contenido a terceros, sujeto a controles de
@@ -155,13 +155,35 @@ requiere coordinar caché e invalidación: [guía oficial](https://nextjs.org/do
 - Local-only es un modo de producto real: debe funcionar sin cuenta ni backend, aunque
   no ofrezca sincronización entre dispositivos.
 
-## Gates pendientes de aprobación
+## Gates resueltos · 2026-08-14
 
-1. Confirmar Tauri 2 frente a Electron para Windows/macOS.
-2. Confirmar Supabase administrado frente a despliegue propio y región inicial.
-3. Aprobar que las claves web sean de sesión por defecto y no recuperables.
-4. Aprobar retención de derivados, OCR y embeddings por sensibilidad.
-5. Definir SLO de sincronización y umbral para migrar desde cola Postgres.
+1. **Tauri 2 para Windows y macOS.** Pesa unos 10 MB frente a los ~150 MB de Electron,
+   declara permisos por ventana y ofrece Stronghold para la bóveda; en un lector que se
+   deja abierto, el consumo y la superficie de permisos pesan más que la comodidad de
+   embeber Chromium. Consecuencia asumida: WKWebView no expone el File System Access
+   API, así que `03.2b` sustituye la vinculación de carpetas del navegador por el plugin
+   de archivos nativo. La aplicación web conserva su implementación actual.
+2. **Supabase administrado, región `sa-east-1` (São Paulo).** Es la más cercana a Perú
+   y deja los datos fuera de jurisdicción estadounidense, que importa en cuanto `01.5`
+   clasifique alguno como personal. A la nube solo llegan cuentas, metadatos, progreso,
+   notas y preferencias. La capa de repositorios se mantiene para poder pasar a
+   despliegue propio sin reescribir el dominio.
+3. **Claves web de sesión, no recuperables.** Viven en memoria de la pestaña y nunca en
+   `localStorage`, variables `NEXT_PUBLIC_`, logs ni telemetría. Se acepta la fricción
+   de volver a pegarlas en cada sesión. Una bóveda web persistente seguiría exigiendo
+   cifrado en cliente, autenticación reciente y una decisión explícita de recuperación:
+   queda fuera del MVP, no descartada.
+4. **Derivados locales por defecto, ámbito sensible aislado.** El texto extraído, el OCR,
+   los embeddings y las fichas de IA se quedan en el dispositivo y no se sincronizan sin
+   consentimiento explícito por Área. Lo que sí se suba se borra en cascada al desvincular
+   el documento, con 90 días de gracia y borrado verificable bajo demanda. Un Área marcada
+   como sensible nunca sube derivados ni sale a proveedores de nube: solo Ollama local.
+5. **SLO de sincronización: 60 s (p95) con conexión.** Un cambio de progreso o una nota
+   aparece en otro dispositivo en menos de un minuto; sin conexión, el outbox garantiza
+   convergencia sin pérdida. La cola en la tabla `jobs` se mantiene hasta que se sostengan
+   ~50 trabajos por segundo o la latencia p95 de recogida supere los 30 s; por debajo de
+   ese umbral, una cola administrada añade una pieza de infraestructura sin justificarla.
 
-Hasta resolver estos gates, el documento permanece **Propuesto** y no se inicia la
-integración nativa, autenticación real ni almacenamiento cloud.
+Con los cinco resueltos, el documento pasa a **Aceptado** y quedan desbloqueadas la
+integración nativa, la autenticación real y el almacenamiento en la nube: `02.4`, `02.5`,
+`03.1` y la fase 6.

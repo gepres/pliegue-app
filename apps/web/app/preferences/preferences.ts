@@ -133,3 +133,27 @@ export function applyReadingProfile(
     },
   };
 }
+
+/**
+ * Nivel en el que conviene guardar un cambio hecho desde el propio lector.
+ *
+ * Es el nivel más fuerte que ya define esa clave: si el Área fija el tamaño y el cambio se
+ * escribiera en el dispositivo, quedaría tapado y el botón parecería no hacer nada. Si
+ * ningún nivel la define, el dispositivo es el sitio natural para un ajuste de pantalla.
+ */
+export function effectiveScopeFor(
+  state: PreferenceState,
+  key: keyof ReadingPreferences,
+): PreferenceScope {
+  for (const scope of [...preferenceScopes].reverse()) {
+    if (state.scopes[scope][key] !== undefined) return scope;
+  }
+  return "device";
+}
+
+/** Paso siguiente o anterior de la escala de lectura, sin salirse de sus extremos. */
+export function stepReaderScale(current: ReaderScale, direction: 1 | -1): ReaderScale {
+  const index = readerScales.indexOf(current);
+  const next = Math.min(readerScales.length - 1, Math.max(0, index + direction));
+  return readerScales[next] ?? current;
+}

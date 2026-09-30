@@ -8,7 +8,10 @@ export const maxTextPreviewBytes = 1024 * 1024;
 
 export type LocalDocumentPreview =
   | { content: string; kind: "text"; truncated: boolean }
-  | { blob: Blob; kind: "image" | "pdf" }
+  // Imagen y PDF llegan igual —un blob ya tipado— pero se muestran con piezas distintas:
+  // separar las variantes es lo que permite tratarlas por separado sin comprobaciones sueltas.
+  | { blob: Blob; kind: "image" }
+  | { blob: Blob; kind: "pdf" }
   | {
       format: StructuredDocumentFormat;
       kind: "structured";
@@ -21,6 +24,39 @@ function isStructuredDocumentFormat(
   format: DocumentFormat,
 ): format is StructuredDocumentFormat {
   return format === "docx" || format === "epub" || format === "pptx" || format === "xlsx";
+}
+
+/**
+ * Tipo con el que debe servirse cada formato que se entrega tal cual al navegador.
+ *
+ * Un `blob:` se sirve con el tipo que declara el propio Blob, no con el que pida la etiqueta
+ * que lo muestra. `getFile()` puede devolverlo vacío —depende de lo que el sistema asocie a la
+ * extensión—, y entonces el navegador entrega el PDF como texto plano: el lector acaba
+ * enseñando «%PDF-1.4» y los objetos internos del archivo en lugar de sus páginas.
+ */
+const previewMimeTypes: Partial<Record<DocumentFormat, string>> = {
+  jpg: "image/jpeg",
+  pdf: "application/pdf",
+  png: "image/png",
+};
+
+/** Devuelve el mismo blob si ya está bien tipado; si no, uno equivalente con su tipo real. */
+export function withPreviewMimeType(blob: Blob, format: DocumentFormat) {
+  const expected = previewMimeTypes[format];
+  if (!expected || blob.type === expected) return blob;
+  return new Blob([blob], { type: expected });
+}
+
+/**
+ * Formatos que se muestran en un visor con desplazamiento propio y que, por tanto, informan
+ * ellos mismos de por dónde va la lectura.
+ *
+ * Se decide por el formato y no por si ya ha llegado un aviso: durante los primeros
+ * instantes no ha llegado ninguno, y en ese hueco la medición por desplazamiento de la
+ * ventana llegaba a guardar la mitad de un documento que aún estaba en su primera página.
+ */
+export function readerCountsItsOwnPages(format: DocumentFormat) {
+  return format === "pdf";
 }
 
 export function classifyLocalDocumentPreview(format: DocumentFormat) {
@@ -43,7 +79,9 @@ export async function createLocalDocumentPreview(
     return { content, kind, truncated };
   }
 
-  if (kind === "image" || kind === "pdf") return { blob, kind };
+  if (kind === "image" || kind === "pdf") {
+    return { blob: withPreviewMimeType(blob, format), kind };
+  }
   if (kind === "structured" && isStructuredDocumentFormat(format)) {
     const { extractStructuredDocument } = await import("./structured-document-extractor");
     const extraction = await extractStructuredDocument(format, blob);

@@ -363,6 +363,47 @@
   width: 100%;
 }
 
+.componentDemo > div:first-child {
+  flex: 1 1 16rem;
+  max-width: 30rem;
+}
+
+.componentMatrix {
+  display: grid;
+  flex: 0 0 auto;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.fieldPair {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.elevationGrid {
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.elevationSample {
+  background: var(--pliegue-color-bg-surface);
+  border-radius: var(--pliegue-radius-md);
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+  min-height: 112px;
+  padding: var(--pliegue-spacing-lg);
+}
+
+.elevationSample code {
+  font-family: var(--pliegue-font-data);
+  font-size: 0.75rem;
+}
+
+.elevationSample small {
+  color: var(--pliegue-color-text-secondary);
+}
+
 .cardDemoRow {
   display: grid;
   gap: var(--pliegue-spacing-sm);

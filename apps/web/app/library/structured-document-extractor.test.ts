@@ -61,6 +61,28 @@ describe("extracción local de documentos estructurados", () => {
     expect(JSON.stringify(result)).not.toContain("alert(1)");
   });
 
+  it("titula con su primer renglón la sección sin encabezado y nunca con el nombre del archivo", async () => {
+    const chapter = (body: string) => `<html><body>${body}</body></html>`;
+    const result = await extractStructuredDocument(
+      "epub",
+      archive({
+        "META-INF/container.xml": `<container><rootfiles><rootfile full-path="OPS/content.opf" /></rootfiles></container>`,
+        "OPS/content.opf": `
+          <package><manifest>
+            <item id="a" href="una_trenza_de_hierba_sagrada-2.xhtml" media-type="application/xhtml+xml" />
+            <item id="b" href="una_trenza_de_hierba_sagrada-3.xhtml" media-type="application/xhtml+xml" />
+            <item id="c" href="una_trenza_de_hierba_sagrada-4.xhtml" media-type="application/xhtml+xml" />
+          </manifest><spine><itemref idref="a" /><itemref idref="b" /><itemref idref="c" /></spine></package>`,
+        "OPS/una_trenza_de_hierba_sagrada-2.xhtml": chapter(`<p class="titulo">Prólogo</p><p>Extiende las manos.</p>`),
+        "OPS/una_trenza_de_hierba_sagrada-3.xhtml": chapter(`<p>Te entrego aquí unas briznas de hierba sagrada recién cortada.</p>`),
+        "OPS/una_trenza_de_hierba_sagrada-4.xhtml": chapter(`<p>—¿Vienes?</p><p>No contestó.</p>`),
+      }),
+    );
+
+    expect(result.sections.map((section) => section.title)).toEqual(["Prólogo", "Sección 2", "Sección 3"]);
+    expect(JSON.stringify(result.sections.map((section) => section.title))).not.toContain("_");
+  });
+
   it("ordena diapositivas PPTX por su número", async () => {
     const result = await extractStructuredDocument(
       "pptx",

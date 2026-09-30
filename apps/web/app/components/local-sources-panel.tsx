@@ -10,10 +10,17 @@ import {
   scanLinkedFolder,
   unlinkLocalFolder,
   useLinkedFolders,
+  type FolderIndexProgress,
   type FolderSyncResult,
   type LinkedFolderSource,
 } from "../library/local-folder-store";
 import styles from "../(workspace)/app/workspace.module.css";
+import { LinkingUnavailableNotice } from "./library/linking-unavailable-notice";
+import { useCatalogAi } from "../ai/ai-readiness";
+import { beforeFilePermission } from "../guide/file-permission-primer";
+import { afterLibraryGrowth } from "../guide/next-steps";
+import { confirmAction } from "./app-ui/confirm-dialog";
+import { suggestNextStep } from "./app-ui/next-step-dialog";
 
 const scanDateFormatter = new Intl.DateTimeFormat("es-PE", {
   dateStyle: "medium",
@@ -63,46 +70,100 @@ function formatLastScan(value: string | null) {
   return `Último escaneo · ${scanDateFormatter.format(new Date(value))}`;
 }
 
+function formatDuration(milliseconds: number) {
+  const seconds = Math.round(milliseconds / 1000);
+  if (seconds < 60) return `${Math.max(1, seconds)} s`;
+  const minutes = Math.round(seconds / 60);
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+}
+
+/**
+ * El tiempo restante se calcula sobre los archivos que hubo que extraer, no sobre todos: en un
+ * reescaneo la mayoría reutiliza su índice y termina al instante, así que promediar el total
+ * daría una previsión demasiado optimista justo cuando más importa acertar.
+ */
+function remainingTime(progress: FolderIndexProgress) {
+  if (progress.extracted < 2) return null;
+  const perExtraction = progress.elapsedMs / progress.extracted;
+  const pending = progress.total - progress.processed;
+  return pending > 0 ? formatDuration(perExtraction * pending) : null;
+}
+
 export function LocalSourcesPanel() {
   const linkedFolders = useLinkedFolders();
+  const catalogAi = useCatalogAi();
   const [busySourceId, setBusySourceId] = useState<string | null>(null);
+  const [progress, setProgress] = useState<FolderIndexProgress | null>(null);
   const [statusMessage, setStatusMessage] = useState(
     "Los cambios y el índice derivado se actualizan bajo demanda; Pliegue nunca copia ni modifica los originales.",
   );
   const isBusy = busySourceId !== null;
 
+  function endRun() {
+    setBusySourceId(null);
+    setProgress(null);
+  }
+
   async function linkFolder() {
+    // Chrome pedirá permiso para ver la carpeta en una ventana suya: se anuncia antes.
+    if (!(await beforeFilePermission("pick-folder"))) return;
     setBusySourceId("picker");
+    setProgress(null);
 
     try {
-      const result = await linkLocalFolder();
+      const result = await linkLocalFolder(setProgress);
       setStatusMessage(
         result.relinked ? `Permiso renovado. ${describeScan(result)}` : describeScan(result),
       );
+      // Una carpeta nueva —o documentos nuevos en una ya vinculada— piden su ficha.
+      const step = afterLibraryGrowth({
+        added: result.relinked ? result.added : result.total,
+        ai: catalogAi,
+        folderName: result.sourceName,
+      });
+      if (step) suggestNextStep(step);
     } catch (error) {
       setStatusMessage(describeFolderError(error));
     } finally {
-      setBusySourceId(null);
+      endRun();
     }
   }
 
   async function scanFolder(source: LinkedFolderSource, requestAccess: boolean) {
+    if (requestAccess && !(await beforeFilePermission("regrant"))) return;
     setBusySourceId(source.id);
+    setProgress(null);
 
     try {
-      const result = await scanLinkedFolder(source.id, requestAccess);
+      const result = await scanLinkedFolder(source.id, requestAccess, setProgress);
       setStatusMessage(describeScan(result));
     } catch (error) {
       setStatusMessage(describeFolderError(error));
     } finally {
-      setBusySourceId(null);
+      endRun();
     }
   }
 
   async function unlinkFolder(source: LinkedFolderSource) {
-    const confirmed = window.confirm(
-      `¿Desvincular «${source.name}»? Solo se eliminarán el permiso y sus metadatos en Pliegue; los archivos originales no cambiarán.`,
-    );
+    const affected = linkedFolders.documents.filter(
+      (document) => document.sourceId === source.id,
+    ).length;
+    // El aviso enumera lo que realmente se pierde. Decir solo «el permiso y sus metadatos»
+    // llevó a desvincular una carpeta creyendo que se renovaba el acceso, y con ella se fueron
+    // el índice de texto y las fichas que costaron llamadas al proveedor.
+    const confirmed = await confirmAction({
+      confirmLabel: "Desvincular carpeta",
+      description: "Se eliminarán de Pliegue:",
+      details: [
+        "el permiso de lectura de la carpeta",
+        `el índice de texto de ${affected} documento${affected === 1 ? "" : "s"}`,
+        "sus fichas del catálogo IA",
+      ],
+      icon: "folder",
+      note: "Los archivos originales no cambian. Volver a vincularla obliga a extraer el texto y a analizarlo otra vez. Si solo quieres recuperar el acceso, cancela y usa «Conceder acceso».",
+      title: `¿Desvincular «${source.name}»?`,
+      tone: "danger",
+    });
     if (!confirmed) return;
 
     setBusySourceId(source.id);
@@ -141,7 +202,7 @@ export function LocalSourcesPanel() {
         <div className={styles.linkedFolderActions}>
           <Button
             aria-describedby="linked-folders-status"
-            disabled={isBusy}
+            disabled={isBusy || linkedFolders.supported === false}
             onClick={() => void linkFolder()}
             variant="secondary"
           >
@@ -155,15 +216,38 @@ export function LocalSourcesPanel() {
         </div>
       </div>
 
-      {linkedFolders.supported === false ? (
+      {progress ? (
         <div className={styles.capabilityNote} role="note">
-          <strong>La vinculación de carpetas no está disponible en esta ventana.</strong>
+          <strong>
+            Indexando {progress.processed} de {progress.total}
+            {remainingTime(progress)
+              ? ` · quedan unos ${remainingTime(progress)}`
+              : ""}
+          </strong>
+          <div
+            aria-label="Progreso de la indexación"
+            aria-valuemax={progress.total}
+            aria-valuemin={0}
+            aria-valuenow={progress.processed}
+            className={styles.progressTrack}
+            role="progressbar"
+          >
+            <span
+              className={styles.progressValue}
+              style={{
+                width: `${progress.total ? Math.round((progress.processed / progress.total) * 100) : 0}%`,
+              }}
+            />
+          </div>
           <p>
-            Puedes reintentar con el botón. Abre Pliegue mediante HTTPS o localhost en Chrome
-            o Edge; la importación de una copia permanece como alternativa explícita.
+            {progress.extracted} con texto extraído
+            {progress.reused ? ` · ${progress.reused} sin cambios` : ""}. La extracción ocurre en
+            esta pestaña: mantenla abierta y no la recargues hasta que termine.
           </p>
         </div>
       ) : null}
+
+      {linkedFolders.supported === false ? <LinkingUnavailableNotice /> : null}
 
       {linkedFolders.sources.length ? (
         <ul aria-label="Carpetas vinculadas" className={styles.folderSourceList}>
@@ -217,7 +301,12 @@ export function LocalSourcesPanel() {
       ) : linkedFolders.supported ? (
         <div className={styles.capabilityNote} role="note">
           <strong>Aún no hay carpetas vinculadas.</strong>
-          <p>El navegador pedirá acceso de solo lectura a la carpeta que elijas.</p>
+          <p>
+            El navegador pedirá acceso de solo lectura a la carpeta que elijas. Pliegue abrirá
+            cada archivo para extraer su texto, así que un corpus de cientos de documentos puede
+            tardar varios minutos la primera vez; los escaneos siguientes solo releen lo que haya
+            cambiado.
+          </p>
         </div>
       ) : null}
 
