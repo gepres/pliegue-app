@@ -126,12 +126,25 @@
   padding-top: var(--pliegue-spacing-sm);
 }
 
+/* Lleva a Ajustes → Cuenta: dice dónde viven los datos y desde ahí se cambia. */
 .areaIdentity {
   align-items: center;
+  border-radius: var(--pliegue-radius-sm);
+  color: inherit;
   display: flex;
   gap: var(--pliegue-spacing-sm);
   min-width: 0;
-  padding-left: var(--pliegue-spacing-xs);
+  padding: 4px var(--pliegue-spacing-xs);
+  text-decoration: none;
+}
+
+.areaIdentity:hover {
+  background: color-mix(in srgb, var(--pliegue-color-text-primary) 5%, transparent);
+}
+
+.areaIdentity:focus-visible {
+  outline: 2px solid var(--pliegue-color-focus-ring);
+  outline-offset: 2px;
 }
 
 .areaDot {
@@ -140,6 +153,12 @@
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--pliegue-color-action-primary) 18%, transparent);
   flex: 0 0 8px;
   height: 8px;
+}
+
+/* Sincronizada: el ocre de la marca en lugar del verde de «solo aquí». */
+.areaDot[data-synced] {
+  background: var(--pliegue-color-accent-warm);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--pliegue-color-accent-warm) 22%, transparent);
 }
 
 .areaText {

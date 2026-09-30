@@ -10,6 +10,7 @@ import "@fontsource/source-serif-4/400.css";
 import "@pliegue/tokens/tokens.css";
 import "@pliegue/ui/styles.css";
 import "./globals.css";
+import { AuthReturn } from "./cloud/auth-return";
 import { PreferenceBridge } from "./preferences/preference-bridge";
 
 export const metadata: Metadata = {
@@ -51,6 +52,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
     <html lang="es">
       <body>
         <PreferenceBridge />
+        <AuthReturn />
         {children}
       </body>
     </html>

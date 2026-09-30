@@ -19,6 +19,12 @@ valor no existe o no es válido, usa `development`.
 - `NEXT_PUBLIC_FEATURE_LOCAL_FILES`: flujos de archivos locales; encendido por defecto.
 - `NEXT_PUBLIC_FEATURE_AI_PANEL`: superficie de IA; encendida por defecto, sin proveedor conectado.
 
+## Nube (opcional)
+
+- `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: el proyecto de Supabase
+  de la cuenta y la sincronización. La clave publicable es pública por diseño (los datos los
+  protege RLS). Sin las dos, Pliegue funciona solo en local. Ver `docs/cloud-sync.md`.
+
 Las flags se leen a través de `apps/web/app/config/public-config.ts`. No se deben
 consultar variables de entorno directamente desde componentes.
 

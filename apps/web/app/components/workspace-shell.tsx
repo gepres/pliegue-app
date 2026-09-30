@@ -7,6 +7,8 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { cx } from "@pliegue/ui";
 
+import { useAccount } from "../cloud/account-store";
+import { useSyncChoices } from "../cloud/sync/sync-controller";
 import { useWorkspaceMode } from "../mode/workspace-mode-store";
 import { isNavigationItemActive, isWideSection, navigationItems } from "../navigation";
 import {
@@ -14,6 +16,7 @@ import {
   useShellLayout,
 } from "../preferences/shell-layout-store";
 import { ConfirmDialogHost } from "./app-ui/confirm-dialog";
+import { CloudSync } from "./cloud/cloud-sync";
 import { IconButton } from "./app-ui/controls";
 import { Icon } from "./app-ui/icons";
 import { ThemeToggle } from "./theme-toggle";
@@ -86,6 +89,9 @@ function useScrolledPast(threshold: number) {
 export function WorkspaceShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
   const workspaceMode = useWorkspaceMode();
+  const account = useAccount();
+  const syncChoices = useSyncChoices(account.userId);
+  const synced = account.status === "signed-in" && syncChoices.enabled;
   const { navigationCollapsed } = useShellLayout();
   const currentItem =
     navigationItems.find((item) => isNavigationItemActive(pathname, item.href)) ??
@@ -123,20 +129,23 @@ export function WorkspaceShell({ children }: Readonly<{ children: ReactNode }>) 
         </nav>
 
         <div className={styles.sidebarFooter}>
-          <div
+          <Link
             className={styles.areaIdentity}
+            href="/app/ajustes#cuenta"
             title={
-              workspaceMode.confirmedAt
-                ? "Modo local confirmado en este dispositivo"
-                : "Los archivos permanecen bajo tu control"
+              synced
+                ? `Sincronizada con ${account.email ?? "tu cuenta"}`
+                : workspaceMode.confirmedAt
+                  ? "Modo local confirmado en este dispositivo"
+                  : "Los archivos permanecen bajo tu control"
             }
           >
-            <span aria-hidden="true" className={styles.areaDot} />
+            <span aria-hidden="true" className={styles.areaDot} data-synced={synced ? "" : undefined} />
             <span className={styles.areaText}>
               <strong>Área personal</strong>
-              <small>Local · este dispositivo</small>
+              <small>{synced ? `Sincronizada · ${account.email ?? "tu cuenta"}` : "Local · este dispositivo"}</small>
             </span>
-          </div>
+          </Link>
           <IconButton
             aria-controls="workspace-navigation"
             aria-expanded={!navigationCollapsed}
@@ -179,6 +188,7 @@ export function WorkspaceShell({ children }: Readonly<{ children: ReactNode }>) 
       </nav>
 
       <ConfirmDialogHost />
+      <CloudSync />
     </div>
   );
 }

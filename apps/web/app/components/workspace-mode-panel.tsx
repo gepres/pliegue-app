@@ -23,8 +23,9 @@ export function WorkspaceModePanel() {
         <Tag>Cuenta · local-only</Tag>
         <h2 id="local-mode-title">Tus archivos permanecen en este dispositivo</h2>
         <p>
-          Puedes usar Biblioteca y preferencias sin crear una cuenta. No hay
-          sincronización ni recuperación remota y Pliegue no sube las copias importadas.
+          Puedes usar Pliegue sin crear una cuenta. Sin ella no hay sincronización entre equipos
+          ni recuperación remota, y con ella tampoco se suben tus archivos ni las copias
+          importadas: solo lo que sabes de ellos.
         </p>
       </div>
       <ul className={styles.localModeList}>
@@ -39,7 +40,7 @@ export function WorkspaceModePanel() {
         <span aria-live="polite" role="status">
           {isConfirmed
             ? "Este dispositivo está configurado como local-only."
-            : "Cuenta y recuperación estarán disponibles después de conectar el backend."}
+            : "La cuenta es opcional: se activa en «Cuenta y sincronización»."}
         </span>
       </div>
     </Card>
