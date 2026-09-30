@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import type { ReactNode } from "react";
 
 import "@fontsource/cormorant-garamond/600.css";
@@ -11,6 +12,8 @@ import "@pliegue/tokens/tokens.css";
 import "@pliegue/ui/styles.css";
 import "./globals.css";
 import { AuthReturn } from "./cloud/auth-return";
+import { earlyInstallCapture } from "./pwa/install-store";
+import { PwaBootstrap } from "./pwa/pwa-bootstrap";
 import { PreferenceBridge } from "./preferences/preference-bridge";
 
 export const metadata: Metadata = {
@@ -22,6 +25,7 @@ export const metadata: Metadata = {
   applicationName: "Pliegue",
   // Sin icono declarado, el navegador pedía /favicon.ico en cada carga y recibía un 404.
   icons: {
+    apple: [{ sizes: "180x180", url: "/icons/apple-touch-icon.png" }],
     icon: [{ type: "image/svg+xml", url: "/brand/pliegue-mark.svg" }],
   },
   title: {
@@ -51,8 +55,13 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html lang="es">
       <body>
+        {/* Chrome avisa de que se puede instalar muy pronto: se guarda el aviso antes de hidratar. */}
+        <Script id="pliegue-install-capture" strategy="beforeInteractive">
+          {earlyInstallCapture}
+        </Script>
         <PreferenceBridge />
         <AuthReturn />
+        <PwaBootstrap />
         {children}
       </body>
     </html>

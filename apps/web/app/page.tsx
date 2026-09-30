@@ -5,6 +5,7 @@ import Link from "next/link";
 import { buttonClassName } from "@pliegue/ui";
 
 import { SmoothScroll } from "./components/home/smooth-scroll";
+import { InstallAppButton } from "./components/pwa/install-app";
 import { ThemeToggle } from "./components/theme-toggle";
 import styles from "./page.module.css";
 
@@ -168,6 +169,7 @@ export default function HomePage() {
         </nav>
         <div className={styles.headerActions}>
           <ThemeToggle compact />
+          <InstallAppButton label="Instalar" size="sm" variant="quiet" />
           <Link className={buttonClassName({ size: "sm" })} href="/app">
             Abrir la app
           </Link>

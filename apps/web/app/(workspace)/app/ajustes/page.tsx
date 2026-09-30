@@ -4,6 +4,7 @@ import { Card, Tag } from "@pliegue/ui";
 
 import { AiSettingsPanel } from "../../../components/ai-settings-panel";
 import { AccountPanel } from "../../../components/cloud/account-panel";
+import { InstallAppCard } from "../../../components/pwa/install-app";
 import { PreferencesPanel } from "../../../components/preferences-panel";
 import { SettingsLayout } from "../../../components/settings/settings-layout";
 import { WorkspaceModePanel } from "../../../components/workspace-mode-panel";
@@ -33,8 +34,13 @@ export default function SettingsPage() {
           label: "Lectura y apariencia",
         },
         {
-          content: <WorkspaceModePanel />,
-          description: "Modo local y dónde viven tus datos",
+          content: (
+            <div className={styles.settingsStack}>
+              <WorkspaceModePanel />
+              <InstallAppCard />
+            </div>
+          ),
+          description: "Modo local, app de escritorio y dónde viven tus datos",
           icon: "monitor",
           id: "espacio",
           label: "Espacio de trabajo",

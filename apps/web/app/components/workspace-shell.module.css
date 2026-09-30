@@ -94,6 +94,27 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* «Instalar Pliegue»: un botón con la forma de los enlaces, justo encima del pie. */
+.installItem {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-top: auto;
+  text-align: left;
+  width: 100%;
+}
+
+.installItem + .sidebarFooter {
+  margin-top: var(--pliegue-spacing-xs);
+}
+
+.installItem .navigationIcon {
+  color: var(--pliegue-color-accent-warm);
+}
+
 .navigationLink:hover {
   background: color-mix(in srgb, var(--pliegue-color-text-primary) 6%, transparent);
   color: var(--pliegue-color-text-primary);

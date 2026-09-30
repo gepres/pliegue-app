@@ -17,6 +17,7 @@ import {
 } from "../preferences/shell-layout-store";
 import { ConfirmDialogHost } from "./app-ui/confirm-dialog";
 import { CloudSync } from "./cloud/cloud-sync";
+import { InstallAppNavItem } from "./pwa/install-app";
 import { IconButton } from "./app-ui/controls";
 import { Icon } from "./app-ui/icons";
 import { ThemeToggle } from "./theme-toggle";
@@ -127,6 +128,15 @@ export function WorkspaceShell({ children }: Readonly<{ children: ReactNode }>) 
             />
           ))}
         </nav>
+
+        <InstallAppNavItem
+          classNames={{
+            icon: styles.navigationIcon,
+            item: cx(styles.navigationLink, styles.installItem),
+            label: styles.navigationLabel,
+          }}
+          collapsed={navigationCollapsed}
+        />
 
         <div className={styles.sidebarFooter}>
           <Link

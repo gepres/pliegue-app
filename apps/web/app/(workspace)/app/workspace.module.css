@@ -982,6 +982,11 @@
   margin: calc(var(--pliegue-spacing-sm) * -1) 0 0;
 }
 
+.settingsStack {
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+}
+
 .settingsCard {
   display: flex;
   flex-direction: column;
