@@ -198,6 +198,20 @@ function OllamaFields({
 export function AiSettingsPanel() {
   const settings = useAiSettings();
   const [draft, setDraft] = useState<AiSettings>(settings);
+  const [edited, setEdited] = useState(false);
+  // Al cargar la página, la primera pintada ve los ajustes por defecto (los del servidor) y
+  // después llegan los guardados. Sin esto el formulario se quedaba con los de fábrica y
+  // «Guardar» los escribía encima de los de la persona. Mientras no haya tocado nada, el
+  // borrador sigue a lo guardado.
+  const [shownSettings, setShownSettings] = useState(settings);
+  if (shownSettings !== settings) {
+    setShownSettings(settings);
+    if (!edited) setDraft(settings);
+  }
+  const editDraft: typeof setDraft = (next) => {
+    setEdited(true);
+    setDraft(next);
+  };
   const [status, setStatus] = useState(
     "El análisis automático está apagado hasta que lo actives expresamente.",
   );
@@ -209,7 +223,7 @@ export function AiSettingsPanel() {
     translationProvider === "browser" || translationProvider === "azure" ? null : translationProvider;
 
   function updateModel(model: string) {
-    setDraft((current) => ({
+    editDraft((current) => ({
       ...current,
       models: { ...current.models, [current.provider]: model },
     }));
@@ -217,19 +231,21 @@ export function AiSettingsPanel() {
 
   function updateTranslationModel(model: string) {
     if (!translationModelProvider) return;
-    setDraft((current) => ({
+    editDraft((current) => ({
       ...current,
       translationModels: { ...current.translationModels, [translationModelProvider]: model },
     }));
   }
 
   function chooseTranslation(choice: TranslationProviderChoice) {
-    setDraft((current) => ({ ...current, translationProvider: choice }));
+    editDraft((current) => ({ ...current, translationProvider: choice }));
   }
 
   function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     saveAiSettings(draft);
+    // Guardado: lo que se ve vuelve a seguir a lo guardado.
+    setEdited(false);
     setStatus(
       draft.autoAnalyzeAfterLink
         ? "Ajustes guardados. Los documentos nuevos o modificados se catalogarán al volver a Biblioteca."
@@ -273,7 +289,7 @@ export function AiSettingsPanel() {
             id="ai-provider"
             onChange={(event) => {
               const provider = event.target.value as AiProvider;
-              setDraft((current) => ({ ...current, provider }));
+              editDraft((current) => ({ ...current, provider }));
             }}
             value={draft.provider}
           >
@@ -298,7 +314,7 @@ export function AiSettingsPanel() {
         </Field>
 
         {draft.provider === "ollama" ? (
-          <OllamaFields draft={draft} onChange={setDraft} />
+          <OllamaFields draft={draft} onChange={editDraft} />
         ) : (
           <ApiKeyField id="ai-api-key" provider={draft.provider} />
         )}
@@ -307,7 +323,7 @@ export function AiSettingsPanel() {
           <Select
             id="ai-excerpt"
             onChange={(event) =>
-              setDraft((current) => ({
+              editDraft((current) => ({
                 ...current,
                 maxExcerptCharacters: Number(event.target.value),
               }))
@@ -324,7 +340,7 @@ export function AiSettingsPanel() {
           <Select
             id="ai-concurrency"
             onChange={(event) =>
-              setDraft((current) => ({ ...current, concurrency: Number(event.target.value) }))
+              editDraft((current) => ({ ...current, concurrency: Number(event.target.value) }))
             }
             value={draft.concurrency}
           >
@@ -342,7 +358,7 @@ export function AiSettingsPanel() {
           description="Solo procesa archivos con texto local disponible y omite versiones ya catalogadas."
           label="Analizar después de vincular o detectar cambios"
           onChange={(event) =>
-            setDraft((current) => ({
+            editDraft((current) => ({
               ...current,
               autoAnalyzeAfterLink: event.target.checked,
             }))
@@ -397,11 +413,11 @@ export function AiSettingsPanel() {
               id="ai-azure-region"
               onBlur={(event) => {
                 const region = normalizeAzureRegion(event.target.value);
-                setDraft((current) => ({ ...current, azureRegion: region }));
+                editDraft((current) => ({ ...current, azureRegion: region }));
               }}
               onChange={(event) => {
                 const region = event.target.value;
-                setDraft((current) => ({ ...current, azureRegion: region }));
+                editDraft((current) => ({ ...current, azureRegion: region }));
               }}
               placeholder="westeurope"
               spellCheck={false}
@@ -420,7 +436,7 @@ export function AiSettingsPanel() {
           draft.provider === "ollama" ? (
             <p className={styles.aiGroupNote}>Traduce con el mismo Ollama de arriba: el texto no sale de tu equipo.</p>
           ) : (
-            <OllamaFields draft={draft} onChange={setDraft} />
+            <OllamaFields draft={draft} onChange={editDraft} />
           )
         ) : sameProvider ? (
           <p className={styles.aiGroupNote}>
