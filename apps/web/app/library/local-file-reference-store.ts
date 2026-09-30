@@ -332,17 +332,23 @@ export async function readLinkedFile(documentId: string) {
   return { document, file: await handle.getFile() };
 }
 
-export async function unlinkLocalFile(documentId: string) {
+export async function unlinkLocalFiles(documentIds: readonly string[]) {
+  if (!documentIds.length) return;
   const database = await openDatabase();
 
   try {
     const transaction = database.transaction(documentStoreName, "readwrite");
-    transaction.objectStore(documentStoreName).delete(documentId);
+    const store = transaction.objectStore(documentStoreName);
+    for (const documentId of documentIds) store.delete(documentId);
     await transactionComplete(transaction);
   } finally {
     database.close();
   }
 
-  fileHandles.delete(documentId);
+  for (const documentId of documentIds) fileHandles.delete(documentId);
   await loadLinkedFiles();
+}
+
+export function unlinkLocalFile(documentId: string) {
+  return unlinkLocalFiles([documentId]);
 }

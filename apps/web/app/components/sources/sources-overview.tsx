@@ -11,6 +11,7 @@ import { describeSkippedFile, type SkippedFileKind } from "../../library/local-f
 import { useLibraryDocuments } from "../../library/use-library-documents";
 import { Icon, type IconName } from "../app-ui/icons";
 import { CatalogImportPanel } from "../catalog-import-panel";
+import { LinkedFilesPanel } from "../linked-files-panel";
 import { LocalSourcesPanel } from "../local-sources-panel";
 import styles from "./sources.module.css";
 
@@ -213,6 +214,7 @@ export function SourcesOverview() {
         </div>
 
         <LocalSourcesPanel />
+        <LinkedFilesPanel />
 
         {folderRows.length ? (
           <div className={styles.panel}>

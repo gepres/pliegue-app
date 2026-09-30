@@ -30,7 +30,7 @@ import {
 import { hasStaleIndex } from "../library/stale-index";
 import { toggleFavorite, useFavorites } from "../library/favorite-store";
 import { languageLabel } from "../library/language";
-import { linkLocalFiles, unlinkLocalFile } from "../library/local-file-reference-store";
+import { linkLocalFiles } from "../library/local-file-reference-store";
 import {
   downloadImportedCopy,
   importLocalFiles,
@@ -49,6 +49,7 @@ import {
 } from "./library/library-document-tile";
 import libraryStyles from "./library/library.module.css";
 import { LinkingUnavailableNotice } from "./library/linking-unavailable-notice";
+import { forgetLinkedFiles } from "./linked-files-panel";
 import { StaleIndexNotice } from "./stale-index-notice";
 import styles from "../(workspace)/app/workspace.module.css";
 
@@ -333,7 +334,11 @@ export function LibraryBrowser() {
           ? `${result.rejected.length} rechazado${result.rejected.length === 1 ? "" : "s"}`
           : "",
       ].filter(Boolean);
-      setImportStatus(parts.length ? `${parts.join(" · ")}.` : "No se vinculó ningún archivo.");
+      setImportStatus(
+        parts.length
+          ? `${parts.join(" · ")}. Para desvincularlo: menú ⋯ de su tarjeta, o Fuentes → Archivos vinculados.`
+          : "No se vinculó ningún archivo.",
+      );
     } catch (error) {
       setImportStatus(describeFileLinkError(error));
     } finally {
@@ -419,17 +424,15 @@ export function LibraryBrowser() {
 
   async function removeFileReference(documentId: string, title: string) {
     const confirmed = window.confirm(
-      `¿Quitar la referencia a «${title}»? El archivo original no se eliminará ni modificará.`,
+      `¿Desvincular «${title}»?\n\nPliegue olvidará la referencia, el índice de texto y la ficha del catálogo IA. El archivo original no cambiará.`,
     );
     if (!confirmed) return;
 
     try {
-      await unlinkLocalFile(documentId);
-      await removeDocumentCatalogRecord(documentId).catch(() => undefined);
-      clearReadingProgress(documentId);
-      setImportStatus("La referencia se eliminó. El archivo original permanece intacto.");
+      await forgetLinkedFiles([documentId]);
+      setImportStatus(`«${title}» se desvinculó. El original sigue donde estaba.`);
     } catch {
-      setImportStatus("No fue posible eliminar la referencia local.");
+      setImportStatus("No fue posible desvincular el archivo.");
     }
   }
 
@@ -558,6 +561,17 @@ export function LibraryBrowser() {
                     fileInputRef.current?.click();
                   }}
                 />
+                {linkedFiles.documents.length || linkedFolders.sources.length ? (
+                  <MenuItem
+                    description="Ver y desvincular archivos y carpetas"
+                    icon="link"
+                    label="Gestionar vinculados…"
+                    onSelect={() => {
+                      close();
+                      router.push("/app/biblioteca/fuentes#carpetas");
+                    }}
+                  />
+                ) : null}
                 <MenuSeparator />
                 <MenuItem
                   description="Fichas desde una plantilla, Zotero o Dublin Core"
@@ -1035,7 +1049,7 @@ export function LibraryBrowser() {
                     : isFileReference
                       ? {
                           remove: {
-                            label: "Quitar referencia",
+                            label: "Desvincular archivo",
                             onSelect: () => void removeFileReference(document.id, document.title),
                           },
                         }
