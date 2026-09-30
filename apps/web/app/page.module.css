@@ -582,14 +582,14 @@
   counter-reset: step;
   display: grid;
   gap: var(--pliegue-spacing-lg);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   list-style: none;
   margin: 0;
   padding: 0;
   position: relative;
 }
 
-/* La línea de puntos que une los tres gestos. */
+/* La línea de puntos que une los cuatro pasos. */
 .steps::before {
   border-top: 1px dashed var(--pliegue-color-border-strong);
   content: "";
@@ -597,6 +597,13 @@
   position: absolute;
   right: 2rem;
   top: 1.5rem;
+}
+
+.howtoLead {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.6;
+  margin: var(--pliegue-spacing-sm) 0 0;
+  max-width: 40rem;
 }
 
 .steps li {
@@ -819,6 +826,17 @@
 
   .footerBrand {
     grid-column: 1 / -1;
+  }
+}
+
+/* Entre la tableta y el escritorio, los cuatro pasos de dos en dos: en fila no caben. */
+@media (min-width: 901px) and (max-width: 1180px) {
+  .steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .steps::before {
+    display: none;
   }
 }
 

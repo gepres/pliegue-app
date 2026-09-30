@@ -780,6 +780,124 @@
   }
 }
 
+/* ---- Siguiente paso ------------------------------------------------------------ */
+
+/* La misma tarjeta que la confirmación, algo más ancha: las salidas van como filas con su
+   explicación, y la recomendada lleva el borde del color de acción. */
+.nextStep {
+  max-width: min(520px, calc(100vw - 32px));
+}
+
+.nextStep .confirmBody > .nextStepLead {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  margin-top: var(--pliegue-spacing-xs);
+  text-transform: uppercase;
+}
+
+.nextStepActions {
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nextStepAction {
+  align-items: center;
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  color: var(--pliegue-color-text-primary);
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
+  text-align: left;
+  transition:
+    border-color var(--pliegue-motion-fast) ease,
+    background-color var(--pliegue-motion-fast) ease;
+  width: 100%;
+}
+
+.nextStepAction:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--pliegue-color-action-primary) 6%, var(--pliegue-color-bg-surface));
+  border-color: color-mix(in srgb, var(--pliegue-color-action-primary) 45%, var(--pliegue-color-border-default));
+}
+
+.nextStepAction:focus-visible {
+  outline: 3px solid var(--pliegue-color-focus-ring);
+  outline-offset: 2px;
+}
+
+.nextStepAction[data-primary] {
+  border-color: var(--pliegue-color-action-primary);
+  box-shadow: inset 3px 0 0 var(--pliegue-color-action-primary);
+}
+
+.nextStepAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.nextStepAction > svg {
+  color: var(--pliegue-color-text-secondary);
+}
+
+.nextStepActionIcon {
+  align-items: center;
+  background: color-mix(in srgb, var(--pliegue-color-action-primary) 10%, var(--pliegue-color-bg-surface));
+  border-radius: 50%;
+  color: var(--pliegue-color-action-primary);
+  display: inline-flex;
+  height: 2.25rem;
+  justify-content: center;
+  width: 2.25rem;
+}
+
+.nextStepActionText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nextStepActionText strong {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.nextStepActionText small {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.nextStepFooter {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm);
+  justify-content: space-between;
+  margin-top: var(--pliegue-spacing-xs);
+}
+
+.nextStepMute {
+  align-items: center;
+  color: var(--pliegue-color-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.8125rem;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.nextStepMute input {
+  accent-color: var(--pliegue-color-action-primary);
+}
+
 @keyframes confirm-in {
   from {
     opacity: 0;

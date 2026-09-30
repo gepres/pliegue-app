@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Button, Card, Tag, buttonClassName } from "@pliegue/ui";
 
+import { beforeFilePermission } from "../guide/file-permission-primer";
 import { useLinkedFiles } from "../library/local-file-reference-store";
 import {
   requestLinkedFolderReadPermission,
@@ -34,6 +35,7 @@ export function ReaderStart() {
   ).length;
 
   async function grantAccess() {
+    if (!(await beforeFilePermission("regrant"))) return;
     setRequesting(true);
     setPermissionError(null);
 

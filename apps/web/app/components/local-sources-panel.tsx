@@ -16,7 +16,11 @@ import {
 } from "../library/local-folder-store";
 import styles from "../(workspace)/app/workspace.module.css";
 import { LinkingUnavailableNotice } from "./library/linking-unavailable-notice";
+import { useCatalogAi } from "../ai/ai-readiness";
+import { beforeFilePermission } from "../guide/file-permission-primer";
+import { afterLibraryGrowth } from "../guide/next-steps";
 import { confirmAction } from "./app-ui/confirm-dialog";
+import { suggestNextStep } from "./app-ui/next-step-dialog";
 
 const scanDateFormatter = new Intl.DateTimeFormat("es-PE", {
   dateStyle: "medium",
@@ -87,6 +91,7 @@ function remainingTime(progress: FolderIndexProgress) {
 
 export function LocalSourcesPanel() {
   const linkedFolders = useLinkedFolders();
+  const catalogAi = useCatalogAi();
   const [busySourceId, setBusySourceId] = useState<string | null>(null);
   const [progress, setProgress] = useState<FolderIndexProgress | null>(null);
   const [statusMessage, setStatusMessage] = useState(
@@ -100,6 +105,8 @@ export function LocalSourcesPanel() {
   }
 
   async function linkFolder() {
+    // Chrome pedirá permiso para ver la carpeta en una ventana suya: se anuncia antes.
+    if (!(await beforeFilePermission("pick-folder"))) return;
     setBusySourceId("picker");
     setProgress(null);
 
@@ -108,6 +115,13 @@ export function LocalSourcesPanel() {
       setStatusMessage(
         result.relinked ? `Permiso renovado. ${describeScan(result)}` : describeScan(result),
       );
+      // Una carpeta nueva —o documentos nuevos en una ya vinculada— piden su ficha.
+      const step = afterLibraryGrowth({
+        added: result.relinked ? result.added : result.total,
+        ai: catalogAi,
+        folderName: result.sourceName,
+      });
+      if (step) suggestNextStep(step);
     } catch (error) {
       setStatusMessage(describeFolderError(error));
     } finally {
@@ -116,6 +130,7 @@ export function LocalSourcesPanel() {
   }
 
   async function scanFolder(source: LinkedFolderSource, requestAccess: boolean) {
+    if (requestAccess && !(await beforeFilePermission("regrant"))) return;
     setBusySourceId(source.id);
     setProgress(null);
 

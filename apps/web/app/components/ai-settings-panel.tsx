@@ -11,11 +11,16 @@ import {
   setSessionApiKey,
   useAiSessionSecrets,
 } from "../ai/ai-session-secret-store";
+import { catalogProviderNames } from "../ai/ai-readiness";
 import { checkApiKey, normalizeApiKey, type KeyProvider } from "../ai/api-key";
+import { countCatalogPending } from "../ai/catalog-analysis";
 import type { AiProvider } from "../ai/document-catalog";
 import { translationProviderChoices, type TranslationProviderChoice } from "../ai/translation-options";
+import { afterAiReady } from "../guide/next-steps";
+import { useLibraryDocuments } from "../library/use-library-documents";
 import styles from "../(workspace)/app/workspace.module.css";
 import { IconButton } from "./app-ui/controls";
+import { suggestNextStep } from "./app-ui/next-step-dialog";
 import { TranslationComparison } from "./translation-comparison";
 
 const providerLabels: Record<AiProvider, string> = {
@@ -197,6 +202,8 @@ function OllamaFields({
 
 export function AiSettingsPanel() {
   const settings = useAiSettings();
+  const secrets = useAiSessionSecrets();
+  const library = useLibraryDocuments();
   const [draft, setDraft] = useState<AiSettings>(settings);
   const [edited, setEdited] = useState(false);
   // Al cargar la página, la primera pintada ve los ajustes por defecto (los del servidor) y
@@ -246,6 +253,18 @@ export function AiSettingsPanel() {
     saveAiSettings(draft);
     // Guardado: lo que se ve vuelve a seguir a lo guardado.
     setEdited(false);
+    // Con la IA de catalogar lista, el paso siguiente es catalogar: se sugiere ahora, al
+    // terminar de configurar, y no mientras se escribe la clave.
+    const key = draft.provider === "ollama" ? "" : secrets[draft.provider];
+    const ready = draft.provider === "ollama" || (Boolean(key) && !checkApiKey(draft.provider, key).error);
+    if (ready) {
+      const step = afterAiReady({
+        documents: library.allDocuments.length,
+        pending: countCatalogPending(library.allDocuments, library.catalogs.records, draft),
+        providerName: catalogProviderNames[draft.provider],
+      });
+      if (step) suggestNextStep(step);
+    }
     setStatus(
       draft.autoAnalyzeAfterLink
         ? "Ajustes guardados. Los documentos nuevos o modificados se catalogarán al volver a Biblioteca."

@@ -25,6 +25,7 @@ import {
   type NormalizedRect,
   type ReaderAnnotation,
 } from "../library/annotations";
+import { beforeFilePermission } from "../guide/file-permission-primer";
 import { applyImportedCatalogs } from "../library/catalog-import";
 import { applyDocumentCatalogs } from "../library/documents";
 import { normalizeLanguage } from "../library/language";
@@ -596,6 +597,7 @@ function PermissionPanel({
   >("idle");
 
   async function requestAccess() {
+    if (!(await beforeFilePermission("regrant"))) return;
     setRequestState("requesting");
 
     try {

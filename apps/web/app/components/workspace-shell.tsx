@@ -16,6 +16,7 @@ import {
   useShellLayout,
 } from "../preferences/shell-layout-store";
 import { ConfirmDialogHost } from "./app-ui/confirm-dialog";
+import { NextStepHost } from "./app-ui/next-step-dialog";
 import { CloudSync } from "./cloud/cloud-sync";
 import { InstallAppNavItem } from "./pwa/install-app";
 import { IconButton } from "./app-ui/controls";
@@ -198,6 +199,7 @@ export function WorkspaceShell({ children }: Readonly<{ children: ReactNode }>) 
       </nav>
 
       <ConfirmDialogHost />
+      <NextStepHost />
       <CloudSync />
     </div>
   );

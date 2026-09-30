@@ -89,21 +89,21 @@ const chapters: Chapter[] = [
   },
   {
     details: [
-      "Cataloga tus documentos: autor, año, género, idioma y una sinopsis breve.",
-      "Con tu propia clave, que solo vive mientras la pestaña está abierta.",
-      "Elige proveedor y modelo, o usa Ollama en tu equipo y no envíes nada.",
+      "Cataloga tus documentos: autor, año, categoría y subcategoría, editorial, serie y tomo, sinopsis.",
+      "Lo que es de la edición —ISBN, editorial, traductor— solo se guarda si figura en el libro.",
+      "Con tu propia clave, que solo vive mientras la pestaña está abierta, o con Ollama en tu equipo.",
       "Solo se envía un extracto limitado; nunca el archivo completo.",
     ],
     id: "ia",
     lead: "La inteligencia que tú eliges, con tu cuenta y bajo tus reglas.",
-    margin: ["OpenAI · Anthropic", "Gemini · Ollama", "Clave solo en la sesión"],
+    margin: ["OpenAI · Anthropic", "Gemini · Ollama", "Clave solo en la sesión", "O tu índice JSON"],
     number: "05",
     title: "IA con tu clave",
   },
   {
     details: [
       "Tus libros, tus marcas y tus traducciones se guardan en tu dispositivo.",
-      "Sin cuentas y sin un servidor que guarde tu biblioteca.",
+      "La cuenta es opcional, y ni con ella salen tus archivos ni su texto.",
       "Lo que viaja a un proveedor de IA es lo que tú decides enviar, y nada más.",
       "El texto de tus libros no se usa para entrenar a nadie.",
     ],
@@ -112,6 +112,19 @@ const chapters: Chapter[] = [
     margin: ["Local primero", "IndexedDB en tu navegador", "Sin rastreo"],
     number: "06",
     title: "Privacidad",
+  },
+  {
+    details: [
+      "Instálala como app de escritorio desde Chrome o Edge: su propia ventana, y abre sin conexión.",
+      "Entra con Google o con tu correo, si quieres: favoritos, notas, progreso y fichas te siguen.",
+      "Tus archivos no suben nunca: viaja lo que sabes de ellos, y en menos de un minuto.",
+      "Sin cuenta, todo sigue en tu equipo, como siempre.",
+    ],
+    id: "equipos",
+    lead: "Tu biblioteca en tu escritorio, y contigo en todos tus equipos.",
+    margin: ["App de escritorio", "Google · correo", "Sincroniza en < 1 min"],
+    number: "07",
+    title: "En todos tus equipos",
   },
 ];
 
@@ -124,12 +137,16 @@ const ticker = [
   "Tu IA",
   "Marcas y notas",
   "Postales",
-  "Sin cuentas",
+  "App de escritorio",
+  "Cuenta opcional",
+  "Sincroniza entre equipos",
 ];
 
+/** El camino de primeros pasos: el mismo que la app propone al terminar cada uno. */
 const steps = [
   { text: "Elige una carpeta o importa tus archivos. Pliegue los indexa en tu equipo.", title: "Vincula" },
-  { text: "Ábrelos en el lector: la página tal cual o el texto a tu medida.", title: "Lee" },
+  { text: "Con tu IA o con un índice JSON: autor, categoría, serie y tomo de cada uno.", title: "Catálogo" },
+  { text: "Filtra por categoría, autor o serie y ábrelos en el lector, a tu medida.", title: "Explora y lee" },
   { text: "Tradúcelos, márcalos y comparte lo que te importó.", title: "Hazlos tuyos" },
 ];
 
@@ -188,8 +205,8 @@ export default function HomePage() {
             </h1>
             <p className={styles.heroLead} style={{ "--i": 2 } as React.CSSProperties}>
               Pliegue reúne tus libros y documentos en tu dispositivo, los abre en un lector
-              cuidado, los traduce junto al original y guarda lo que subrayas. Sin cuentas y sin
-              subir tu biblioteca a ninguna parte.
+              cuidado, los traduce junto al original y guarda lo que subrayas. Sin cuenta si no la
+              quieres, y sin subir nunca tus archivos.
             </p>
             <div className={styles.heroActions} style={{ "--i": 3 } as React.CSSProperties}>
               <Link className={buttonClassName({ size: "lg" })} href="/app/biblioteca">
@@ -209,8 +226,8 @@ export default function HomePage() {
                 <dd>En tu equipo o con tu IA</dd>
               </div>
               <div>
-                <dt>Cuentas</dt>
-                <dd>Ninguna</dd>
+                <dt>Cuenta</dt>
+                <dd>Opcional</dd>
               </div>
             </dl>
           </div>
@@ -267,7 +284,7 @@ export default function HomePage() {
         <section aria-labelledby="funciones-title" className={styles.contents} id="funciones">
           <header className={styles.sectionHead}>
             <p className={styles.eyebrow}>Índice</p>
-            <h2 id="funciones-title">Seis capítulos para tu biblioteca</h2>
+            <h2 id="funciones-title">Siete capítulos para tu biblioteca</h2>
           </header>
           <ol className={styles.toc}>
             {chapters.map((chapter) => (
@@ -315,7 +332,11 @@ export default function HomePage() {
         <section aria-labelledby="como-funciona-title" className={styles.howto} id="como-funciona">
           <header className={styles.sectionHead}>
             <p className={styles.eyebrow}>Cómo funciona</p>
-            <h2 id="como-funciona-title">Tres gestos, ninguna cuenta</h2>
+            <h2 id="como-funciona-title">Cuatro pasos, y la app te guía</h2>
+            <p className={styles.howtoLead}>
+              Al terminar cada paso, Pliegue te propone el siguiente; en Inicio ves siempre por
+              dónde vas. Sin cuenta, si no la quieres.
+            </p>
           </header>
           <ol className={styles.steps}>
             {steps.map((step, index) => (
@@ -378,6 +399,12 @@ export default function HomePage() {
             </li>
             <li>
               <Link href="/app/ajustes">Ajustes</Link>
+            </li>
+            <li>
+              <Link href="/app/ajustes#cuenta">Cuenta y sincronización</Link>
+            </li>
+            <li>
+              <Link href="/app/ajustes#espacio">Instalar la app</Link>
             </li>
           </ul>
         </nav>

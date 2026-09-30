@@ -58,6 +58,7 @@ export function InstallAppNavItem({
 const benefits = [
   "Su propia ventana, en el menú Inicio, el Dock o la barra de tareas",
   "Abre sin conexión: tu biblioteca y tus notas viven en este equipo",
+  "Chrome recuerda el acceso a tus carpetas: no vuelve a pedir permiso cada vez",
   "Sigue usando Chrome o Edge por dentro: conserva el traductor integrado y la vinculación de carpetas",
 ];
 

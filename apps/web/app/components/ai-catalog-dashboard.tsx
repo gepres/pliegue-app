@@ -8,6 +8,9 @@ import { Button, Card, Tag, buttonClassName } from "@pliegue/ui";
 import { providerModel } from "../ai/ai-settings";
 import { useAiSettings } from "../ai/ai-settings-store";
 import { useAiSessionSecrets } from "../ai/ai-session-secret-store";
+import { readDocumentCatalogRecords } from "../ai/document-catalog-store";
+import { afterCatalog } from "../guide/next-steps";
+import { suggestNextStep } from "./app-ui/next-step-dialog";
 import {
   analyzeDocumentCatalogs,
   catalogBatchSize,
@@ -171,6 +174,15 @@ export function AiCatalogDashboard() {
         retryErrors: true,
       });
       setStatus(describeSummary(summary) || "El catálogo ya estaba al día.");
+      if (summary.analyzed && !summary.stopped) {
+        // Las categorías, recién escritas: las del estado de este render son de antes.
+        const records = await readDocumentCatalogRecords().catch(() => []);
+        const categories = [
+          ...new Set(records.map((record) => record.extras?.category).filter((value): value is string => Boolean(value))),
+        ];
+        const step = afterCatalog({ analyzed: summary.analyzed, categories });
+        if (step) suggestNextStep(step);
+      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "No fue posible iniciar el análisis.");
     } finally {

@@ -17,7 +17,10 @@ import {
   catalogImportJsonSchema,
   createCatalogExample,
 } from "../library/catalog-template";
+import { useCatalogAi } from "../ai/ai-readiness";
+import { afterJsonImport } from "../guide/next-steps";
 import { confirmAction } from "./app-ui/confirm-dialog";
+import { suggestNextStep } from "./app-ui/next-step-dialog";
 import { Disclosure } from "./app-ui/controls";
 import { downloadCatalogTemplate, downloadJson } from "./catalog-template-download";
 import type { LibraryDocument } from "../library/documents";
@@ -65,6 +68,7 @@ function describeParseError(error: unknown) {
 
 export function CatalogImportPanel({ documents }: { documents: readonly LibraryDocument[] }) {
   const importedCatalogs = useImportedCatalogs();
+  const catalogAi = useCatalogAi();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [busy, setBusy] = useState(false);
@@ -135,6 +139,13 @@ export function CatalogImportPanel({ documents }: { documents: readonly LibraryD
 
     try {
       await saveImportedCatalogRecords(preview.records);
+      const withoutCatalog = documents.filter((document) => !document.catalog).length;
+      const step = afterJsonImport({
+        ai: catalogAi,
+        matched: preview.matched,
+        missing: Math.max(0, withoutCatalog - preview.matched),
+      });
+      if (step) suggestNextStep(step);
       setStatus(
         `${preview.matched} ficha${preview.matched === 1 ? "" : "s"} aplicada${
           preview.matched === 1 ? "" : "s"

@@ -6,7 +6,8 @@ import { Button } from "@pliegue/ui";
 
 import type { LibraryDocument } from "../library/documents";
 import { linkLocalFiles } from "../library/local-file-reference-store";
-import { scanLinkedFolder, type FolderIndexProgress } from "../library/local-folder-store";
+import { beforeFilePermission } from "../guide/file-permission-primer";
+import { scanLinkedFolder, useLinkedFolders, type FolderIndexProgress } from "../library/local-folder-store";
 import { reindexImportedDocuments } from "../library/local-library-store";
 import { findStaleIndexes, type StaleIndexAction } from "../library/stale-index";
 import styles from "../(workspace)/app/workspace.module.css";
@@ -38,6 +39,7 @@ function describeGroup(action: StaleIndexAction, count: number) {
 
 export function StaleIndexNotice({ documents }: { documents: readonly LibraryDocument[] }) {
   const report = findStaleIndexes(documents);
+  const linkedFolders = useLinkedFolders();
   const [busy, setBusy] = useState<StaleIndexAction | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [progress, setProgress] = useState<FolderIndexProgress | null>(null);
@@ -47,6 +49,13 @@ export function StaleIndexNotice({ documents }: { documents: readonly LibraryDoc
   if (!report.total) return null;
 
   async function run(action: StaleIndexAction, sourceIds: readonly string[]) {
+    // Si alguna carpeta perdió el acceso, Chrome lo pedirá: se anuncia antes.
+    const needsAccess = linkedFolders.sources.some(
+      (source) => sourceIds.includes(source.id) && source.permission !== "granted",
+    );
+    if (action !== "reindex-copy" && action !== "relink-file" && needsAccess && !(await beforeFilePermission("regrant"))) {
+      return;
+    }
     setBusy(action);
     setMessage(null);
 

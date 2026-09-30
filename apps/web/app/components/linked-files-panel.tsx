@@ -13,7 +13,10 @@ import {
   useLinkedFiles,
 } from "../library/local-file-reference-store";
 import { clearReadingProgress } from "../library/reading-progress-store";
+import { useCatalogAi } from "../ai/ai-readiness";
+import { afterLibraryGrowth } from "../guide/next-steps";
 import { confirmAction, type ConfirmOptions } from "./app-ui/confirm-dialog";
+import { suggestNextStep } from "./app-ui/next-step-dialog";
 import styles from "../(workspace)/app/workspace.module.css";
 
 /**
@@ -51,6 +54,7 @@ export function unlinkFilesConfirmation(label: string): ConfirmOptions {
  */
 export function LinkedFilesPanel() {
   const linkedFiles = useLinkedFiles();
+  const catalogAi = useCatalogAi();
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState(
     "Desvincular quita la referencia, su índice y su ficha; el archivo original no se toca.",
@@ -63,6 +67,8 @@ export function LinkedFilesPanel() {
     setBusy("picker");
     try {
       const result = await linkLocalFiles();
+      const step = afterLibraryGrowth({ added: result.linked, ai: catalogAi });
+      if (step) suggestNextStep(step);
       setStatus(
         result.linked || result.updated
           ? `${result.linked + result.updated} archivo${result.linked + result.updated === 1 ? "" : "s"} vinculado${result.linked + result.updated === 1 ? "" : "s"}.`

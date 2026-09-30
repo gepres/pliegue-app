@@ -49,7 +49,10 @@ import {
 } from "./library/library-document-tile";
 import libraryStyles from "./library/library.module.css";
 import { LinkingUnavailableNotice } from "./library/linking-unavailable-notice";
+import { useCatalogAi } from "../ai/ai-readiness";
+import { afterLibraryGrowth } from "../guide/next-steps";
 import { confirmAction } from "./app-ui/confirm-dialog";
+import { suggestNextStep } from "./app-ui/next-step-dialog";
 import { forgetLinkedFiles, unlinkFilesConfirmation } from "./linked-files-panel";
 import { StaleIndexNotice } from "./stale-index-notice";
 import styles from "../(workspace)/app/workspace.module.css";
@@ -149,6 +152,7 @@ function describeFileLinkError(error: unknown) {
 
 export function LibraryBrowser() {
   const router = useRouter();
+  const catalogAi = useCatalogAi();
   const phoneWidth = usePhoneWidth();
   const [availability, setAvailability] = useState<AvailabilityState | "all">("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -328,6 +332,8 @@ export function LibraryBrowser() {
 
     try {
       const result = await linkLocalFiles();
+      const step = afterLibraryGrowth({ added: result.linked, ai: catalogAi });
+      if (step) suggestNextStep(step);
       const parts = [
         result.linked ? `${result.linked} vinculado${result.linked === 1 ? "" : "s"}` : "",
         result.updated ? `${result.updated} actualizado${result.updated === 1 ? "" : "s"}` : "",
@@ -377,6 +383,8 @@ export function LibraryBrowser() {
 
     try {
       const result = await importLocalFiles(Array.from(files));
+      const step = afterLibraryGrowth({ added: result.imported, ai: catalogAi });
+      if (step) suggestNextStep(step);
       const parts = [
         result.imported ? `${result.imported} importado${result.imported === 1 ? "" : "s"}` : "",
         result.duplicates

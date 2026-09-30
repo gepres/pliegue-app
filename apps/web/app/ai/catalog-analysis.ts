@@ -134,6 +134,20 @@ export function catalogQueueReason(
   return null;
 }
 
+/** Cuántos documentos con texto se enviarían ahora: el número del botón «Catalogar N». */
+export function countCatalogPending(
+  documents: readonly LibraryDocument[],
+  records: readonly DocumentCatalogRecord[],
+  settings: AiSettings,
+) {
+  const recordsById = new Map(records.map((record) => [record.documentId, record]));
+  return documents.filter(
+    (document) =>
+      Boolean(document.searchText?.trim()) &&
+      catalogQueueReason(document, recordsById.get(document.id), settings, { retryErrors: true }) !== null,
+  ).length;
+}
+
 /** Cede el hilo entre bloques para que la interfaz pinte el avance. */
 function yieldToBrowser() {
   return new Promise<void>((resolve) => {

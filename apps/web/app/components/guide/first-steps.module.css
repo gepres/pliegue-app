@@ -1,0 +1,142 @@
+.card {
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+  margin-bottom: var(--pliegue-spacing-lg);
+}
+
+.head {
+  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-md);
+  justify-content: space-between;
+}
+
+.head > div {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  justify-items: start;
+}
+
+.head h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(1.6rem, 3.5vw, 2.1rem);
+  font-weight: 600;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.toggle {
+  max-width: 22rem;
+}
+
+/* Cuatro columnas en escritorio, una línea que las une y el paso actual resaltado. */
+.steps {
+  counter-reset: paso;
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.step {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-rows: auto 1fr;
+  position: relative;
+}
+
+.step:not(:last-child)::after {
+  border-top: 1px dashed var(--pliegue-color-border-strong);
+  content: "";
+  left: 2.5rem;
+  position: absolute;
+  right: calc(var(--pliegue-spacing-md) * -1 + 0.5rem);
+  top: 1rem;
+}
+
+.marker {
+  align-items: center;
+  background: var(--pliegue-color-bg-surface);
+  border: 1.5px solid var(--pliegue-color-border-strong);
+  border-radius: 50%;
+  color: var(--pliegue-color-text-secondary);
+  display: inline-flex;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.8125rem;
+  height: 2rem;
+  justify-content: center;
+  position: relative;
+  width: 2rem;
+  z-index: 1;
+}
+
+.stepDone .marker {
+  background: var(--pliegue-color-action-primary);
+  border-color: var(--pliegue-color-action-primary);
+  color: var(--pliegue-color-text-on-action);
+}
+
+.stepCurrent .marker {
+  border-color: var(--pliegue-color-accent-warm);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--pliegue-color-accent-warm) 22%, transparent);
+  color: var(--pliegue-color-text-primary);
+}
+
+.stepBody {
+  align-content: start;
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+  justify-items: start;
+}
+
+.stepBody h3 {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.stepBody p {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.stepDone .stepBody h3 {
+  color: var(--pliegue-color-text-secondary);
+}
+
+.visuallyHidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/* En el teléfono, una columna: el marcador a la izquierda y la línea hacia abajo. */
+@media (max-width: 760px) {
+  .steps {
+    grid-template-columns: 1fr;
+  }
+
+  .step {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto;
+  }
+
+  .step:not(:last-child)::after {
+    border-left: 1px dashed var(--pliegue-color-border-strong);
+    border-top: 0;
+    bottom: calc(var(--pliegue-spacing-md) * -1);
+    left: 1rem;
+    right: auto;
+    top: 2rem;
+  }
+}
