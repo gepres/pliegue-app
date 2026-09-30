@@ -13,6 +13,7 @@ import {
   setNavigationCollapsed,
   useShellLayout,
 } from "../preferences/shell-layout-store";
+import { ConfirmDialogHost } from "./app-ui/confirm-dialog";
 import { IconButton } from "./app-ui/controls";
 import { Icon } from "./app-ui/icons";
 import { ThemeToggle } from "./theme-toggle";
@@ -176,6 +177,8 @@ export function WorkspaceShell({ children }: Readonly<{ children: ReactNode }>) 
           <NavigationLink compact item={item} key={item.href} pathname={pathname} />
         ))}
       </nav>
+
+      <ConfirmDialogHost />
     </div>
   );
 }

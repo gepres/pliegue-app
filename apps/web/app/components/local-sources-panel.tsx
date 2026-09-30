@@ -16,6 +16,7 @@ import {
 } from "../library/local-folder-store";
 import styles from "../(workspace)/app/workspace.module.css";
 import { LinkingUnavailableNotice } from "./library/linking-unavailable-notice";
+import { confirmAction } from "./app-ui/confirm-dialog";
 
 const scanDateFormatter = new Intl.DateTimeFormat("es-PE", {
   dateStyle: "medium",
@@ -135,11 +136,19 @@ export function LocalSourcesPanel() {
     // El aviso enumera lo que realmente se pierde. Decir solo «el permiso y sus metadatos»
     // llevó a desvincular una carpeta creyendo que se renovaba el acceso, y con ella se fueron
     // el índice de texto y las fichas que costaron llamadas al proveedor.
-    const confirmed = window.confirm(
-      `¿Desvincular «${source.name}»?\n\nSe eliminarán de Pliegue el permiso, el índice de texto de ${affected} documento${
-        affected === 1 ? "" : "s"
-      } y sus fichas del catálogo IA. Volver a vincularla obliga a reextraer el texto y a analizarlo otra vez.\n\nLos archivos originales no cambiarán.\n\nSi solo quieres recuperar el acceso, cancela y usa «Conceder acceso».`,
-    );
+    const confirmed = await confirmAction({
+      confirmLabel: "Desvincular carpeta",
+      description: "Se eliminarán de Pliegue:",
+      details: [
+        "el permiso de lectura de la carpeta",
+        `el índice de texto de ${affected} documento${affected === 1 ? "" : "s"}`,
+        "sus fichas del catálogo IA",
+      ],
+      icon: "folder",
+      note: "Los archivos originales no cambian. Volver a vincularla obliga a extraer el texto y a analizarlo otra vez. Si solo quieres recuperar el acceso, cancela y usa «Conceder acceso».",
+      title: `¿Desvincular «${source.name}»?`,
+      tone: "danger",
+    });
     if (!confirmed) return;
 
     setBusySourceId(source.id);

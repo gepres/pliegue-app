@@ -49,7 +49,8 @@ import {
 } from "./library/library-document-tile";
 import libraryStyles from "./library/library.module.css";
 import { LinkingUnavailableNotice } from "./library/linking-unavailable-notice";
-import { forgetLinkedFiles } from "./linked-files-panel";
+import { confirmAction } from "./app-ui/confirm-dialog";
+import { forgetLinkedFiles, unlinkFilesConfirmation } from "./linked-files-panel";
 import { StaleIndexNotice } from "./stale-index-notice";
 import styles from "../(workspace)/app/workspace.module.css";
 
@@ -407,9 +408,14 @@ export function LibraryBrowser() {
   }
 
   async function removeCopy(documentId: string, title: string) {
-    const confirmed = window.confirm(
-      `¿Eliminar la copia local de «${title}»? Esta acción no afecta al archivo original.`,
-    );
+    const confirmed = await confirmAction({
+      confirmLabel: "Eliminar copia",
+      description: "Se borra la copia guardada en este navegador, y con ella:",
+      details: ["su índice de texto", "su ficha del catálogo IA", "dónde se quedó la lectura"],
+      note: "El archivo original, allí donde lo tengas, no se toca.",
+      title: `¿Eliminar la copia de «${title}»?`,
+      tone: "danger",
+    });
     if (!confirmed) return;
 
     try {
@@ -423,9 +429,7 @@ export function LibraryBrowser() {
   }
 
   async function removeFileReference(documentId: string, title: string) {
-    const confirmed = window.confirm(
-      `¿Desvincular «${title}»?\n\nPliegue olvidará la referencia, el índice de texto y la ficha del catálogo IA. El archivo original no cambiará.`,
-    );
+    const confirmed = await confirmAction(unlinkFilesConfirmation(`«${title}»`));
     if (!confirmed) return;
 
     try {

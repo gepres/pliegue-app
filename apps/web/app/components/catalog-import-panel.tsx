@@ -17,6 +17,7 @@ import {
   catalogImportJsonSchema,
   createCatalogExample,
 } from "../library/catalog-template";
+import { confirmAction } from "./app-ui/confirm-dialog";
 import { Disclosure } from "./app-ui/controls";
 import { downloadCatalogTemplate, downloadJson } from "./catalog-template-download";
 import type { LibraryDocument } from "../library/documents";
@@ -152,9 +153,21 @@ export function CatalogImportPanel({ documents }: { documents: readonly LibraryD
   }
 
   async function handleClear() {
-    const confirmed = window.confirm(
-      "¿Descartar todas las fichas importadas? Los documentos conservarán la ficha que haya generado la IA.",
-    );
+    const count = importedCatalogs.records.length;
+    const confirmed = await confirmAction({
+      confirmLabel: "Descartar fichas",
+      description:
+        count === 1
+          ? "Se borra la ficha que importaste desde JSON."
+          : `Se borran las ${count} fichas que importaste desde JSON.`,
+      details: [
+        "Cada documento conserva la ficha que le haya hecho la IA; si no tiene, se queda sin ficha.",
+        "Las categorías, series y portadas que venían del JSON desaparecen de la Biblioteca.",
+      ],
+      note: "Puedes volver a importar el mismo archivo cuando quieras.",
+      title: "¿Descartar las fichas importadas?",
+      tone: "danger",
+    });
     if (!confirmed) return;
 
     setBusy(true);

@@ -656,6 +656,137 @@
   }
 }
 
+/* ---- Confirmación ---------------------------------------------------------- */
+
+/* Sustituye a window.confirm: una tarjeta centrada, con el velo de la hoja, el título en la
+   letra de la marca y lo que se pierde en renglones. El diálogo no tiene relleno propio: así un
+   clic solo tiene como destino el <dialog> cuando cae en el velo. */
+.confirm {
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-lg);
+  box-shadow: 0 24px 64px rgb(15 14 12 / 28%);
+  color: var(--pliegue-color-text-primary);
+  max-height: calc(100dvh - 32px);
+  max-width: min(460px, calc(100vw - 32px));
+  overflow: auto;
+  padding: 0;
+  width: 100%;
+}
+
+.confirm::backdrop {
+  backdrop-filter: blur(4px);
+  background: rgb(15 14 12 / 42%);
+}
+
+.confirm[open] {
+  animation: confirm-in 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.confirmBody {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  padding: var(--pliegue-spacing-lg);
+}
+
+.confirmHead {
+  align-items: center;
+  display: flex;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.confirmHead h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.55rem;
+  font-weight: 600;
+  line-height: 1.15;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.confirmIcon {
+  align-items: center;
+  background: color-mix(in srgb, var(--pliegue-color-accent-warm) 12%, var(--pliegue-color-bg-surface));
+  border-radius: 50%;
+  color: var(--pliegue-color-accent-warm);
+  display: inline-flex;
+  flex: none;
+  height: 2.5rem;
+  justify-content: center;
+  width: 2.5rem;
+}
+
+.confirm[data-tone="danger"] .confirmIcon {
+  background: color-mix(in srgb, var(--pliegue-color-status-danger) 12%, var(--pliegue-color-bg-surface));
+  color: var(--pliegue-color-status-danger);
+}
+
+.confirmBody > p,
+.confirmDetails {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.confirmDetails {
+  display: grid;
+  gap: 2px;
+  padding-left: 1.15rem;
+}
+
+.confirmBody > .confirmNote {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  font-size: 0.8125rem;
+  padding-top: var(--pliegue-spacing-sm);
+}
+
+.confirmActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm);
+  justify-content: flex-end;
+  margin-top: var(--pliegue-spacing-sm);
+}
+
+/* La variante «danger» del sistema es un texto rojo para acciones en línea. Aquí borrar es la
+   acción principal del diálogo: va rellena, con la misma forma que el botón primario. */
+.confirmActions .confirmDanger {
+  background-color: var(--pliegue-color-status-danger);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--pliegue-white-1000) 12%, transparent),
+    transparent 60%
+  );
+  border-color: color-mix(in srgb, var(--pliegue-color-status-danger) 82%, var(--pliegue-ink-950));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--pliegue-white-1000) 18%, transparent),
+    0 6px 16px -8px color-mix(in srgb, var(--pliegue-color-status-danger) 80%, transparent);
+  color: var(--pliegue-color-text-on-action);
+}
+
+.confirmActions .confirmDanger:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--pliegue-color-status-danger) 88%, var(--pliegue-color-text-primary));
+}
+
+/* En el teléfono, dos botones a todo el ancho y el que actúa arriba, donde llega el pulgar. */
+@media (max-width: 480px) {
+  .confirmActions {
+    flex-direction: column-reverse;
+  }
+
+  .confirmActions > * {
+    width: 100%;
+  }
+}
+
+@keyframes confirm-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
 @keyframes sheet-up {
   from {
     transform: translateY(100%);
@@ -668,7 +799,8 @@
   .sheet[data-open="true"],
   .toast,
   .iconButton,
-  .disclosureChevron {
+  .disclosureChevron,
+  .confirm[open] {
     animation: none;
     transition: none;
   }

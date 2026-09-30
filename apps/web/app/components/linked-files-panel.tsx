@@ -13,6 +13,7 @@ import {
   useLinkedFiles,
 } from "../library/local-file-reference-store";
 import { clearReadingProgress } from "../library/reading-progress-store";
+import { confirmAction, type ConfirmOptions } from "./app-ui/confirm-dialog";
 import styles from "../(workspace)/app/workspace.module.css";
 
 /**
@@ -24,6 +25,23 @@ export async function forgetLinkedFiles(documentIds: readonly string[]) {
   await unlinkLocalFiles(documentIds);
   await removeDocumentCatalogRecords(documentIds).catch(() => undefined);
   for (const documentId of documentIds) clearReadingProgress(documentId);
+}
+
+/** La misma pregunta desde la Biblioteca y desde Fuentes: dice qué se olvida y qué no. */
+export function unlinkFilesConfirmation(label: string): ConfirmOptions {
+  return {
+    confirmLabel: "Desvincular",
+    description: "Pliegue olvidará:",
+    details: [
+      "la referencia al archivo y su índice de texto",
+      "su ficha del catálogo IA",
+      "dónde se quedó la lectura",
+    ],
+    icon: "link",
+    note: "El archivo original no cambia. Puedes volver a vincularlo cuando quieras.",
+    title: `¿Desvincular ${label}?`,
+    tone: "danger",
+  };
 }
 
 /**
@@ -62,9 +80,7 @@ export function LinkedFilesPanel() {
   }
 
   async function unlink(documentIds: readonly string[], label: string) {
-    const confirmed = window.confirm(
-      `¿Desvincular ${label}?\n\nPliegue olvidará la referencia, el índice de texto y la ficha del catálogo IA. El archivo original no cambiará.`,
-    );
+    const confirmed = await confirmAction(unlinkFilesConfirmation(label));
     if (!confirmed) return;
 
     setBusy(documentIds.length === 1 ? (documentIds[0] ?? "all") : "all");
