@@ -1,13 +1,17 @@
 "use client";
 
 import type { LibraryDocument } from "../library/documents";
+import { readImportedCatalogRecords } from "../library/imported-catalog-store";
 import { AuthorIndex, authorKey } from "./author-names";
+import { groundCatalogExtras } from "./catalog-grounding";
+import { CategoryIndex, spanishCategory } from "./category-names";
 import { providerModel, type AiSettings } from "./ai-settings";
 import { checkApiKey } from "./api-key";
 import { getSessionApiKey } from "./ai-session-secret-store";
 import { requestCatalogFromProvider } from "./catalog-provider-client";
 import {
   addCatalogUsage,
+  catalogPromptVersion,
   createCatalogDocumentInput,
   createCatalogInputFingerprint,
   emptyCatalogUsage,
@@ -90,6 +94,46 @@ function createRecord(
   };
 }
 
+/**
+ * Por qué un documento entra en la cola, o `null` si no entra:
+ * - `new`: nunca se analizó;
+ * - `error`: el último intento falló (solo con `retryErrors`);
+ * - `outdated`: su ficha es de un prompt anterior, sin los campos que se añadieron después
+ *   (hoy, la categoría y los datos de la edición);
+ * - `changed`: cambió su texto, el proveedor o el modelo.
+ *
+ * La comparten el análisis y el panel: si el panel contara por su cuenta, anunciaría «0
+ * pendientes» y el botón acabaría reanalizando medio corpus.
+ */
+export type CatalogQueueReason = "changed" | "error" | "new" | "outdated";
+
+export function catalogQueueReason(
+  document: LibraryDocument,
+  record: DocumentCatalogRecord | undefined,
+  settings: AiSettings,
+  options: { force?: boolean; retryErrors?: boolean } = {},
+): CatalogQueueReason | null {
+  // Una ficha escrita a mano ya es mejor evidencia que la que produciría el modelo, así que
+  // analizarla otra vez solo gastaría tokens. Para rehacerla hay que pedirlo con `force`.
+  if (!options.force && document.catalogSource === "import" && document.catalog) return null;
+  if (!record) return "new";
+  if (options.force) return "changed";
+
+  const fingerprint = createCatalogInputFingerprint(
+    document,
+    settings.provider,
+    providerModel(settings),
+    settings.maxExcerptCharacters,
+  );
+  if (record.inputFingerprint !== fingerprint) {
+    return record.inputFingerprint.startsWith(`v${catalogPromptVersion}:`) ? "changed" : "outdated";
+  }
+  if (record.status === "error") return options.retryErrors ? "error" : null;
+  // Una ficha que se quedó «analizando» es de una pestaña que se cerró a medias.
+  if (record.status === "analyzing") return "error";
+  return null;
+}
+
 /** Cede el hilo entre bloques para que la interfaz pinte el avance. */
 function yieldToBrowser() {
   return new Promise<void>((resolve) => {
@@ -97,48 +141,74 @@ function yieldToBrowser() {
   });
 }
 
-export interface AuthorReconciliationResult {
+export interface NameReconciliationResult {
+  /** Variantes de autor unidas: «J. Grinberg» → «Jacobo Grinberg». */
   merged: Array<{ from: string; to: string }>;
+  /** Variantes de categoría unidas: «Filosofia» → «Filosofía». */
+  mergedCategories: Array<{ from: string; to: string }>;
   reviewed: number;
   updated: number;
 }
 
 /**
- * Unifica las grafías de autor en las fichas ya guardadas. Se ejecuta al terminar un análisis
- * y también puede lanzarse sola: arregla un catálogo heredado sin gastar una sola llamada al
- * proveedor, que es justo lo que hacía falta cuando el mismo autor figuraba tres veces.
+ * Unifica las grafías de autor y de categoría en las fichas ya guardadas. Se ejecuta al
+ * terminar un análisis y también puede lanzarse sola: arregla un catálogo heredado sin gastar
+ * una sola llamada al proveedor, que es justo lo que hacía falta cuando el mismo autor figuraba
+ * tres veces. Las categorías toman la grafía de las fichas importadas, que eligió la persona.
  */
-export async function reconcileStoredAuthors(): Promise<AuthorReconciliationResult> {
+export async function reconcileStoredNames(): Promise<NameReconciliationResult> {
   const records = await readDocumentCatalogRecords();
   const index = new AuthorIndex();
+  const categories = new CategoryIndex();
   const merged = new Map<string, string>();
+  const mergedCategories = new Map<string, string>();
 
-  // Primera pasada: fijar la forma canónica de cada autor viendo el catálogo entero.
+  // Primera pasada: fijar la forma canónica de cada nombre viendo el catálogo entero.
+  for (const record of await readImportedCatalogRecords().catch(() => [])) {
+    categories.add(record.organization?.category, record.organization?.subcategory);
+  }
   for (const record of records) {
     for (const author of record.catalog?.authors ?? []) index.add(author);
+    categories.add(record.extras?.category, record.extras?.subcategory);
   }
 
   let updated = 0;
   for (const record of records) {
-    const authors = record.catalog?.authors;
-    if (!record.catalog || !authors?.length) continue;
-
+    if (!record.catalog) continue;
+    const authors = record.catalog.authors;
     const canonical = authors.map((author) => index.resolve(author));
     for (const [position, author] of authors.entries()) {
       const destino = canonical[position] as string;
       if (authorKey(destino) !== authorKey(author)) merged.set(author, destino);
     }
-    if (canonical.every((author, position) => author === authors[position])) continue;
+
+    const extras = record.extras;
+    const organization = categories.add(extras?.category, extras?.subcategory);
+    if (extras?.category && organization.category !== extras.category) {
+      mergedCategories.set(extras.category, organization.category ?? extras.category);
+    }
+    if (extras?.subcategory && organization.subcategory !== extras.subcategory) {
+      mergedCategories.set(extras.subcategory, organization.subcategory ?? extras.subcategory);
+    }
+
+    const authorsChanged = canonical.some((author, position) => author !== authors[position]);
+    const categoriesChanged = Boolean(
+      extras &&
+        (organization.category !== extras.category || organization.subcategory !== extras.subcategory),
+    );
+    if (!authorsChanged && !categoriesChanged) continue;
 
     await saveDocumentCatalogRecord({
       ...record,
       catalog: { ...record.catalog, authors: canonical },
+      ...(extras ? { extras: { ...extras, ...organization } } : {}),
     });
     updated += 1;
   }
 
   return {
     merged: [...merged].map(([from, to]) => ({ from, to })),
+    mergedCategories: [...mergedCategories].map(([from, to]) => ({ from, to })),
     reviewed: records.length,
     updated,
   };
@@ -191,32 +261,24 @@ async function runCatalogAnalysis(
   const authorIndex = new AuthorIndex(
     storedRecords.flatMap((record) => record.catalog?.authors ?? []),
   );
+  // Lo mismo con las categorías: primero las escritas a mano, que son el vocabulario que la
+  // persona eligió, y después las de análisis anteriores.
+  const categoryIndex = new CategoryIndex();
+  for (const document of documents) {
+    categoryIndex.add(document.organization?.category, document.organization?.subcategory);
+  }
+  const importedRecords = await readImportedCatalogRecords().catch(() => []);
+  for (const record of importedRecords) {
+    categoryIndex.add(record.organization?.category, record.organization?.subcategory);
+  }
+  for (const record of storedRecords) {
+    categoryIndex.add(record.extras?.category, record.extras?.subcategory);
+  }
 
   const queue = documents.filter((document) => {
-    // Una ficha escrita a mano ya es mejor evidencia que la que produciría el modelo, así que
-    // analizarla otra vez solo gastaría tokens. Para rehacerla hay que pedirlo con `force`.
-    if (!options.force && document.catalogSource === "import" && document.catalog) {
-      progress.skipped += 1;
-      return false;
-    }
-
-    const fingerprint = createCatalogInputFingerprint(
-      document,
-      settings.provider,
-      model,
-      settings.maxExcerptCharacters,
-    );
-    const record = recordsByDocument.get(document.id);
-    const current = record?.inputFingerprint === fingerprint;
-    const reusable =
-      record?.status === "analyzed" ||
-      record?.status === "needs-content" ||
-      (record?.status === "error" && !options.retryErrors);
-    if (!options.force && current && reusable) {
-      progress.skipped += 1;
-      return false;
-    }
-    return true;
+    const reason = catalogQueueReason(document, recordsByDocument.get(document.id), settings, options);
+    if (!reason) progress.skipped += 1;
+    return reason !== null;
   });
 
   progress.queued = queue.length;
@@ -235,6 +297,7 @@ async function runCatalogAnalysis(
       document,
       settings.maxExcerptCharacters,
       authorIndex.names,
+      categoryIndex.entries,
     );
     progress.current = document.title;
 
@@ -254,13 +317,19 @@ async function runCatalogAnalysis(
     );
 
     try {
-      const { catalog, usage } = await requestCatalogFromProvider(input, settings, apiKey);
-      // El modelo recibe los autores conocidos, pero no siempre los respeta: la grafía se
-      // decide aquí, donde la reconciliación es una regla y no una sugerencia.
+      const { catalog, extras, usage } = await requestCatalogFromProvider(input, settings, apiKey);
+      // El modelo recibe los autores y las categorías conocidos, pero no siempre los respeta:
+      // la grafía se decide aquí, donde la reconciliación es una regla y no una sugerencia.
       const authors = catalog.authors.map((author) => authorIndex.add(author));
+      // Los datos de la edición se cotejan con el extracto que vio el modelo; la materia se
+      // pasa al español si llegó en inglés y a la grafía que ya usa la biblioteca.
+      const grounded = groundCatalogExtras(extras, input.excerpt, catalog.canonicalTitle);
+      const spanish = spanishCategory(grounded);
+      const organization = categoryIndex.add(spanish.category, spanish.subcategory);
       await saveDocumentCatalogRecord(
         createRecord(document, settings, fingerprint, "analyzed", {
           catalog: { ...catalog, authors },
+          extras: { ...grounded, ...organization },
         }),
       );
       progress.analyzed += 1;
@@ -305,7 +374,7 @@ async function runCatalogAnalysis(
   progress.current = null;
 
   // Solo merece la pena repasar lo guardado si este lote llegó a escribir algo.
-  if (progress.analyzed) await reconcileStoredAuthors();
+  if (progress.analyzed) await reconcileStoredNames();
 
   publish();
   return progress;

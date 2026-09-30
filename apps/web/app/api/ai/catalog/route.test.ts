@@ -37,6 +37,60 @@ function request(provider: "anthropic" | "gemini" | "openai", apiKey = testKey) 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("catalog provider route", () => {
+  it("devuelve en la misma ficha la categoría y los datos de la edición, ya limpios", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          output_text: JSON.stringify({
+            ...catalog,
+            category: "Historia",
+            edition: null,
+            editors: [],
+            isbn: "ISBN 978-612-306-361-0",
+            originalTitle: null,
+            publisher: "El Comercio",
+            series: "Historia de la República del Perú",
+            subcategory: "Historia del Perú",
+            translators: [],
+            volume: 8,
+          }),
+        }),
+      ),
+    );
+
+    const response = await POST(request("openai"));
+    const payload = (await response.json()) as { catalog: Record<string, unknown> };
+
+    expect(response.status).toBe(200);
+    expect(payload.catalog).toMatchObject({
+      authors: ["Autora"],
+      category: "Historia",
+      isbn: "9786123063610",
+      series: "Historia de la República del Perú",
+      subcategory: "Historia del Perú",
+      volume: 8,
+    });
+  });
+
+  it("rechaza una lista de categorías conocidas fuera de límites", async () => {
+    const providerFetch = vi.fn();
+    vi.stubGlobal("fetch", providerFetch);
+    const response = await POST(
+      new Request("http://localhost/api/ai/catalog", {
+        body: JSON.stringify({
+          input: { ...input, knownCategories: Array.from({ length: 200 }, (_, i) => `Materia ${i}`) },
+          model: "test-model",
+          provider: "openai",
+        }),
+        headers: { authorization: `Bearer ${testKey}`, "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(providerFetch).not.toHaveBeenCalled();
+  });
+
   it("no reenvía al proveedor una credencial que no lo parece", async () => {
     const providerFetch = vi.fn();
     vi.stubGlobal("fetch", providerFetch);

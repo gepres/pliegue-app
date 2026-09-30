@@ -1,5 +1,6 @@
 import type {
   CatalogAnalysisStatus,
+  CatalogExtras,
   DocumentCatalogMetadata,
   DocumentCatalogRecord,
   DocumentWorkType,
@@ -309,6 +310,46 @@ export function organizationFacets(documents: readonly LibraryDocument[]) {
   };
 }
 
+/**
+ * La categoría y los datos de la edición que dedujo el modelo, con la forma que tienen en una
+ * ficha importada. `null` si el modelo no encontró nada: un bloque vacío haría creer a la
+ * plantilla exportada que alguien los revisó.
+ */
+function organizationFromExtras(extras: CatalogExtras | undefined): CatalogOrganization | null {
+  if (!extras?.category) return null;
+  return { category: extras.category, duplicateOf: null, subcategory: extras.subcategory };
+}
+
+function bibliographicFromExtras(
+  extras: CatalogExtras | undefined,
+): CatalogBibliographicData | null {
+  if (!extras) return null;
+  const found =
+    extras.edition ||
+    extras.editors.length ||
+    extras.isbn ||
+    extras.originalTitle ||
+    extras.publisher ||
+    extras.series ||
+    extras.translators.length ||
+    extras.volume !== null;
+  if (!found) return null;
+  return {
+    doi: null,
+    edition: extras.edition,
+    editors: extras.editors,
+    isbn: extras.isbn,
+    originalTitle: extras.originalTitle,
+    pageCount: null,
+    publisher: extras.publisher,
+    rights: null,
+    series: extras.series,
+    translators: extras.translators,
+    url: null,
+    volume: extras.volume,
+  };
+}
+
 export function applyDocumentCatalogs(
   documents: readonly LibraryDocument[],
   records: readonly DocumentCatalogRecord[],
@@ -317,10 +358,14 @@ export function applyDocumentCatalogs(
   return documents.map((document): LibraryDocument => {
     const record = recordsByDocument.get(document.id);
     if (!record) return document;
+    const organization = organizationFromExtras(record.extras);
+    const bibliographic = bibliographicFromExtras(record.extras);
     return {
       ...document,
       ...(record.catalog ? { catalog: record.catalog } : {}),
       ...(record.error ? { catalogError: record.error } : {}),
+      ...(organization ? { organization } : {}),
+      ...(bibliographic ? { bibliographic } : {}),
       catalogSource: "ai",
       catalogStatus: record.status,
     };

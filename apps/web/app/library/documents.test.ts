@@ -128,6 +128,43 @@ describe("document catalog layer", () => {
     expect(document?.reference).toEqual(testDocuments[0]!.reference);
   });
 
+  it("lleva la categoría y los datos de la edición del análisis a la ficha del documento", () => {
+    const [document] = applyDocumentCatalogs(testDocuments.slice(0, 1), [
+      {
+        ...record,
+        extras: {
+          category: "Literatura",
+          edition: null,
+          editors: [],
+          isbn: "9788445076620",
+          originalTitle: "Steering the Craft",
+          publisher: "Minotauro",
+          series: null,
+          subcategory: "Ensayo literario",
+          translators: ["Martín Schifino"],
+          volume: null,
+        },
+      },
+    ]);
+
+    expect(document?.organization).toEqual({
+      category: "Literatura",
+      duplicateOf: null,
+      subcategory: "Ensayo literario",
+    });
+    expect(document?.bibliographic).toMatchObject({
+      isbn: "9788445076620",
+      originalTitle: "Steering the Craft",
+      publisher: "Minotauro",
+      translators: ["Martín Schifino"],
+    });
+
+    // Una ficha anterior, sin esos campos, no inventa una organización vacía.
+    const [old] = applyDocumentCatalogs(testDocuments.slice(0, 1), [record]);
+    expect(old?.organization).toBeUndefined();
+    expect(old?.bibliographic).toBeUndefined();
+  });
+
   it("filtra por tipo, género y año y construye facetas", () => {
     const enriched = applyDocumentCatalogs(testDocuments.slice(0, 1), [record]);
     const result = filterDocuments(enriched, {

@@ -4,6 +4,8 @@ import {
   createCatalogPrompt,
   documentCatalogJsonSchema,
   maxKnownAuthorsInPrompt,
+  maxKnownCategoriesInPrompt,
+  parseCatalogExtras,
   parseDocumentCatalog,
   type CatalogDocumentInput,
 } from "../../../ai/document-catalog";
@@ -21,15 +23,15 @@ interface CatalogRouteRequest {
   provider?: HostedAiProvider;
 }
 
-/** Holgura suficiente para la ficha completa con la sinopsis extensa del contrato v2. */
-const catalogMaxOutputTokens = 1_500;
+/** Holgura para la ficha completa: la sinopsis y, desde la v4, los datos de la edición. */
+const catalogMaxOutputTokens = 2_000;
 
-function validKnownAuthors(authors: CatalogDocumentInput["knownAuthors"]) {
-  if (authors === undefined) return true;
+function validNames(names: string[] | undefined, maxItems: number, maxLength: number) {
+  if (names === undefined) return true;
   return (
-    Array.isArray(authors) &&
-    authors.length <= maxKnownAuthorsInPrompt &&
-    authors.every((author) => typeof author === "string" && author.length <= 120)
+    Array.isArray(names) &&
+    names.length <= maxItems &&
+    names.every((name) => typeof name === "string" && name.length <= maxLength)
   );
 }
 
@@ -41,7 +43,8 @@ function validInput(input: CatalogDocumentInput | undefined) {
       typeof input.format === "string" &&
       input.format.length <= 24 &&
       (input.path === null || (typeof input.path === "string" && input.path.length <= 1000)) &&
-      validKnownAuthors(input.knownAuthors) &&
+      validNames(input.knownAuthors, maxKnownAuthorsInPrompt, 120) &&
+      validNames(input.knownCategories, maxKnownCategoriesInPrompt, 200) &&
       typeof input.excerpt === "string" &&
       input.excerpt.length > 0 &&
       input.excerpt.length <= 24_100,
@@ -92,7 +95,12 @@ export async function POST(request: Request) {
       system: catalogSystemPrompt,
       user: createCatalogPrompt(body.input!),
     });
-    return Response.json({ catalog: parseDocumentCatalog(json), usage });
+    // Una sola ficha plana, como la devolvió el modelo: el navegador lee de ella la parte
+    // básica y la de la edición con los mismos lectores que usa con Ollama.
+    return Response.json({
+      catalog: { ...parseDocumentCatalog(json), ...parseCatalogExtras(json) },
+      usage,
+    });
   } catch (error) {
     return providerErrorResponse(error);
   }

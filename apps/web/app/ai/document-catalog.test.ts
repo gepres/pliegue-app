@@ -5,7 +5,11 @@ import {
   catalogPromptVersion,
   createCatalogDocumentInput,
   createCatalogInputFingerprint,
+  createCatalogPrompt,
+  documentCatalogJsonSchema,
+  emptyCatalogExtras,
   maxSummaryCharacters,
+  parseCatalogExtras,
   parseDocumentCatalog,
   selectCatalogExcerpt,
 } from "./document-catalog";
@@ -79,6 +83,69 @@ describe("document catalog", () => {
 
     expect(fingerprint.startsWith(`v${catalogPromptVersion}:`)).toBe(true);
     expect(fingerprint).not.toBe("v1:");
+  });
+
+  it("pide lo mismo que la plantilla JSON: categoría, subcategoría y los datos de la edición", () => {
+    const properties = Object.keys(documentCatalogJsonSchema.properties).sort();
+    expect(properties).toEqual(
+      expect.arrayContaining([
+        "category",
+        "edition",
+        "editors",
+        "isbn",
+        "originalTitle",
+        "publisher",
+        "series",
+        "subcategory",
+        "translators",
+        "volume",
+      ]),
+    );
+    // La salida estricta de OpenAI rechaza un esquema con propiedades no obligatorias.
+    expect([...documentCatalogJsonSchema.required].sort()).toEqual(properties);
+  });
+
+  it("lee la categoría y los datos de la edición, y descarta lo que no lo es", () => {
+    expect(
+      parseCatalogExtras({
+        category: " Historia ",
+        edition: "2.ª",
+        editors: ["Ana Ruiz", "ana ruiz"],
+        isbn: "978-612-306-361-0",
+        originalTitle: null,
+        publisher: "Empresa Editora El Comercio",
+        series: "Historia de la República del Perú",
+        subcategory: "Historia del Perú",
+        translators: [],
+        volume: 8,
+      }),
+    ).toEqual({
+      category: "Historia",
+      edition: "2.ª",
+      editors: ["Ana Ruiz"],
+      isbn: "9786123063610",
+      originalTitle: null,
+      publisher: "Empresa Editora El Comercio",
+      series: "Historia de la República del Perú",
+      subcategory: "Historia del Perú",
+      translators: [],
+      volume: 8,
+    });
+
+    expect(parseCatalogExtras({ category: null, isbn: "sin ISBN", subcategory: "Suelta", volume: 0 })).toEqual(
+      emptyCatalogExtras,
+    );
+    // Una ficha del contrato anterior, sin estos campos, no rompe nada.
+    expect(parseCatalogExtras({ authors: ["X"] })).toEqual(emptyCatalogExtras);
+  });
+
+  it("ofrece al modelo las categorías que ya usa la biblioteca", () => {
+    const input = createCatalogDocumentInput(document, 12_000, [], ["Historia › Historia del Perú", "Filosofía"]);
+    expect(input.knownCategories).toEqual(["Historia › Historia del Perú", "Filosofía"]);
+    expect(createCatalogPrompt(input)).toContain(
+      "Categorías ya usadas en la biblioteca: Historia › Historia del Perú; Filosofía",
+    );
+    expect(createCatalogPrompt(createCatalogDocumentInput(document, 12_000))).not.toContain("Categorías");
   });
 
   it("conserva inicio y cierre al acotar el extracto", () => {

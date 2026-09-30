@@ -1,0 +1,245 @@
+/* Panel de IA: catalogar a la izquierda; revisar a mano y unificar, a la derecha. Cada
+   acción lleva al lado lo que hace: antes eran dos botones sueltos que no se entendían. */
+.layout {
+  align-items: start;
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+  grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.7fr);
+  margin-bottom: var(--pliegue-spacing-lg);
+}
+
+.run {
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+}
+
+.head {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.head > :global(.pliegue-tag) {
+  justify-self: start;
+}
+
+.head h2,
+.recentHead h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(1.75rem, 4vw, 2.35rem);
+  font-weight: 600;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.head p {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 44rem;
+}
+
+/* Lo que rellena la IA, en dos columnas de renglones con su marca. */
+.fields {
+  display: grid;
+  gap: var(--pliegue-spacing-xs) var(--pliegue-spacing-lg);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fields li {
+  align-items: center;
+  display: flex;
+  font-size: 0.875rem;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.fields svg {
+  color: var(--pliegue-color-action-primary);
+  flex: none;
+}
+
+.queue {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+  padding-top: var(--pliegue-spacing-md);
+}
+
+.queue h3 {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.queue ul,
+.queue p {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.queue ul {
+  display: grid;
+  gap: 2px;
+  padding-left: 1.1rem;
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.hint,
+.status {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.status:empty {
+  display: none;
+}
+
+.side {
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+}
+
+.tool {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.tool > svg {
+  color: var(--pliegue-color-accent-warm);
+}
+
+.tool h2 {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.tool p {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.toolActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-xs);
+  margin-top: var(--pliegue-spacing-xs);
+}
+
+/* Fichas recientes: título y autor, categoría, datos y estado, en columnas que se leen de un
+   vistazo; en el teléfono pasan a renglones. */
+.recent {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+}
+
+.recentHead {
+  align-items: center;
+  display: flex;
+  gap: var(--pliegue-spacing-md);
+  justify-content: space-between;
+}
+
+.records {
+  display: grid;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.records li {
+  align-items: center;
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: var(--pliegue-spacing-xs) var(--pliegue-spacing-lg);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1.2fr) auto;
+  padding: var(--pliegue-spacing-sm) 0;
+}
+
+.recordMain {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.recordMain strong,
+.recordMain span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recordMain strong {
+  font-family: var(--pliegue-font-reading);
+  font-weight: 600;
+}
+
+.recordMain span,
+.recordFacts {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+}
+
+.recordCategory {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.recordCategory[data-empty] {
+  color: var(--pliegue-color-text-secondary);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.emptyNote {
+  color: var(--pliegue-color-text-secondary);
+  margin: 0;
+}
+
+@media (max-width: 960px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .side {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .fields,
+  .side {
+    grid-template-columns: 1fr;
+  }
+
+  .records li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .recordCategory,
+  .recordFacts {
+    grid-column: 1;
+  }
+
+  .records li > :global(.pliegue-tag) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}

@@ -15,12 +15,10 @@ import {
 import {
   catalogExampleFileName,
   catalogImportJsonSchema,
-  catalogTemplateFileName,
   createCatalogExample,
-  createCatalogTemplate,
-  serializeCatalogTemplate,
 } from "../library/catalog-template";
 import { Disclosure } from "./app-ui/controls";
+import { downloadCatalogTemplate, downloadJson } from "./catalog-template-download";
 import type { LibraryDocument } from "../library/documents";
 import {
   removeImportedCatalogRecords,
@@ -57,17 +55,6 @@ const fieldReference = Object.entries(catalogImportJsonSchema.properties.entries
   }))
   .sort((left, right) => Number(right.required) - Number(left.required) || left.name.localeCompare(right.name));
 
-function downloadJson(fileName: string, content: string) {
-  const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
-  const anchor = document.createElement("a");
-  anchor.download = fileName;
-  anchor.href = url;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
-
 function describeParseError(error: unknown) {
   if (error instanceof SyntaxError) {
     return "El archivo no es JSON válido. Revisa que no falte una coma o una llave.";
@@ -85,11 +72,10 @@ export function CatalogImportPanel({ documents }: { documents: readonly LibraryD
   );
 
   function handleTemplateDownload() {
-    const template = createCatalogTemplate(documents);
-    downloadJson(catalogTemplateFileName(template.generatedAt), serializeCatalogTemplate(template));
+    const entries = downloadCatalogTemplate(documents);
     setStatus(
-      `Plantilla descargada con ${template.entries.length} documento${
-        template.entries.length === 1 ? "" : "s"
+      `Plantilla descargada con ${entries} documento${
+        entries === 1 ? "" : "s"
       }. Conserva «fileName» y «fingerprint» tal como están.`,
     );
   }

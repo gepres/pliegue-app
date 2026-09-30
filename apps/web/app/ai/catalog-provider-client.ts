@@ -5,9 +5,11 @@ import {
   catalogSystemPrompt,
   createCatalogPrompt,
   documentCatalogJsonSchema,
+  parseCatalogExtras,
   parseDocumentCatalog,
   readCatalogUsage,
   type CatalogDocumentInput,
+  type CatalogExtras,
   type CatalogUsage,
   type DocumentCatalogMetadata,
 } from "./document-catalog";
@@ -21,6 +23,7 @@ interface CatalogApiResponse {
 
 export interface CatalogProviderResult {
   catalog: DocumentCatalogMetadata;
+  extras: CatalogExtras;
   usage: CatalogUsage;
 }
 
@@ -53,7 +56,11 @@ async function requestHostedProvider(
   });
   const payload = await readJson(response);
   if (!response.ok) throw new Error(payload.error || "El proveedor no pudo analizar el archivo.");
-  return { catalog: parseDocumentCatalog(payload.catalog), usage: readCatalogUsage(payload) };
+  return {
+    catalog: parseDocumentCatalog(payload.catalog),
+    extras: parseCatalogExtras(payload.catalog),
+    usage: readCatalogUsage(payload),
+  };
 }
 
 async function requestOllama(input: CatalogDocumentInput, settings: AiSettings) {
@@ -71,6 +78,9 @@ async function requestOllama(input: CatalogDocumentInput, settings: AiSettings) 
         model: settings.models.ollama,
         options: { temperature: 0 },
         stream: false,
+        // Los modelos que razonan (qwen3, deepseek-r1) piensan antes de cada ficha: minutos por
+        // documento para rellenar campos que están en la portada. Sin razonamiento, segundos.
+        think: false,
       }),
       headers: { "content-type": "application/json" },
       method: "POST",
@@ -93,8 +103,10 @@ async function requestOllama(input: CatalogDocumentInput, settings: AiSettings) 
   }
 
   try {
+    const json: unknown = JSON.parse(payload.message?.content ?? "");
     return {
-      catalog: parseDocumentCatalog(JSON.parse(payload.message?.content ?? "")),
+      catalog: parseDocumentCatalog(json),
+      extras: parseCatalogExtras(json),
       // Ollama publica sus contadores en la raíz de la respuesta, no bajo `usage`.
       usage: readCatalogUsage(payload),
     };
