@@ -17,6 +17,12 @@ import { createLinkedFileFingerprint, maxSkippedFiles, type SkippedLinkedFile } 
  */
 export interface DriveDocument extends LibraryDocument {
   addedAt: string;
+  /**
+   * El SHA-256 que da Drive: con él se reconoce la misma copia en una carpeta local sin
+   * descargar nada (ver `book-copies.ts`). `null` en los Documentos de Google; ausente en
+   * los documentos guardados antes de pedirlo, que se completan solos.
+   */
+  contentSha256?: string | null;
   driveId: string | null;
   fingerprint: string;
   lastModified: number;
@@ -60,6 +66,7 @@ export function createDriveDocument(
     addedAt: placement.addedAt,
     author: placement.sourceName ? `Google Drive · ${placement.sourceName}` : "Google Drive",
     availability: "available",
+    contentSha256: file.sha256Checksum?.toLowerCase() ?? null,
     driveId: file.driveId ?? null,
     // La misma forma que la huella de las carpetas locales: si Drive conserva la fecha del
     // archivo, un índice JSON de la biblioteca en disco también encaja aquí.

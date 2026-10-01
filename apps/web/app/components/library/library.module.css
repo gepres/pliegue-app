@@ -517,6 +517,17 @@
   text-transform: uppercase;
 }
 
+/* Un libro con copias en local y en Drive: la misma pastilla, con borde continuo. */
+.tileCopies {
+  border: 1px solid var(--pliegue-color-border-control);
+  border-radius: var(--pliegue-radius-full);
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.625rem;
+  letter-spacing: 0.06em;
+  padding: 0 6px;
+  text-transform: uppercase;
+}
+
 .tileWarning {
   color: var(--pliegue-color-status-danger);
 }

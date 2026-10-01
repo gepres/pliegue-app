@@ -161,3 +161,19 @@ export async function removeDocumentCatalogRecords(documentIds: readonly string[
     records: snapshot.records.filter((record) => !ids.has(record.documentId)),
   });
 }
+
+/**
+ * La ficha IA de una copia pasa a la que guarda el estado del libro, salvo que esta ya tenga
+ * la suya: entonces se conserva esa y no se paga otro análisis.
+ */
+export async function transferDocumentCatalogRecord(fromId: string, toId: string) {
+  if (fromId === toId) return false;
+  const records = await readDocumentCatalogRecords();
+  const from = records.find((record) => record.documentId === fromId);
+  if (!from) return false;
+  if (!records.some((record) => record.documentId === toId)) {
+    await saveDocumentCatalogRecord({ ...from, documentId: toId });
+  }
+  await removeDocumentCatalogRecord(fromId);
+  return true;
+}

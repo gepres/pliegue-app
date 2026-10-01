@@ -39,6 +39,8 @@ import {
 } from "../library/local-library-store";
 import { clearReadingProgress } from "../library/reading-progress-store";
 import { useLibraryDocuments } from "../library/use-library-documents";
+import { copiesLabel } from "../library/book-copies";
+import { copyReleaseNote, releaseCopies } from "../library/book-copies-store";
 import { publicConfig } from "../config/public-config";
 import { IconButton, Segmented, Toast } from "./app-ui/controls";
 import { Icon } from "./app-ui/icons";
@@ -421,13 +423,14 @@ export function LibraryBrowser() {
       confirmLabel: "Eliminar copia",
       description: "Se borra la copia guardada en este navegador, y con ella:",
       details: ["su índice de texto", "su ficha del catálogo IA", "dónde se quedó la lectura"],
-      note: "El archivo original, allí donde lo tengas, no se toca.",
+      note: copyReleaseNote([documentId]) ?? "El archivo original, allí donde lo tengas, no se toca.",
       title: `¿Eliminar la copia de «${title}»?`,
       tone: "danger",
     });
     if (!confirmed) return;
 
     try {
+      await releaseCopies([documentId]);
       await removeImportedCopy(documentId);
       await removeDocumentCatalogRecord(documentId).catch(() => undefined);
       clearReadingProgress(documentId);
@@ -438,7 +441,7 @@ export function LibraryBrowser() {
   }
 
   async function removeFileReference(documentId: string, title: string) {
-    const confirmed = await confirmAction(unlinkFilesConfirmation(`«${title}»`));
+    const confirmed = await confirmAction(unlinkFilesConfirmation(`«${title}»`, [documentId]));
     if (!confirmed) return;
 
     try {
@@ -1086,7 +1089,7 @@ export function LibraryBrowser() {
                 isFavorite={favoriteIds.has(document.id)}
                 key={document.id}
                 onToggleFavorite={() => toggleFavorite(document.id)}
-                originLabel={originLabels[document.origin]}
+                originLabel={document.copies?.length ? copiesLabel(document.copies) : originLabels[document.origin]}
                 showDetails={gridDetails}
                 view={view}
               />

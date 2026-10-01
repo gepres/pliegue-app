@@ -161,3 +161,35 @@ export function useDocumentAnnotations(documentId: string) {
   );
   return { annotations, error: store.error, status: store.status };
 }
+
+/**
+ * Las marcas de una copia pasan a la que guarda el estado del libro. Solo se juntan copias con
+ * el mismo contenido byte a byte, así que sus posiciones y citas siguen valiendo.
+ */
+export async function transferAnnotations(fromId: string, toId: string) {
+  if (fromId === toId) return 0;
+  const database = await openDatabase();
+  let moved = 0;
+  try {
+    const transaction = database.transaction(storeName, "readwrite");
+    const store = transaction.objectStore(storeName);
+    const records = await requestResult(
+      store.index("documentId").getAll(fromId) as IDBRequest<ReaderAnnotation[]>,
+    );
+    for (const record of records) {
+      store.put({ ...record, documentId: toId });
+      moved += 1;
+    }
+    await transactionComplete(transaction);
+  } finally {
+    database.close();
+  }
+  if (moved) await reload();
+  return moved;
+}
+
+/** Los documentos que tienen alguna marca o nota. */
+export async function annotatedDocumentIds() {
+  const annotations = await readAll();
+  return new Set(annotations.map((annotation) => annotation.documentId));
+}

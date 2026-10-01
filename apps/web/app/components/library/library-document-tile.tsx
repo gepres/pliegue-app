@@ -169,6 +169,17 @@ export function LibraryDocumentTile({
             <span>{originLabel}</span>
           )}
           {unavailable ? <span className={styles.tileWarning}>{availabilityLabel}</span> : null}
+          {document.copies?.length && percent > 0 ? (
+            // Un libro con copias en varios sitios: un solo libro, con dónde está cada copia.
+            <span
+              className={styles.tileCopies}
+              title={document.copies
+                .map((copy) => `${copy.origin === "drive" ? "Google Drive" : "Local"}: ${copy.location}`)
+                .join("\n")}
+            >
+              {originLabel}
+            </span>
+          ) : null}
           {duplicate ? (
             <span className={styles.tileDuplicate} title={`Copia de ${document.organization?.duplicateOf}`}>
               Duplicado

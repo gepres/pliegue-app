@@ -224,3 +224,28 @@ export function useReadingProgressEntries() {
 export function useReadingProgress(documentId: string) {
   return useReadingProgressEntries().find((entry) => entry.documentId === documentId);
 }
+
+/**
+ * El avance de una copia pasa a la que guarda el estado del libro. Se queda el mayor de los
+ * dos, con la fecha más reciente: juntar copias nunca hace retroceder la lectura.
+ */
+export function transferReadingProgress(fromId: string, toId: string) {
+  const entries = readProgress();
+  const from = entries.find((entry) => entry.documentId === fromId);
+  if (fromId === toId || !from) return false;
+  const to = entries.find((entry) => entry.documentId === toId);
+  const latest = [from.updatedAt, to?.updatedAt ?? ""].sort().at(-1) ?? from.updatedAt;
+  const merged: ReadingProgressRecord = to
+    ? { ...to, percent: Math.max(to.percent, from.percent), updatedAt: latest }
+    : { ...from, documentId: toId };
+  writeProgress([
+    merged,
+    ...entries.filter((entry) => entry.documentId !== fromId && entry.documentId !== toId),
+  ]);
+  return true;
+}
+
+/** El avance guardado, fuera de React. */
+export function readReadingProgressEntries() {
+  return readProgress();
+}

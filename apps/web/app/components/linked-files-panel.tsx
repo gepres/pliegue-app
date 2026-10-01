@@ -12,6 +12,7 @@ import {
   unlinkLocalFiles,
   useLinkedFiles,
 } from "../library/local-file-reference-store";
+import { copyReleaseNote, releaseCopies } from "../library/book-copies-store";
 import { clearReadingProgress } from "../library/reading-progress-store";
 import { useCatalogAi } from "../ai/ai-readiness";
 import { afterLibraryGrowth } from "../guide/next-steps";
@@ -25,13 +26,16 @@ import styles from "../(workspace)/app/workspace.module.css";
  * deje lo mismo.
  */
 export async function forgetLinkedFiles(documentIds: readonly string[]) {
+  // Lo que valga para otra copia del mismo libro pasa a ella antes de borrar nada.
+  await releaseCopies(documentIds);
   await unlinkLocalFiles(documentIds);
   await removeDocumentCatalogRecords(documentIds).catch(() => undefined);
   for (const documentId of documentIds) clearReadingProgress(documentId);
 }
 
 /** La misma pregunta desde la Biblioteca y desde Fuentes: dice qué se olvida y qué no. */
-export function unlinkFilesConfirmation(label: string): ConfirmOptions {
+export function unlinkFilesConfirmation(label: string, documentIds: readonly string[] = []): ConfirmOptions {
+  const copies = copyReleaseNote(documentIds);
   return {
     confirmLabel: "Desvincular",
     description: "Pliegue olvidará:",
@@ -41,7 +45,9 @@ export function unlinkFilesConfirmation(label: string): ConfirmOptions {
       "dónde se quedó la lectura",
     ],
     icon: "link",
-    note: "El archivo original no cambia. Puedes volver a vincularlo cuando quieras.",
+    note: copies
+      ? `${copies} El archivo original no cambia.`
+      : "El archivo original no cambia. Puedes volver a vincularlo cuando quieras.",
     title: `¿Desvincular ${label}?`,
     tone: "danger",
   };
@@ -86,7 +92,7 @@ export function LinkedFilesPanel() {
   }
 
   async function unlink(documentIds: readonly string[], label: string) {
-    const confirmed = await confirmAction(unlinkFilesConfirmation(label));
+    const confirmed = await confirmAction(unlinkFilesConfirmation(label, documentIds));
     if (!confirmed) return;
 
     setBusy(documentIds.length === 1 ? (documentIds[0] ?? "all") : "all");

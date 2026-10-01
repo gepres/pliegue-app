@@ -31,6 +31,7 @@ import {
   type DriveFolderResult,
   type DriveFolderSource,
 } from "../library/drive-library-store";
+import { copyGroupOf, copyReleaseNote, releaseCopies, useCopyGroups } from "../library/book-copies-store";
 import { formatFileSize } from "../library/local-file-metadata";
 import { clearReadingProgress } from "../library/reading-progress-store";
 import { confirmAction } from "./app-ui/confirm-dialog";
@@ -76,6 +77,7 @@ export function DriveSourcesPanel() {
   const connection = useDriveConnection();
   const drive = useDriveLibrary();
   const catalogAi = useCatalogAi();
+  const copyGroups = useCopyGroups();
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState("");
 
@@ -105,6 +107,9 @@ export function DriveSourcesPanel() {
   }
 
   const files = drive.documents.filter((document) => !document.sourceId);
+  // Un libro que también está en una carpeta local o importado sale una vez en la Biblioteca.
+  const alsoLocal = (documentId: string) =>
+    Boolean(copyGroupOf(copyGroups, documentId)?.copyIds.some((id) => id !== documentId && !id.startsWith("drive:")));
   const indexing = drive.indexing;
   const pending = drive.documents.filter((document) => document.indexStatus === "pending").length;
 
@@ -219,13 +224,14 @@ export function DriveSourcesPanel() {
       description: "Se eliminarán de Pliegue:",
       details: [`el índice de ${plural(documentIds.length, "documento")}`, "sus fichas del catálogo IA", "dónde se quedó la lectura"],
       icon: "cloud",
-      note: "Los archivos siguen en tu Drive, sin cambios.",
+      note: `${copyReleaseNote(documentIds) ?? ""} Los archivos siguen en tu Drive, sin cambios.`.trim(),
       title: `¿Desvincular «${source.name}»?`,
       tone: "danger",
     });
     if (!confirmed) return;
     setBusy(source.id);
     try {
+      await releaseCopies(documentIds);
       await unlinkDriveFolder(source.id);
       await forgetDriveDocuments(documentIds);
       setStatus(`«${source.name}» se desvinculó. Los archivos siguen en tu Drive.`);
@@ -242,13 +248,14 @@ export function DriveSourcesPanel() {
       description: "Pliegue olvidará:",
       details: ["la referencia y su índice de texto", "su ficha del catálogo IA", "dónde se quedó la lectura"],
       icon: "cloud",
-      note: "El archivo sigue en tu Drive. Puedes volver a elegirlo cuando quieras.",
+      note: `${copyReleaseNote(documentIds) ?? ""} El archivo sigue en tu Drive. Puedes volver a elegirlo cuando quieras.`.trim(),
       title: `¿Quitar ${label} de la biblioteca?`,
       tone: "danger",
     });
     if (!confirmed) return;
     setBusy("remove");
     try {
+      await releaseCopies(documentIds);
       await unlinkDriveFiles(documentIds);
       await forgetDriveDocuments(documentIds);
       setStatus(`${label[0]?.toLocaleUpperCase("es")}${label.slice(1)} ya no está en la biblioteca. Sigue en tu Drive.`);
@@ -387,6 +394,10 @@ export function DriveSourcesPanel() {
                 </div>
                 <span className={styles.folderSourceMeta}>
                   {plural(source.fileCount, "documento")} · {formatLastScan(source.lastScannedAt)}
+                  {(() => {
+                    const shared = drive.documents.filter((document) => document.sourceId === source.id && alsoLocal(document.id)).length;
+                    return shared ? ` · ${shared} también en local` : "";
+                  })()}
                   {source.skippedFiles.length ? ` · ${plural(source.skippedFiles.length, "archivo")} que Pliegue no lee` : ""}
                 </span>
               </div>
@@ -410,7 +421,13 @@ export function DriveSourcesPanel() {
               <div>
                 <div className={styles.folderSourceTitle}>
                   <strong title={file.originalName}>{file.originalName}</strong>
-                  <Tag>{file.indexStatus === "pending" ? "Por indexar" : file.format.toUpperCase()}</Tag>
+                  <Tag>
+                    {alsoLocal(file.id)
+                      ? "También en local"
+                      : file.indexStatus === "pending"
+                        ? "Por indexar"
+                        : file.format.toUpperCase()}
+                  </Tag>
                 </div>
                 <span className={styles.folderSourceMeta}>
                   {file.sizeBytes ? formatFileSize(file.sizeBytes) : "Documento de Google"}

@@ -113,3 +113,59 @@ export async function clearTranslation(documentId: string, pairId: string) {
   }
   return units.size;
 }
+
+/**
+ * Las traducciones de una copia pasan a la que guarda el estado del libro. Una página que el
+ * destino ya tenía traducida se conserva: no se pisa nada.
+ */
+export async function transferTranslations(fromId: string, toId: string) {
+  if (fromId === toId) return 0;
+  const range = (documentId: string) => IDBKeyRange.bound([documentId, ""], [documentId, "\uffff"]);
+  const database = await openDatabase();
+  let moved = 0;
+  try {
+    const transaction = database.transaction(storeName, "readwrite");
+    const store = transaction.objectStore(storeName);
+    const [records, existing] = await Promise.all([
+      requestResult(store.index(byTranslation).getAll(range(fromId)) as IDBRequest<TranslatedUnitRecord[]>),
+      requestResult(store.index(byTranslation).getAllKeys(range(toId))),
+    ]);
+    const taken = new Set(existing.map(String));
+    for (const record of records) {
+      const key = translatedUnitKey(toId, record.pairId, record.unitId);
+      if (!taken.has(key)) {
+        store.put({ ...record, documentId: toId, key });
+        moved += 1;
+      }
+      store.delete(record.key);
+    }
+    await transactionComplete(transaction);
+  } finally {
+    database.close();
+  }
+  return moved;
+}
+
+/** Los documentos con alguna página traducida guardada. Recorre solo el índice, no los textos. */
+export async function translatedDocumentIds() {
+  const database = await openDatabase();
+  const ids = new Set<string>();
+  try {
+    const transaction = database.transaction(storeName, "readonly");
+    await new Promise<void>((resolve, reject) => {
+      const request = transaction.objectStore(storeName).index(byTranslation).openKeyCursor(null, "nextunique");
+      request.addEventListener("success", () => {
+        const cursor = request.result;
+        if (!cursor) return resolve();
+        const [documentId] = cursor.key as [string, string];
+        ids.add(documentId);
+        cursor.continue();
+      });
+      request.addEventListener("error", () => reject(request.error), { once: true });
+    });
+    await transactionComplete(transaction);
+  } finally {
+    database.close();
+  }
+  return ids;
+}

@@ -13,6 +13,8 @@ export interface DriveFileMeta {
   modifiedTime?: string;
   name: string;
   parents?: string[];
+  /** El SHA-256 del contenido, sin descargarlo. No existe para los Documentos de Google. */
+  sha256Checksum?: string;
   size?: string;
   trashed?: boolean;
 }
@@ -29,7 +31,7 @@ const googleAppsPrefix = "application/vnd.google-apps.";
 
 /** Los campos que se piden de cada archivo: los mismos al elegir, al listar y al revisar. */
 export const driveFileFields =
-  "id,name,mimeType,size,modifiedTime,md5Checksum,driveId,parents,trashed";
+  "id,name,mimeType,size,modifiedTime,md5Checksum,sha256Checksum,driveId,parents,trashed";
 
 export const driveApiBase = "https://www.googleapis.com/drive/v3";
 

@@ -9,10 +9,12 @@ import type { LibraryDocument } from "../../library/documents";
  * modificación: copiar un archivo o bajarlo de la nube la cambia.
  *
  * A la nube solo va el SHA-256 de esa identidad, no el nombre del archivo.
+ *
+ * Un archivo de Google Drive se identifica igual: el mismo libro leído en el móvil desde Drive
+ * y en el PC desde una carpeta comparte así avance, notas y favoritos. Solo un Documento de
+ * Google, que no tiene tamaño, se identifica por su id de Drive.
  */
 export function documentIdentity(document: LibraryDocument): string | null {
-  if (document.reference.kind === "google-drive") return `drive:${document.reference.fileId}`;
-
   const record = document as LibraryDocument & {
     originalName?: string;
     relativePath?: string;
@@ -24,6 +26,9 @@ export function documentIdentity(document: LibraryDocument): string | null {
       ? document.reference.relativePath.split("/").at(-1)
       : undefined);
   const size = record.sizeBytes;
+  if (document.reference.kind === "google-drive" && !(typeof size === "number" && size > 0)) {
+    return `drive:${document.reference.fileId}`;
+  }
   if (!name || typeof size !== "number" || size <= 0) return null;
   return `file:${name.normalize("NFC").trim().toLocaleLowerCase("es")}:${size}`;
 }

@@ -86,6 +86,11 @@ let stored: { documents: DriveDocument[]; sources: DriveFolderSource[] } = { doc
 let loadingPromise: Promise<void> | null = null;
 let indexingRun: Promise<void> | null = null;
 let pausedByUser = false;
+/**
+ * Decide si un documento debe esperar antes de indexarse: podría ser la copia de un libro ya
+ * indexado en local, y entonces no hace falta descargarlo. La pone el conciliador de copias.
+ */
+let indexGate: ((document: DriveDocument) => boolean) | null = null;
 let stopConnection: (() => void) | null = null;
 const listeners = new Set<() => void>();
 
@@ -414,8 +419,14 @@ export async function readDriveDocumentFile(
 
 // ---- Indexación en segundo plano -------------------------------------------------------------
 
-function needsIndex(document: DriveDocument) {
+/** Le falta el índice, espere o no a la compuerta. */
+function lacksIndex(document: DriveDocument) {
   return document.indexStatus === "pending" || !isCurrentContentIndex(document.indexVersion);
+}
+
+/** Le falta el índice y puede descargarse ya para hacerlo. */
+function needsIndex(document: DriveDocument) {
+  return !indexGate?.(document) && lacksIndex(document);
 }
 
 export function pauseDriveIndexing() {
@@ -522,4 +533,59 @@ async function indexQueue(queue: readonly DriveDocument[]): Promise<DriveIndexin
 
   emit({ indexing: stop ? { ...state, current: null, paused: stop } : null });
   return stop;
+}
+
+// ---- Copias del mismo libro (ver book-copies.ts) -----------------------------------------------
+
+/** Ver `indexGate`. `true` = el documento espera. */
+export function setDriveIndexGate(gate: ((document: DriveDocument) => boolean) | null) {
+  indexGate = gate;
+}
+
+/** El conciliador ya decidió sobre lo que esperaba: la indexación sigue con lo que quede. */
+export function releaseDriveIndexGate() {
+  kickIndexing();
+}
+
+/** El índice de otra copia del mismo libro, sin descargar este archivo. */
+export async function adoptDriveIndex(
+  documentId: string,
+  index: Pick<DriveDocument, "cover" | "detectedLanguage" | "indexStatus" | "indexVersion" | "indexedAt" | "searchText">,
+) {
+  const document = stored.documents.find((item) => item.id === documentId);
+  // Sin mirar la compuerta: adoptar es justo lo que la compuerta está esperando.
+  if (!document || !lacksIndex(document)) return false;
+  const adopted: DriveDocument = { ...document };
+  for (const [field, value] of Object.entries(index)) {
+    if (value !== undefined) (adopted as unknown as Record<string, unknown>)[field] = value;
+  }
+  await saveIndexedDocument(adopted);
+  emit();
+  return true;
+}
+
+/**
+ * Los documentos guardados antes de pedir el SHA-256 lo reciben ahora, con una consulta por
+ * archivo. Sin token no se hace nada: se intentará en la próxima conexión.
+ */
+export async function backfillDriveChecksums() {
+  const token = getDriveToken();
+  const missing = stored.documents.filter((document) => document.contentSha256 === undefined);
+  if (!token || !missing.length) return 0;
+  const updated: DriveDocument[] = [];
+  await runLimited(missing, 4, async (document) => {
+    try {
+      const meta = await getDriveFile(document.reference.fileId, token);
+      updated.push({ ...document, contentSha256: meta.sha256Checksum?.toLowerCase() ?? null });
+    } catch {
+      // Un archivo que ya no está o sin permiso: lo resolverá «Buscar cambios».
+    }
+  });
+  if (updated.length) {
+    await write({ putDocuments: updated });
+    const byId = new Map(updated.map((document) => [document.id, document]));
+    stored = { ...stored, documents: stored.documents.map((document) => byId.get(document.id) ?? document) };
+    emit();
+  }
+  return updated.length;
 }
