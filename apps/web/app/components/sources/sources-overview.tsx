@@ -11,6 +11,7 @@ import { describeSkippedFile, type SkippedFileKind } from "../../library/local-f
 import { useLibraryDocuments } from "../../library/use-library-documents";
 import { Icon, type IconName } from "../app-ui/icons";
 import { CatalogImportPanel } from "../catalog-import-panel";
+import { DriveSourcesPanel } from "../drive-sources-panel";
 import { LinkedFilesPanel } from "../linked-files-panel";
 import { LocalSourcesPanel } from "../local-sources-panel";
 import styles from "./sources.module.css";
@@ -44,7 +45,7 @@ function topFolder(document: FolderDocument) {
  * permitía gestionar; aquí se ve el conjunto y se entiende en qué estado está.
  */
 export function SourcesOverview() {
-  const { allDocuments, importedCatalogs, importedLibrary, linkedFiles, linkedFolders, loading } =
+  const { allDocuments, driveLibrary, importedCatalogs, importedLibrary, linkedFiles, linkedFolders, loading } =
     useLibraryDocuments();
   const documents = allDocuments as FolderDocument[];
   const organization = organizationFacets(allDocuments);
@@ -76,7 +77,7 @@ export function SourcesOverview() {
   const largestCategory = organization.categories[0]?.count ?? 1;
 
   const stats = [
-    { hint: `${plural(linkedFiles.documents.length + linkedFolders.documents.length, "vinculado")} · ${plural(importedLibrary.documents.length, "copia")}`, label: "Documentos", value: allDocuments.length },
+    { hint: `${plural(linkedFiles.documents.length + linkedFolders.documents.length, "vinculado")}${driveLibrary.documents.length ? ` · ${driveLibrary.documents.length} en Drive` : ""} · ${plural(importedLibrary.documents.length, "copia")}`, label: "Documentos", value: allDocuments.length },
     { hint: `${allDocuments.length ? Math.round((withCatalog / allDocuments.length) * 100) : 0} % de la biblioteca`, label: "Con ficha", value: withCatalog },
     { hint: "Incrustadas en la ficha", label: "Con portada", value: withCover },
     { hint: "Esperan al OCR para buscarse por contenido", label: "Sin capa de texto", value: withoutText },
@@ -94,7 +95,7 @@ export function SourcesOverview() {
         <h1>Fuentes</h1>
         <p>
           De dónde salen tus documentos, cómo están organizados y qué falta para completarlos.
-          Nada se sube a ningún servidor.
+          Nada se sube a ningún servidor: lo que está en Google Drive se lee desde Drive.
         </p>
       </header>
 
@@ -281,6 +282,15 @@ export function SourcesOverview() {
         ) : null}
       </section>
 
+      {/* ---- Google Drive --------------------------------------------------------- */}
+      <section aria-labelledby="fuentes-drive" className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 id="fuentes-drive">Google Drive</h2>
+          <p>Libros sueltos o carpetas enteras de tu Drive, leídos donde están.</p>
+        </div>
+        <DriveSourcesPanel />
+      </section>
+
       {/* ---- Índice JSON ---------------------------------------------------------- */}
       <section aria-labelledby="fuentes-indice" className={styles.section} id="indice-json">
         <div className={styles.sectionHeader}>
@@ -293,7 +303,7 @@ export function SourcesOverview() {
         <CatalogImportPanel documents={allDocuments} />
       </section>
 
-      {/* ---- IA y Drive --------------------------------------------------------- */}
+      {/* ---- IA ------------------------------------------------------------------ */}
       <section aria-labelledby="fuentes-otras" className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 id="fuentes-otras">Otras fuentes de fichas</h2>
@@ -310,16 +320,6 @@ export function SourcesOverview() {
             <Link className={buttonClassName({ size: "sm", variant: "secondary" })} href="/app/ajustes#ia">
               Configurar proveedor
             </Link>
-          </div>
-          <div className={styles.panel}>
-            <h3>
-              <Icon name="cloud" size={18} /> Google Drive
-            </h3>
-            <p className={styles.panelIntro}>
-              Referencia remota sin duplicar archivos. La autorización OAuth y la renovación segura
-              del acceso siguen pendientes antes de habilitar esta fuente.
-            </p>
-            <span className={styles.pending}>Pendiente</span>
           </div>
         </div>
       </section>

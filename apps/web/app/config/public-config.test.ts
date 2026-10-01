@@ -6,10 +6,11 @@ describe("readPublicConfig", () => {
   it("aplica valores seguros cuando no hay entorno configurado", () => {
     expect(readPublicConfig({})).toEqual({
       cloud: null,
+      drive: null,
       environment: "development",
       features: {
         aiPanel: true,
-        drive: false,
+        drive: true,
         localFiles: true,
       },
     });
@@ -25,6 +26,7 @@ describe("readPublicConfig", () => {
       }),
     ).toEqual({
       cloud: null,
+      drive: null,
       environment: "staging",
       features: {
         aiPanel: false,
@@ -54,5 +56,21 @@ describe("readPublicConfig", () => {
         NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
       }).cloud,
     ).toEqual({ publishableKey: "clave-antigua", url: "http://127.0.0.1:54321" });
+  });
+
+  it("activa Drive solo con las tres credenciales públicas bien formadas", () => {
+    const google = {
+      NEXT_PUBLIC_GOOGLE_API_KEY: " AIzaClave ",
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: "123-abc.apps.googleusercontent.com",
+      NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER: "123456789",
+    };
+    expect(readPublicConfig(google).drive).toEqual({
+      apiKey: "AIzaClave",
+      appId: "123456789",
+      clientId: "123-abc.apps.googleusercontent.com",
+    });
+    expect(readPublicConfig({ ...google, NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER: "pliegue-app" }).drive).toBeNull();
+    expect(readPublicConfig({ ...google, NEXT_PUBLIC_GOOGLE_CLIENT_ID: "AIzaClave" }).drive).toBeNull();
+    expect(readPublicConfig({ ...google, NEXT_PUBLIC_FEATURE_DRIVE: "false" }).drive).toBeNull();
   });
 });

@@ -58,6 +58,9 @@ import {
 } from "../library/local-document-preview";
 import { ExtractedBlocks } from "./extracted-blocks";
 import type { LinkedFileDocument } from "../library/local-file-reference";
+import { connectDrive, preloadDriveConnection, useDriveConnection } from "../drive/drive-connection";
+import type { DriveDocument } from "../library/drive-document";
+import { readDriveDocumentFile, useDriveLibrary } from "../library/drive-library-store";
 import {
   readLinkedFile,
   requestLinkedFileReadPermission,
@@ -70,7 +73,7 @@ import {
   useLinkedFolders,
   type PermissionRequestOutcome,
 } from "../library/local-folder-store";
-import type { ImportedDocument } from "../library/local-file-metadata";
+import { formatFileSize, type ImportedDocument } from "../library/local-file-metadata";
 import {
   readImportedDocumentFile,
   useImportedDocuments,
@@ -123,6 +126,10 @@ function isLinkedFileDocument(document: LocalDocument): document is LinkedFileDo
 
 function isImportedDocument(document: LocalDocument): document is ImportedDocument {
   return document.reference.kind === "local-copy";
+}
+
+function isDriveDocument(document: LocalDocument): document is DriveDocument {
+  return document.reference.kind === "google-drive";
 }
 
 function ImagePreview({
@@ -384,6 +391,8 @@ function PreviewCanvas({
   const referenceKind = document.reference.kind;
   const [state, setState] = useState<PreviewState>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
+  // Solo los documentos de Drive se descargan: lo demás ya está en el equipo.
+  const [download, setDownload] = useState<{ loaded: number; total: number | null } | null>(null);
   const [showIndexedFallback, setShowIndexedFallback] = useState(false);
 
   useEffect(() => {
@@ -395,9 +404,19 @@ function PreviewCanvas({
           ? await readLinkedDocumentFile(documentId, sourceId)
           : referenceKind === "local-file"
             ? await readLinkedFile(documentId)
-            : await readImportedDocumentFile(documentId);
+            : referenceKind === "google-drive"
+              ? await readDriveDocumentFile(documentId, (loaded, total) => {
+                  if (active) setDownload({ loaded, total });
+                })
+              : await readImportedDocumentFile(documentId);
 
-        if (!record) throw new Error("El archivo ya no está disponible en su origen local.");
+        if (!record) {
+          throw new Error(
+            referenceKind === "google-drive"
+              ? "El documento ya no está entre tus archivos de Google Drive en Pliegue."
+              : "El archivo ya no está disponible en su origen local.",
+          );
+        }
 
         const blob = "file" in record ? record.file : record.blob;
         const preview = await createLocalDocumentPreview(format, blob);
@@ -450,6 +469,7 @@ function PreviewCanvas({
 
   function retryOpening() {
     setShowIndexedFallback(false);
+    setDownload(null);
     setState({ status: "loading" });
     setAttempt((currentAttempt) => currentAttempt + 1);
   }
@@ -462,9 +482,17 @@ function PreviewCanvas({
   if (state.status === "loading") {
     return (
       <Card aria-live="polite" className={styles.readerStatus} role="status" tone="subtle">
-        <Tag>Preparando</Tag>
-        <h2>Abriendo el documento en este dispositivo…</h2>
-        <p>El contenido no se está enviando a ningún servidor.</p>
+        <Tag>{referenceKind === "google-drive" ? "Google Drive" : "Preparando"}</Tag>
+        <h2>
+          {referenceKind === "google-drive"
+            ? "Descargando de Google Drive…"
+            : "Abriendo el documento en este dispositivo…"}
+        </h2>
+        <p>
+          {referenceKind === "google-drive"
+            ? `${download ? `${formatFileSize(download.loaded)}${download.total ? ` de ${formatFileSize(download.total)}` : ""}. ` : ""}Llega directamente de Google a esta pestaña: no pasa por ningún servidor de Pliegue.`
+            : "El contenido no se está enviando a ningún servidor."}
+        </p>
       </Card>
     );
   }
@@ -588,16 +616,23 @@ function PreviewCanvas({
 function PermissionPanel({
   onRequestPermission,
   sourceName,
+  variant = "local",
 }: {
   onRequestPermission: () => Promise<PermissionRequestOutcome>;
   sourceName: string;
+  /** `drive`: no es un permiso del navegador sino conectar la cuenta de Google. */
+  variant?: "drive" | "local";
 }) {
   const [requestState, setRequestState] = useState<
     "denied" | "error" | "idle" | "requesting" | "unanswered"
   >("idle");
 
+  useEffect(() => {
+    if (variant === "drive") preloadDriveConnection();
+  }, [variant]);
+
   async function requestAccess() {
-    if (!(await beforeFilePermission("regrant"))) return;
+    if (variant === "local" && !(await beforeFilePermission("regrant"))) return;
     setRequestState("requesting");
 
     try {
@@ -613,15 +648,24 @@ function PermissionPanel({
 
   return (
     <Card className={styles.permissionPanel} tone="subtle">
-      <Tag>Permiso local</Tag>
-      <h2>Vuelve a autorizar «{sourceName}»</h2>
+      <Tag>{variant === "drive" ? "Google Drive" : "Permiso local"}</Tag>
+      <h2>
+        {variant === "drive"
+          ? `Conecta Google Drive para abrir «${sourceName}»`
+          : `Vuelve a autorizar «${sourceName}»`}
+      </h2>
       <p>
-        El navegador recuerda el vínculo, pero requiere tu permiso para leer el archivo. Pliegue
-        no copiará ni subirá el contenido.
+        {variant === "drive"
+          ? "El documento está en tu Drive. Pliegue lo descarga a esta pestaña para leerlo; no lo copia ni lo modifica."
+          : "El navegador recuerda el vínculo, pero requiere tu permiso para leer el archivo. Pliegue no copiará ni subirá el contenido."}
       </p>
       <div className={styles.permissionActions}>
         <Button disabled={requestState === "requesting"} onClick={() => void requestAccess()}>
-          {requestState === "requesting" ? "Solicitando…" : "Permitir lectura"}
+          {requestState === "requesting"
+            ? "Solicitando…"
+            : variant === "drive"
+              ? "Conectar Google Drive"
+              : "Permitir lectura"}
         </Button>
         <Link
           className={buttonClassName({ size: "md", variant: "quiet" })}
@@ -631,7 +675,15 @@ function PermissionPanel({
         </Link>
       </div>
       <p aria-live="polite" className={styles.permissionStatus} role="status">
-        {requestState === "denied"
+        {variant === "drive"
+          ? requestState === "denied"
+            ? "No se concedió el acceso. Puedes intentarlo de nuevo cuando quieras."
+            : requestState === "unanswered"
+              ? "El navegador bloqueó la ventana de Google. Permite las ventanas emergentes de este sitio y vuelve a intentarlo."
+              : requestState === "error"
+                ? "No fue posible conectar con Google Drive."
+                : "Google abrirá una ventana para confirmar tu cuenta."
+          : requestState === "denied"
           ? "El permiso no fue concedido. Puedes intentarlo de nuevo cuando quieras."
           : requestState === "unanswered"
             ? "El navegador no llegó a mostrar la ventana de permiso. Ocurre cuando esta pestaña no está en primer plano o cuando otra ventana de Pliegue tiene la petición abierta: déjala visible, cierra las demás y vuelve a intentarlo."
@@ -840,12 +892,14 @@ function pageUnitId(unit: number) {
 function LocalReaderShell({
   document,
   permissionRequired = false,
+  permissionVariant = "local",
   requestPermission,
   resumeRequested,
   sourceName,
 }: {
   document: LocalDocument;
   permissionRequired?: boolean;
+  permissionVariant?: "drive" | "local";
   requestPermission?: (() => Promise<PermissionRequestOutcome>) | undefined;
   resumeRequested: boolean;
   sourceName?: string | undefined;
@@ -1344,6 +1398,7 @@ function LocalReaderShell({
           <PermissionPanel
             onRequestPermission={requestPermission}
             sourceName={sourceName ?? "el origen"}
+            variant={permissionVariant}
           />
         ) : (
           <PreviewCanvas
@@ -1536,10 +1591,12 @@ export function LocalDocumentReader({
   const importedLibrary = useImportedDocuments();
   const linkedFiles = useLinkedFiles();
   const linkedFolders = useLinkedFolders();
+  const driveLibrary = useDriveLibrary();
   const resolution = resolveLocalReaderDocument(documentId, [
     importedLibrary,
     linkedFiles,
     linkedFolders,
+    driveLibrary,
   ]);
 
   if (resolution.status === "loading") {
@@ -1584,6 +1641,10 @@ export function LocalDocumentReader({
     );
   }
 
+  if (isDriveDocument(document)) {
+    return <DriveReaderShell document={document} key={document.id} resumeRequested={resumeRequested} />;
+  }
+
   if (isLinkedFileDocument(document)) {
     return (
       <LocalReaderShell
@@ -1611,4 +1672,26 @@ export function LocalDocumentReader({
       />
     );
   }
+}
+
+/**
+ * Un documento de Drive se abre con un token de Google vigente. Sin él —tras recargar, o
+ * pasada la hora que dura— el lector pide conectar en vez de fallar al descargar.
+ */
+function DriveReaderShell({ document, resumeRequested }: { document: DriveDocument; resumeRequested: boolean }) {
+  const connection = useDriveConnection();
+
+  return (
+    <LocalReaderShell
+      document={document}
+      permissionRequired={!connection.tokenReady}
+      permissionVariant="drive"
+      requestPermission={async () => {
+        const outcome = await connectDrive();
+        return outcome === "granted" ? "granted" : outcome === "blocked" ? "unanswered" : "denied";
+      }}
+      resumeRequested={resumeRequested}
+      sourceName={document.originalName}
+    />
+  );
 }

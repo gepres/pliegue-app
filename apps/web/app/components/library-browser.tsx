@@ -39,6 +39,7 @@ import {
 } from "../library/local-library-store";
 import { clearReadingProgress } from "../library/reading-progress-store";
 import { useLibraryDocuments } from "../library/use-library-documents";
+import { publicConfig } from "../config/public-config";
 import { IconButton, Segmented, Toast } from "./app-ui/controls";
 import { Icon } from "./app-ui/icons";
 import { MenuItem, MenuSeparator, Popover } from "./app-ui/overlays";
@@ -563,6 +564,17 @@ export function LibraryBrowser() {
                     router.push("/app/biblioteca/fuentes#carpetas");
                   }}
                 />
+                {publicConfig.drive ? (
+                  <MenuItem
+                    description="Libros o una carpeta de tu Drive, sin copiarlos"
+                    icon="cloud"
+                    label="Desde Google Drive…"
+                    onSelect={() => {
+                      close();
+                      router.push("/app/biblioteca/fuentes#drive");
+                    }}
+                  />
+                ) : null}
                 <MenuItem
                   description="Copia dentro del navegador, para navegadores sin vínculo"
                   disabled={importing || importedLibrary.status === "error"}
@@ -791,8 +803,8 @@ export function LibraryBrowser() {
                     value={origin}
                   >
                     <option value="all">Todo el espacio</option>
-                    <option disabled value="drive">
-                      Google Drive · aún no conectado
+                    <option disabled={!publicConfig.drive} value="drive">
+                      {publicConfig.drive ? "Google Drive" : "Google Drive · no configurado"}
                     </option>
                     <option value="local">Archivos locales</option>
                   </Select>

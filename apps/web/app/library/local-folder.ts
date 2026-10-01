@@ -134,9 +134,10 @@ export function createLinkedFolderDocument(
   };
 }
 
+/** Solo mira el id y la huella: la comparten las carpetas locales y las de Google Drive. */
 export function compareFolderDocuments(
-  previous: readonly LinkedFolderDocument[],
-  current: readonly LinkedFolderDocument[],
+  previous: readonly Pick<LinkedFolderDocument, "fingerprint" | "id">[],
+  current: readonly Pick<LinkedFolderDocument, "fingerprint" | "id">[],
 ): FolderChangeSummary {
   const previousById = new Map(previous.map((document) => [document.id, document]));
   const currentIds = new Set(current.map((document) => document.id));

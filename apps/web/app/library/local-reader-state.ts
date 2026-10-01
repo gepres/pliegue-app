@@ -1,8 +1,9 @@
+import type { DriveDocument } from "./drive-document";
 import type { ImportedDocument } from "./local-file-metadata";
 import type { LinkedFileDocument } from "./local-file-reference";
 import type { LinkedFolderDocument } from "./local-folder";
 
-export type LocalReaderDocument = ImportedDocument | LinkedFileDocument | LinkedFolderDocument;
+export type LocalReaderDocument = DriveDocument | ImportedDocument | LinkedFileDocument | LinkedFolderDocument;
 
 type ReaderStoreStatus = "error" | "idle" | "loading" | "ready";
 
