@@ -7,6 +7,7 @@ import { AccountPanel } from "../../../components/cloud/account-panel";
 import { InstallAppCard } from "../../../components/pwa/install-app";
 import { PreferencesPanel } from "../../../components/preferences-panel";
 import { SettingsLayout } from "../../../components/settings/settings-layout";
+import { SourcesSettingsPanel } from "../../../components/settings/sources-settings-panel";
 import { WorkspaceModePanel } from "../../../components/workspace-mode-panel";
 import styles from "../workspace.module.css";
 
@@ -53,14 +54,8 @@ export default function SettingsPage() {
           label: "Inteligencia artificial",
         },
         {
-          content: (
-            <Card className={styles.settingsCard}>
-              <Tag>Próximo incremento</Tag>
-              <h2>Drive y archivos locales</h2>
-              <p>Administra ubicaciones conectadas, permisos y disponibilidad offline.</p>
-            </Card>
-          ),
-          description: "Ubicaciones conectadas y permisos",
+          content: <SourcesSettingsPanel />,
+          description: "Ubicaciones, permisos y datos guardados",
           icon: "folder",
           id: "fuentes",
           label: "Fuentes",
