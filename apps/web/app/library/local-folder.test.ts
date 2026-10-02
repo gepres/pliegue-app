@@ -6,6 +6,7 @@ import {
   createLinkedDocumentId,
   describeSkippedFile,
   listSkippedFiles,
+  pairMovedDocuments,
 } from "./local-folder";
 
 const baseFile = {
@@ -108,5 +109,42 @@ describe("archivos que la carpeta no puede leer", () => {
     });
     expect(describeSkippedFile({ relativePath: "viejo.doc", size: 10 }).kind).toBe("legacy-office");
     expect(describeSkippedFile({ relativePath: "vacio.pdf", size: 0 }).kind).toBe("empty");
+  });
+});
+
+describe("archivos movidos o renombrados entre dos escaneos (03.3b)", () => {
+  const file = (id: string, relativePath: string, sizeBytes = 2048, lastModified = 1_700_000_000_000) => ({
+    id,
+    lastModified,
+    relativePath,
+    sizeBytes,
+  });
+
+  it("empareja un archivo que cambió de carpeta", () => {
+    expect(pairMovedDocuments([file("a", "Raíz/Morel.pdf")], [file("b", "Literatura/Morel.pdf")])).toEqual([
+      { from: "a", renamed: false, to: "b" },
+    ]);
+  });
+
+  it("empareja un archivo renombrado: mismo tamaño y misma fecha", () => {
+    expect(pairMovedDocuments([file("a", "Raíz/morel_bioy.pdf")], [file("b", "Raíz/La invención de Morel.pdf")])).toEqual([
+      { from: "a", renamed: true, to: "b" },
+    ]);
+  });
+
+  it("no toca lo que no cambió ni empareja archivos con otra fecha o tamaño", () => {
+    const previous = [file("igual", "A/igual.pdf"), file("borrado", "A/viejo.pdf"), file("otro", "A/otro.pdf", 999)];
+    const current = [file("igual", "A/igual.pdf"), file("nuevo", "B/nuevo.pdf", 2048, 1_800_000_000_000), file("otro2", "B/otro.pdf", 998)];
+    expect(pairMovedDocuments(previous, current)).toEqual([]);
+  });
+
+  it("con dos archivos de igual tamaño y fecha, empareja solo por nombre y no adivina", () => {
+    const previous = [file("a1", "Raíz/Uno.pdf"), file("a2", "Raíz/Dos.pdf")];
+    expect(pairMovedDocuments(previous, [file("b1", "X/Uno.pdf"), file("b2", "X/Dos.pdf")])).toEqual([
+      { from: "a1", renamed: false, to: "b1" },
+      { from: "a2", renamed: false, to: "b2" },
+    ]);
+    // Renombrados los dos, no hay forma segura de saber cuál es cuál.
+    expect(pairMovedDocuments(previous, [file("c1", "X/Tres.pdf"), file("c2", "X/Cuatro.pdf")])).toEqual([]);
   });
 });

@@ -269,6 +269,18 @@ function SignedIn({ email, provider, userId }: { email: string | null; provider:
               Sincronizar ahora
             </Button>
           </div>
+          {status.blockedDeletions ? (
+            <div className={styles.row}>
+              <Button
+                disabled={status.state === "syncing"}
+                onClick={() => void requestSync({ allowMassDeletion: true })}
+                size="sm"
+                variant="quiet"
+              >
+                Sí, borrar esos {status.blockedDeletions} elementos de mi cuenta
+              </Button>
+            </div>
+          ) : null}
           <SyncConsent userId={userId} />
           <div className={styles.row}>
             <Button onClick={() => setSyncChoices(userId, { enabled: false })} size="sm" variant="quiet">

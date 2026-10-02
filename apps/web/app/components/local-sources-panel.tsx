@@ -43,6 +43,7 @@ function describeScan(result: FolderSyncResult) {
   const changes = [
     result.added ? `${result.added} nuevo${result.added === 1 ? "" : "s"}` : "",
     result.changed ? `${result.changed} modificado${result.changed === 1 ? "" : "s"}` : "",
+    result.moved ? `${result.moved} movido${result.moved === 1 ? "" : "s"} o renombrado${result.moved === 1 ? "" : "s"}, con sus notas y avance` : "",
     result.removed ? `${result.removed} eliminado${result.removed === 1 ? "" : "s"}` : "",
   ].filter(Boolean);
 

@@ -7,7 +7,8 @@ import { currentAccount } from "../account-store";
 import { cloudClient } from "../supabase-client";
 import { syncCollections, type LocalSnapshot } from "./collections";
 import { indexLibraryKeys } from "./document-key";
-import { runSync } from "./sync-runner";
+import { isSyncHeld, onSyncReleased } from "./sync-hold";
+import { MassDeletionError, runSync } from "./sync-runner";
 import { indexedDbSyncState } from "./sync-state-idb";
 import { supabaseRemote } from "./supabase-remote";
 
@@ -69,12 +70,14 @@ export function useSyncChoices(userId: string | null) {
 /* ---- Estado visible ------------------------------------------------------------------- */
 
 export interface SyncStatus {
+  /** Borrados que la red de seguridad retuvo a la espera de que la persona los confirme. */
+  blockedDeletions: number | null;
   error: string | null;
   lastSyncedAt: string | null;
   state: "error" | "idle" | "offline" | "syncing";
 }
 
-let status: SyncStatus = { error: null, lastSyncedAt: null, state: "idle" };
+let status: SyncStatus = { blockedDeletions: null, error: null, lastSyncedAt: null, state: "idle" };
 const statusListeners = new Set<() => void>();
 
 function setStatus(next: Partial<SyncStatus>) {
@@ -126,8 +129,12 @@ function deviceId() {
 
 let running: Promise<void> | null = null;
 let again = false;
+/** La persona confirmó los borrados retenidos: la próxima vuelta puede subirlos. */
+let confirmDeletions = false;
 
-async function syncOnce() {
+async function syncOnce(allowMassDeletion: boolean) {
+  // Alguien está dejando el estado a medias (un escaneo de carpeta): se sincroniza al soltar.
+  if (isSyncHeld()) return;
   const account = currentAccount();
   const client = cloudClient();
   const local = readLocal?.();
@@ -142,6 +149,7 @@ async function syncOnce() {
   setStatus({ error: null, state: "syncing" });
   try {
     await runSync({
+      allowMassDeletion,
       collections: syncCollections,
       context: {
         keys: await indexLibraryKeys(local.documents),
@@ -152,9 +160,14 @@ async function syncOnce() {
       remote: supabaseRemote(client, account.userId, deviceId()),
       stateStore: indexedDbSyncState(account.userId),
     });
-    setStatus({ error: null, lastSyncedAt: new Date().toISOString(), state: "idle" });
+    setStatus({ blockedDeletions: null, error: null, lastSyncedAt: new Date().toISOString(), state: "idle" });
   } catch (error) {
+    if (error instanceof MassDeletionError) {
+      setStatus({ blockedDeletions: error.deletions, error: error.message, state: "error" });
+      return;
+    }
     setStatus({
+      blockedDeletions: null,
       error:
         error instanceof Error && /relation .*sync_items|does not exist|schema cache/i.test(error.message)
           ? "La base de datos aún no tiene la tabla de sincronización: falta aplicar la migración."
@@ -170,7 +183,8 @@ async function syncOnce() {
  * Pide una sincronización. Si ya hay una en marcha, se hace otra al terminar —con lo que haya
  * cambiado mientras— en vez de lanzar dos a la vez sobre la misma base.
  */
-export function requestSync() {
+export function requestSync({ allowMassDeletion = false }: { allowMassDeletion?: boolean } = {}) {
+  if (allowMassDeletion) confirmDeletions = true;
   if (running) {
     again = true;
     return running;
@@ -178,10 +192,16 @@ export function requestSync() {
   running = (async () => {
     do {
       again = false;
-      await syncOnce();
+      // El permiso para borrar vale para la vuelta que lo pidió, no para las siguientes.
+      const allow = confirmDeletions;
+      confirmDeletions = false;
+      await syncOnce(allow);
     } while (again);
   })().finally(() => {
     running = null;
   });
   return running;
 }
+
+// Al soltar la última retención (fin de un escaneo), se sincroniza con el estado ya completo.
+onSyncReleased(() => void requestSync());

@@ -26,6 +26,13 @@ type EntryMap = Record<string, SyncEntry>;
 export interface SyncState {
   base: Record<string, EntryMap>;
   cursor: string | null;
+  /**
+   * Qué documento de este equipo tenía cada libro (por su clave) en la última vuelta. Si un
+   * libro pasa a ser otro documento —se movió de carpeta o se volvió a vincular—, lo que tenía
+   * guardado sigue con el documento viejo: sin este recuerdo, su ausencia parecería un borrado.
+   * Ausente en estados guardados antes de que existiera.
+   */
+  docIds?: Record<string, string>;
   pending: Record<string, EntryMap>;
 }
 
@@ -47,7 +54,27 @@ export interface SyncSummary {
  */
 export const pullOverlapMs = 2 * 60 * 1000;
 
-export const emptySyncState: SyncState = { base: {}, cursor: null, pending: {} };
+export const emptySyncState: SyncState = { base: {}, cursor: null, docIds: {}, pending: {} };
+
+/**
+ * Cuántos borrados puede subir una vuelta sin preguntar. Quitar a mano diez notas o favoritos
+ * de una vez es raro; que desaparezcan cientos suele ser un fallo —una carpeta reorganizada, un
+ * almacén que no cargó— y en la nube un borrado viaja a todos los equipos.
+ */
+export const maxSilentDeletions = 10;
+
+/** Una vuelta que iba a borrar demasiado de golpe: no sube nada hasta que la persona lo confirme. */
+export class MassDeletionError extends Error {
+  readonly deletions: number;
+
+  constructor(deletions: number) {
+    super(
+      `Esta sincronización iba a borrar ${deletions} elementos de tu cuenta de golpe y se ha detenido por seguridad. Si de verdad los quitaste, confírmalo; si no, revisa tu biblioteca antes de seguir.`,
+    );
+    this.name = "MassDeletionError";
+    this.deletions = deletions;
+  }
+}
 
 function toIso(value: string) {
   return new Date(value).toISOString();
@@ -86,12 +113,15 @@ function toMap(record: EntryMap | undefined) {
  * subida falla, la siguiente vuelta rehace la fusión y llega al mismo sitio.
  */
 export async function runSync({
+  allowMassDeletion = false,
   collections,
   context,
   enabled,
   remote,
   stateStore,
 }: {
+  /** La persona confirmó que los borrados son suyos: se suben aunque sean muchos. */
+  allowMassDeletion?: boolean;
   collections: readonly SyncCollection[];
   context: SyncContext;
   /** Las colecciones con consentimiento que la persona aceptó. */
@@ -110,7 +140,17 @@ export async function runSync({
     if (!cursor || at > cursor) cursor = at;
   }
 
-  const next: SyncState = { base: {}, cursor, pending: {} };
+  // Libros que en este equipo son ahora otro documento: lo que la base recuerda de ellos no
+  // vale como «estaba y ya no está». Se olvida, y lo de la nube se aplica al documento nuevo.
+  const docIds = new Map(Object.entries(state.docIds ?? {}));
+  const moved = new Set<string>();
+  for (const [key, document] of context.keys.documentByKey) {
+    const before = docIds.get(key);
+    if (before && before !== document.id) moved.add(key);
+    docIds.set(key, document.id);
+  }
+
+  const next: SyncState = { base: {}, cursor, docIds: Object.fromEntries(docIds), pending: {} };
   const outgoing: OutgoingRow[] = [];
 
   for (const collection of collections) {
@@ -126,7 +166,12 @@ export async function runSync({
       continue;
     }
 
-    const merged = mergeCollection(toMap(state.base[collection.name]), collection.snapshot(context), remoteEntries, {
+    const base = toMap(state.base[collection.name]);
+    if (moved.size) {
+      for (const [key, entry] of base) if (entry.docKey && moved.has(entry.docKey)) base.delete(key);
+    }
+
+    const merged = mergeCollection(base, collection.snapshot(context), remoteEntries, {
       hasDocument: (docKey) => context.keys.documentByKey.has(docKey),
       now: context.now,
       ...(collection.resolve ? { resolve: collection.resolve } : {}),
@@ -138,6 +183,9 @@ export async function runSync({
     next.base[collection.name] = Object.fromEntries(merged.base);
     next.pending[collection.name] = Object.fromEntries(merged.pending);
   }
+
+  const deletions = outgoing.filter((row) => row.deleted).length;
+  if (deletions > maxSilentDeletions && !allowMassDeletion) throw new MassDeletionError(deletions);
 
   if (outgoing.length) await remote.push(outgoing);
   summary.pushed = outgoing.length;

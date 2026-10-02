@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
+import { holdSync } from "../cloud/sync/sync-hold";
 import {
   carriedIndexFields,
   createLocalContentIndex,
@@ -15,6 +16,7 @@ import {
   type LinkedFolderDocument,
   listSkippedFiles,
   maxLinkedFolderFiles,
+  pairMovedDocuments,
   type SkippedLinkedFile,
 } from "./local-folder";
 
@@ -409,6 +411,18 @@ async function saveFolderScan(
       documents.map(toLinkedDocument),
     );
     const previousById = new Map(previous.map((document) => [document.id, document]));
+    // Lo que cambió de carpeta o de nombre sigue siendo el mismo libro: conserva su índice
+    // y, al terminar, su estado (03.3b).
+    const moves = pairMovedDocuments(previous.map(toLinkedDocument), documents.map(toLinkedDocument));
+    const movedFrom = new Map(
+      moves.flatMap((move) => {
+        const prior = previousById.get(move.from);
+        return prior ? [[move.to, prior] as const] : [];
+      }),
+    );
+    summary.added -= moves.length;
+    summary.removed -= moves.length;
+    summary.moved = moves.length;
     const indexedDocuments: StoredLinkedFolderDocument[] = new Array(documents.length);
     const startedAt = Date.now();
     const progress: FolderIndexProgress = {
@@ -436,13 +450,15 @@ async function saveFolderScan(
         nextIndex += 1;
         const document = documents[index];
         if (!document) continue;
-        const priorDocument = previousById.get(document.id);
+        const priorDocument = previousById.get(document.id) ?? movedFrom.get(document.id);
 
         // El índice se reutiliza solo si el archivo no cambió Y lo produjo el extractor
         // vigente: al ampliar la extracción, lo indexado con una versión anterior debe
-        // rehacerse aunque el archivo siga idéntico.
+        // rehacerse aunque el archivo siga idéntico. Uno movido o renombrado no cambió: su
+        // huella sí, porque lleva la ruta.
         if (
-          priorDocument?.fingerprint === document.fingerprint &&
+          priorDocument &&
+          (priorDocument.fingerprint === document.fingerprint || movedFrom.has(document.id)) &&
           priorDocument.indexStatus &&
           priorDocument.indexedAt &&
           isCurrentContentIndex(priorDocument.indexVersion)
@@ -484,6 +500,13 @@ async function saveFolderScan(
     previous.forEach((document) => documentStore.delete(document.id));
     indexedDocuments.forEach((document) => documentStore.put(document));
     await completed;
+
+    // El avance, las notas, el favorito, las traducciones y la ficha pasan al documento nuevo.
+    // Importación diferida: el almacén de copias ya depende de este.
+    if (moves.length) {
+      const { transferDocumentState } = await import("./book-copies-store");
+      for (const move of moves) await transferDocumentState(move.from, move.to).catch(() => undefined);
+    }
     return summary;
   } finally {
     database.close();
@@ -544,10 +567,16 @@ export async function linkLocalFolder(
     permission: "granted",
     skippedFiles: listSkippedFiles(files),
   };
-  const summary = await saveFolderScan(source, documents, onProgress);
-
-  sourceHandles.set(sourceId, handle);
-  await loadLinkedFolders();
+  // Sin sincronizar hasta que la biblioteca muestre los documentos nuevos con su estado.
+  const release = holdSync();
+  let summary: FolderChangeSummary;
+  try {
+    summary = await saveFolderScan(source, documents, onProgress);
+    sourceHandles.set(sourceId, handle);
+    await loadLinkedFolders();
+  } finally {
+    release();
+  }
   return {
     ...summary,
     permission: "granted",
@@ -653,9 +682,15 @@ export async function scanLinkedFolder(
     permission,
     skippedFiles: listSkippedFiles(files),
   };
-  const summary = await saveFolderScan(storedSource, documents, onProgress);
-
-  await loadLinkedFolders();
+  // Sin sincronizar hasta que la biblioteca muestre los documentos nuevos con su estado.
+  const release = holdSync();
+  let summary: FolderChangeSummary;
+  try {
+    summary = await saveFolderScan(storedSource, documents, onProgress);
+    await loadLinkedFolders();
+  } finally {
+    release();
+  }
   return {
     ...summary,
     permission,
