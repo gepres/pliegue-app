@@ -17,9 +17,11 @@ import {
   useSyncChoices,
   useSyncStatus,
 } from "../../cloud/sync/sync-controller";
+import { describeChanges } from "../../cloud/sync/sync-activity";
 import { confirmAction } from "../app-ui/confirm-dialog";
 import { Icon } from "../app-ui/icons";
 import styles from "./account-panel.module.css";
+import { SyncDetails } from "./sync-details";
 
 /** Lo que viaja con la cuenta, tal como se lo explica a quien decide activarla. */
 const syncedItems = [
@@ -219,6 +221,7 @@ function SyncConsent({ userId }: { userId: string }) {
 function SignedIn({ email, provider, userId }: { email: string | null; provider: string | null; userId: string }) {
   const choices = useSyncChoices(userId);
   const status = useSyncStatus();
+  const lastChange = status.activity.find((entry) => entry.kind === "changes") ?? null;
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -254,18 +257,35 @@ function SignedIn({ email, provider, userId }: { email: string | null; provider:
 
       {choices.enabled ? (
         <>
-          <div className={styles.status} data-state={status.state}>
-            <Icon name={status.state === "error" ? "info" : status.state === "syncing" ? "refresh" : "cloud"} size={18} />
-            <span role="status">
-              {status.state === "syncing"
-                ? "Sincronizando…"
-                : status.state === "offline"
-                  ? "Sin conexión: se sincronizará al volver."
-                  : status.state === "error"
-                    ? status.error
-                    : `Sincronizado ${formatAgo(status.lastSyncedAt, now)}`}
-            </span>
-            <Button disabled={status.state === "syncing"} onClick={() => void requestSync()} size="sm" variant="secondary">
+          <div className={styles.status} data-checking={status.checking || undefined} data-state={status.state}>
+            <Icon
+              name={status.state === "error" ? "info" : status.state === "syncing" || status.checking ? "refresh" : "cloud"}
+              size={18}
+            />
+            <div className={styles.statusText}>
+              <span role="status">
+                {status.state === "syncing"
+                  ? "Sincronizando…"
+                  : status.state === "offline"
+                    ? "Sin conexión: se sincronizará al volver."
+                    : status.state === "error"
+                      ? status.error
+                      : status.lastSyncedAt
+                        ? `Al día · comprobado ${formatAgo(status.lastSyncedAt, now)}`
+                        : "Preparando la primera sincronización…"}
+              </span>
+              {lastChange ? (
+                <small>
+                  Última vuelta con cambios: {formatAgo(lastChange.at, now)} · {describeChanges(lastChange)}
+                </small>
+              ) : null}
+            </div>
+            <Button
+              disabled={status.state === "syncing"}
+              onClick={() => void requestSync({ reason: "manual" })}
+              size="sm"
+              variant="secondary"
+            >
               Sincronizar ahora
             </Button>
           </div>
@@ -281,6 +301,7 @@ function SignedIn({ email, provider, userId }: { email: string | null; provider:
               </Button>
             </div>
           ) : null}
+          <SyncDetails status={status} />
           <SyncConsent userId={userId} />
           <div className={styles.row}>
             <Button onClick={() => setSyncChoices(userId, { enabled: false })} size="sm" variant="quiet">

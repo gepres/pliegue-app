@@ -152,8 +152,194 @@
   color: var(--pliegue-color-status-danger);
 }
 
-.status[data-state="syncing"] > svg {
+.status[data-state="syncing"] > svg,
+.status[data-checking] > svg {
   animation: spin 1.2s linear infinite;
+}
+
+.statusText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.statusText small {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+/* ---- Detalle de la sincronización ---- */
+
+.details {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+}
+
+.detailBlock {
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.detailBlock h3 {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1.125rem;
+  margin: 0;
+}
+
+.counts {
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  max-width: 34rem;
+  width: 100%;
+}
+
+.counts th,
+.counts td {
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  padding: 6px 0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.counts thead th {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.counts td,
+.counts thead th:not(:first-child) {
+  font-variant-numeric: tabular-nums;
+  padding-left: var(--pliegue-spacing-sm);
+  text-align: right;
+}
+
+.counts td {
+  white-space: nowrap;
+}
+
+/* Los encabezados de las cifras se parten: en el móvil, el nombre de cada fila necesita el sitio. */
+.counts thead th:not(:first-child) {
+  width: 7rem;
+}
+
+@media (max-width: 640px) {
+  .counts thead th:not(:first-child) {
+    width: 4.75rem;
+  }
+}
+
+.counts tbody th {
+  font-weight: 500;
+}
+
+.counts tbody th small {
+  color: var(--pliegue-color-text-secondary);
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.counts tr[data-disabled] td,
+.counts tr[data-disabled] th {
+  color: var(--pliegue-color-text-secondary);
+}
+
+.upToDate {
+  color: var(--pliegue-color-accent-warm);
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+.upToDate[data-complete] {
+  color: var(--pliegue-color-action-primary);
+}
+
+.booksLine {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.origins {
+  display: grid;
+  font-size: 0.9375rem;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  max-width: 34rem;
+  padding: 0;
+}
+
+.origins li {
+  align-items: baseline;
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 4px 0;
+}
+
+.origins strong {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.origins a,
+.origins small {
+  font-size: 0.8125rem;
+  grid-column: 1 / -1;
+}
+
+.origins a {
+  color: var(--pliegue-color-action-primary);
+}
+
+.origins small {
+  color: var(--pliegue-color-text-secondary);
+}
+
+.activity {
+  display: grid;
+  font-size: 0.875rem;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  max-width: 44rem;
+  padding: 0;
+}
+
+.activity li {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: 3.25rem minmax(0, 1fr);
+}
+
+.activity time {
+  color: var(--pliegue-color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity li[data-kind="checked"] span {
+  color: var(--pliegue-color-text-secondary);
+}
+
+.activity li[data-kind="error"] span {
+  color: var(--pliegue-color-status-danger);
+}
+
+.visuallyHidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 
 .consent {
@@ -207,7 +393,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .status[data-state="syncing"] > svg {
+  .status[data-state="syncing"] > svg,
+  .status[data-checking] > svg {
     animation: none;
   }
 }

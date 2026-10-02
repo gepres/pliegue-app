@@ -89,8 +89,9 @@ export function CloudSync() {
 
   useEffect(() => {
     if (!active) return;
+    // Comprobar si otro equipo cambió algo: no se anuncia como «Sincronizando…».
     function whenVisible() {
-      if (document.visibilityState === "visible") void requestSync();
+      if (document.visibilityState === "visible") void requestSync({ reason: "poll" });
     }
     const interval = window.setInterval(whenVisible, pollMs);
     document.addEventListener("visibilitychange", whenVisible);

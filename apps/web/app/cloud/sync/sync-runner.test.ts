@@ -197,6 +197,63 @@ describe("un libro que cambia de documento en este equipo (06.3b)", () => {
   });
 });
 
+describe("recuento de lo que hay en la cuenta (06.3c)", () => {
+  it("cuenta lo que hay en la nube, lo de este equipo y lo que espera su libro", async () => {
+    const cloud = memoryCloud();
+    const pc = device([book("pc-1", "Morel.pdf"), book("pc-2", "Ficciones.pdf")]);
+    pc.favorites.add("pc-1");
+    pc.favorites.add("pc-2");
+    const first = await pc.sync(cloud, "2026-10-02T12:00:00.000Z");
+    expect(first.collections.favorites).toEqual({ applied: 0, cloud: 2, disabled: false, local: 2, pushed: 2, waiting: 0 });
+    expect(first.booksWithState).toBe(2);
+
+    // El portátil solo tiene «Morel»: el favorito de «Ficciones» espera su libro.
+    const laptop = device([book("lap-9", "Morel.pdf")]);
+    const second = await laptop.sync(cloud, "2026-10-02T12:01:00.000Z");
+    expect(second.collections.favorites).toEqual({ applied: 1, cloud: 2, disabled: false, local: 0, pushed: 0, waiting: 1 });
+    expect(second.booksWithState).toBe(1);
+  });
+
+  it("antes de subir avisa de cuánto va a subir: si la subida falla, se sabe qué quedó pendiente", async () => {
+    const cloud = memoryCloud();
+    const pc = device([book("pc-1", "Morel.pdf"), book("pc-2", "Ficciones.pdf")]);
+    pc.favorites.add("pc-1");
+    pc.favorites.add("pc-2");
+    const failing: RemoteStore = {
+      pull: () => cloud.store().pull(null),
+      push: async () => {
+        throw new Error("sin conexión");
+      },
+    };
+    let planned = -1;
+    const context: SyncContext = {
+      keys: await indexLibraryKeys(pc.documents),
+      local: { favorites: [...pc.favorites] } as unknown as LocalSnapshot,
+      now: "2026-10-02T12:00:00.000Z",
+    };
+    const collection = {
+      apply: async () => undefined,
+      docKeyOf: (key: string) => key,
+      name: "favorites",
+      snapshot: (ctx: SyncContext) =>
+        new Map([...pc.favorites].map((id) => [ctx.keys.keyById.get(id)!, entry(ctx.keys.keyById.get(id)!, { favorite: true }, ctx.now, ctx.keys.keyById.get(id)!)])),
+    } satisfies SyncCollection;
+    await expect(
+      runSync({
+        collections: [collection],
+        context,
+        enabled: () => true,
+        onPlanned: (summary) => {
+          planned = summary.pushed;
+        },
+        remote: failing,
+        stateStore: memoryState(),
+      }),
+    ).rejects.toThrow("sin conexión");
+    expect(planned).toBe(2);
+  });
+});
+
 describe("red de seguridad contra borrados masivos", () => {
   const many = (prefix: string) => Array.from({ length: 12 }, (_, index) => book(`${prefix}-${index}`, `Libro ${index}.pdf`));
 

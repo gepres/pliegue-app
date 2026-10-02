@@ -41,10 +41,36 @@ export interface SyncStateStore {
   save(state: SyncState): Promise<void>;
 }
 
+/** Cómo queda una colección tras una vuelta: lo que la persona ve en Ajustes → Cuenta. */
+export interface CollectionCounts {
+  /** Lo recibido de otros equipos y aplicado aquí en esta vuelta. */
+  applied: number;
+  /** Elementos vivos en la cuenta (sin los borrados), tal como quedan tras esta vuelta. */
+  cloud: number;
+  /** Sin consentimiento: ni se sube ni se aplica (las fichas de la IA). */
+  disabled: boolean;
+  /** Elementos de este equipo. */
+  local: number;
+  /** Lo subido en esta vuelta, borrados incluidos. */
+  pushed: number;
+  /** De la cuenta, los que esperan su libro: aquí aún no está. */
+  waiting: number;
+}
+
 export interface SyncSummary {
   applied: number;
+  /** Libros de este equipo que tienen algo guardado en la cuenta. */
+  booksWithState: number;
+  collections: Record<string, CollectionCounts>;
   pulled: number;
   pushed: number;
+}
+
+/** Elementos vivos de una colección en la nube: lo pendiente manda sobre lo que recuerda la base. */
+function liveEntries(base: Record<string, SyncEntry>, pending: Record<string, SyncEntry>) {
+  const merged = new Map(Object.entries(base));
+  for (const [key, entry] of Object.entries(pending)) merged.set(key, entry);
+  return [...merged.values()].filter((entry) => !entry.deleted);
 }
 
 /**
@@ -117,6 +143,7 @@ export async function runSync({
   collections,
   context,
   enabled,
+  onPlanned,
   remote,
   stateStore,
 }: {
@@ -126,13 +153,18 @@ export async function runSync({
   context: SyncContext;
   /** Las colecciones con consentimiento que la persona aceptó. */
   enabled: (collection: SyncCollection) => boolean;
+  /**
+   * Antes de subir: cómo quedaría todo si la subida sale bien. Si falla, quien llama sabe
+   * cuántos cambios de este equipo quedaron sin subir.
+   */
+  onPlanned?: (summary: SyncSummary) => void;
   remote: RemoteStore;
   stateStore: SyncStateStore;
 }): Promise<SyncSummary> {
   const state = await stateStore.load();
   const since = state.cursor ? new Date(Date.parse(state.cursor) - pullOverlapMs).toISOString() : null;
   const rows = await remote.pull(since);
-  const summary: SyncSummary = { applied: 0, pulled: rows.length, pushed: 0 };
+  const summary: SyncSummary = { applied: 0, booksWithState: 0, collections: {}, pulled: rows.length, pushed: 0 };
 
   let cursor = state.cursor;
   for (const row of rows) {
@@ -152,6 +184,7 @@ export async function runSync({
 
   const next: SyncState = { base: {}, cursor, docIds: Object.fromEntries(docIds), pending: {} };
   const outgoing: OutgoingRow[] = [];
+  const booksWithState = new Set<string>();
 
   for (const collection of collections) {
     const remoteEntries = toMap(state.pending[collection.name]);
@@ -159,36 +192,59 @@ export async function runSync({
       if (row.collection === collection.name) remoteEntries.set(row.item_key, rowToEntry(row, collection));
     }
 
+    const local = collection.snapshot(context);
+
     if (!enabled(collection)) {
       // Sin consentimiento no se toca nada, pero lo que llega se guarda para cuando lo haya.
       next.base[collection.name] = state.base[collection.name] ?? {};
       next.pending[collection.name] = Object.fromEntries(remoteEntries);
-      continue;
+    } else {
+      const base = toMap(state.base[collection.name]);
+      if (moved.size) {
+        for (const [key, entry] of base) if (entry.docKey && moved.has(entry.docKey)) base.delete(key);
+      }
+
+      const merged = mergeCollection(base, local, remoteEntries, {
+        hasDocument: (docKey) => context.keys.documentByKey.has(docKey),
+        now: context.now,
+        ...(collection.resolve ? { resolve: collection.resolve } : {}),
+      });
+
+      if (merged.apply.length) await collection.apply(merged.apply, context);
+      summary.applied += merged.apply.length;
+      outgoing.push(...merged.push.map((entry) => entryToRow(collection.name, entry)));
+      next.base[collection.name] = Object.fromEntries(merged.base);
+      next.pending[collection.name] = Object.fromEntries(merged.pending);
+      summary.collections[collection.name] = {
+        applied: merged.apply.length,
+        cloud: 0,
+        disabled: false,
+        local: local.size,
+        pushed: merged.push.length,
+        waiting: 0,
+      };
     }
 
-    const base = toMap(state.base[collection.name]);
-    if (moved.size) {
-      for (const [key, entry] of base) if (entry.docKey && moved.has(entry.docKey)) base.delete(key);
+    const live = liveEntries(next.base[collection.name] ?? {}, next.pending[collection.name] ?? {});
+    const waiting = Object.values(next.pending[collection.name] ?? {}).filter((entry) => !entry.deleted).length;
+    summary.collections[collection.name] = {
+      ...(summary.collections[collection.name] ?? { applied: 0, disabled: true, local: local.size, pushed: 0 }),
+      cloud: live.length,
+      waiting,
+    };
+    for (const entry of live) {
+      if (entry.docKey && context.keys.documentByKey.has(entry.docKey)) booksWithState.add(entry.docKey);
     }
-
-    const merged = mergeCollection(base, collection.snapshot(context), remoteEntries, {
-      hasDocument: (docKey) => context.keys.documentByKey.has(docKey),
-      now: context.now,
-      ...(collection.resolve ? { resolve: collection.resolve } : {}),
-    });
-
-    if (merged.apply.length) await collection.apply(merged.apply, context);
-    summary.applied += merged.apply.length;
-    outgoing.push(...merged.push.map((entry) => entryToRow(collection.name, entry)));
-    next.base[collection.name] = Object.fromEntries(merged.base);
-    next.pending[collection.name] = Object.fromEntries(merged.pending);
   }
+
+  summary.booksWithState = booksWithState.size;
+  summary.pushed = outgoing.length;
+  onPlanned?.(summary);
 
   const deletions = outgoing.filter((row) => row.deleted).length;
   if (deletions > maxSilentDeletions && !allowMassDeletion) throw new MassDeletionError(deletions);
 
   if (outgoing.length) await remote.push(outgoing);
-  summary.pushed = outgoing.length;
   await stateStore.save(next);
   return summary;
 }
