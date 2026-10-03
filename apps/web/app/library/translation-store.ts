@@ -99,6 +99,21 @@ export async function listTranslatedUnits(documentId: string, pairId: string) {
   return new Set(keys.map((key) => String(key).slice(prefix.length)));
 }
 
+/** Cuántos fragmentos traducidos hay guardados en este navegador, de todos los libros. */
+export async function countTranslatedUnits() {
+  return withStore<number>("readonly", (store) => store.count());
+}
+
+/**
+ * Borra todas las traducciones guardadas (Ajustes → Datos y portabilidad). Los libros quedan
+ * como estaban; traducir de nuevo vuelve a llenarla. Devuelve cuántos fragmentos había.
+ */
+export async function clearAllTranslations() {
+  const count = await countTranslatedUnits();
+  await withStore("readwrite", (store) => store.clear());
+  return count;
+}
+
 /** Borra la traducción de un documento a un idioma; el libro queda como estaba. */
 export async function clearTranslation(documentId: string, pairId: string) {
   const units = await listTranslatedUnits(documentId, pairId);

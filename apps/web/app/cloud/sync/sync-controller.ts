@@ -142,6 +142,11 @@ export function registerLocalSource(reader: (() => LocalSource | null) | null) {
   readLocal = reader;
 }
 
+/** Lo de este equipo tal como lo ve la sincronización; también lo usa la copia de seguridad. */
+export function readLocalSource() {
+  return readLocal?.() ?? null;
+}
+
 function deviceId() {
   const key = "pliegue-device-id";
   try {
