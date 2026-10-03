@@ -148,12 +148,57 @@ export interface GeneralLibraryAccess {
   session: LibrarySession;
 }
 
-/** La sesión de la cookie, si es buena y su código sigue valiendo, con la carpeta que abre. */
+/** El identificador de un código, para saber si un enlace trae el mismo con el que ya se entró. */
+export async function accessCodeId(code: string, deps: LibraryServerDeps) {
+  const { config } = deps;
+  const normalized = normalizeAccessCode(code);
+  if (!config || !normalized) return null;
+  try {
+    const query = new URLSearchParams({ code: `eq.${normalized}`, library: `eq.${generalLibrary}`, select: "id" });
+    const response = await (deps.fetcher ?? fetch)(`${config.supabaseUrl}/rest/v1/library_access_codes?${query}`, {
+      cache: "no-store",
+      headers: supabaseHeaders(config.secretKey),
+    });
+    if (!response.ok) return null;
+    const [row] = (await response.json()) as Array<{ id: string }>;
+    return row?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * ¿Sigue en el registro la entrada de esta persona? Si el administrador la quitó, su sesión deja
+ * de valer en la próxima visita. Se compara el nombre sin distinguir mayúsculas, como las vueltas.
+ */
+export async function visitorStillRegistered(session: Pick<LibrarySession, "codeId" | "device" | "name">, deps: LibraryServerDeps) {
+  const { config } = deps;
+  if (!config) return false;
+  try {
+    const query = new URLSearchParams({ code_id: `eq.${session.codeId}`, device_id: `eq.${session.device}`, select: "visitor_name" });
+    const response = await (deps.fetcher ?? fetch)(`${config.supabaseUrl}/rest/v1/library_access_events?${query}`, {
+      cache: "no-store",
+      headers: supabaseHeaders(config.secretKey),
+    });
+    if (!response.ok) return false;
+    const name = session.name.toLocaleLowerCase("es");
+    const events = (await response.json()) as Array<{ visitor_name: string }>;
+    return events.some((event) => event.visitor_name.toLocaleLowerCase("es") === name);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * La sesión de la cookie, con la carpeta que abre, si la firma es buena, su código sigue valiendo
+ * y la persona sigue en el registro.
+ */
 export async function readGeneralLibraryAccess(cookieValue: string | undefined, deps: LibraryServerDeps): Promise<GeneralLibraryAccess | null> {
   const { config } = deps;
   if (!config) return null;
   const session = await verifySession(cookieValue, config.sessionSecret, deps.now?.() ?? Date.now());
   if (!session || session.library !== generalLibrary) return null;
-  if (!(await accessCodeStillValid(session.codeId, deps))) return null;
+  const [codeValid, registered] = await Promise.all([accessCodeStillValid(session.codeId, deps), visitorStillRegistered(session, deps)]);
+  if (!codeValid || !registered) return null;
   return { folderId: config.folderId, session };
 }

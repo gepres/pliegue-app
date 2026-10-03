@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 
-import { readGeneralLibraryAccess, readLibraryServerConfig } from "./access-server";
+import { accessCodeId, readGeneralLibraryAccess, readLibraryServerConfig } from "./access-server";
 import { sessionCookieName } from "./access-session";
 
 /** Para las páginas de servidor de la biblioteca general: ¿está montada y quién entra? */
@@ -11,4 +11,9 @@ export async function generalLibraryPageState() {
   const store = await cookies();
   const access = await readGeneralLibraryAccess(store.get(sessionCookieName)?.value, { config });
   return { access, apiKey, configured: true as const };
+}
+
+/** ¿El código de un enlace es el mismo con el que ya se está dentro? */
+export async function isCurrentAccessCode(code: string, currentCodeId: string) {
+  return (await accessCodeId(code, { config: readLibraryServerConfig() })) === currentCodeId;
 }

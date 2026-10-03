@@ -41,6 +41,8 @@ export function codeStatus(code: AccessCodeRow, now = Date.now()): CodeStatus {
 export interface CodeSummary {
   /** Equipos distintos que entraron con el código. */
   devices: number;
+  /** Veces que se entró, contando las vueltas. */
+  entries: number;
   lastEntry: string | null;
   /** Nombres distintos (sin distinguir mayúsculas ni espacios). */
   people: number;
@@ -52,11 +54,52 @@ export function summarizeCodes(codes: readonly AccessCodeRow[], events: readonly
     const own = events.filter((event) => event.code_id === code.id);
     summaries.set(code.id, {
       devices: new Set(own.map((event) => event.device_id)).size,
+      entries: own.length,
       lastEntry: own.reduce<string | null>((latest, event) => (!latest || event.created_at > latest ? event.created_at : latest), null),
       people: new Set(own.map((event) => event.visitor_name.trim().toLocaleLowerCase("es"))).size,
     });
   }
   return summaries;
+}
+
+const visitorKey = (event: AccessEventRow) => `${event.code_id}|${event.device_id}|${event.visitor_name.trim().toLocaleLowerCase("es")}`;
+
+/**
+ * Las entradas que son vueltas: alguien que ya había entrado con el mismo código, desde el mismo
+ * equipo y con el mismo nombre. Es la regla con la que el servidor decide no gastar otro uso.
+ */
+export function returningEntries(events: readonly AccessEventRow[]) {
+  const seen = new Set<string>();
+  const returning = new Set<number>();
+  for (const event of [...events].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id - right.id)) {
+    const key = visitorKey(event);
+    if (seen.has(key)) returning.add(event.id);
+    seen.add(key);
+  }
+  return returning;
+}
+
+const pad = (value: number) => String(value).padStart(2, "0");
+
+/** De la caducidad guardada al valor del campo de fecha, en la hora de quien la mira. */
+export function dateInputValue(iso: string | null) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "" : `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** Del campo de fecha («2026-10-31») al final de ese día en la hora de quien lo elige. */
+export function endOfDay(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day, 23, 59, 59).toISOString();
+}
+
+/** Usos máximos escritos: vacío es ilimitado; si no, un entero mayor que cero. */
+export function parseMaxUses(value: string): number | null | "invalid" {
+  if (!value.trim()) return null;
+  const uses = Number(value);
+  return Number.isInteger(uses) && uses >= 1 ? uses : "invalid";
 }
 
 /** «Chrome en Windows», «Safari en iPhone»: suficiente para reconocer un equipo. */
