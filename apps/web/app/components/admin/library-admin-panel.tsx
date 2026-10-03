@@ -13,13 +13,18 @@ import {
   accessLink,
   codeStatus,
   codeStatusLabels,
+  dateInputValue,
   describeBrowser,
+  endOfDay,
+  parseMaxUses,
+  returningEntries,
   suggestAccessCode,
   summarizeCodes,
   type AccessCodeRow,
   type AccessEventRow,
 } from "../../library-access/admin-summary";
 import { confirmAction } from "../app-ui/confirm-dialog";
+import { IconButton } from "../app-ui/controls";
 import { Icon } from "../app-ui/icons";
 import styles from "./library-admin-panel.module.css";
 
@@ -32,13 +37,6 @@ function shortDate(iso: string | null) {
 
 function dayDate(iso: string) {
   return new Date(iso).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" });
-}
-
-/** De «2026-10-31» (el campo de fecha) al final de ese día en la hora de quien lo elige. */
-function endOfDay(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  if (!year || !month || !day) return null;
-  return new Date(year, month - 1, day, 23, 59, 59).toISOString();
 }
 
 function describeError(error: { code?: string; message?: string } | null) {
@@ -66,8 +64,8 @@ function NewCodeForm({ onCreated, userId }: { onCreated: () => void; userId: str
       setMessage("El código lleva de 4 a 40 letras, números o guiones, sin espacios.");
       return;
     }
-    const uses = maxUses.trim() ? Number(maxUses) : null;
-    if (uses !== null && (!Number.isInteger(uses) || uses < 1)) {
+    const uses = parseMaxUses(maxUses);
+    if (uses === "invalid") {
       setMessage("Los usos máximos son un número entero mayor que cero, o vacío para ilimitados.");
       return;
     }
@@ -140,6 +138,76 @@ function NewCodeForm({ onCreated, userId }: { onCreated: () => void; userId: str
   );
 }
 
+/** Cambiar etiqueta, caducidad y usos máximos de un código ya creado. */
+function EditCodeForm({ code, onDone }: { code: AccessCodeRow; onDone: (message: string | null) => void }) {
+  const [label, setLabel] = useState(code.label);
+  const [expires, setExpires] = useState(dateInputValue(code.expires_at));
+  const [maxUses, setMaxUses] = useState(code.max_uses === null ? "" : String(code.max_uses));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const uses = parseMaxUses(maxUses);
+  const willBeFull = uses !== null && uses !== "invalid" && uses <= code.uses;
+  const willBeExpired = Boolean(expires) && (endOfDay(expires) ?? "") <= new Date().toISOString();
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (uses === "invalid") {
+      setError("Los usos máximos son un número entero mayor que cero, o vacío para ilimitados.");
+      return;
+    }
+    const client = cloudClient();
+    if (!client) return;
+    setBusy(true);
+    const { error: saveError } = await client
+      .from("library_access_codes")
+      .update({ expires_at: expires ? endOfDay(expires) : null, label: label.trim().slice(0, 120), max_uses: uses })
+      .eq("id", code.id);
+    setBusy(false);
+    if (saveError) {
+      setError(describeError(saveError));
+      return;
+    }
+    onDone(`${code.code} actualizado.`);
+  }
+
+  const id = (name: string) => `edit-${code.id}-${name}`;
+  return (
+    <form className={styles.editCode} onSubmit={(event) => void save(event)}>
+      <Field label="Etiqueta" labelFor={id("label")}>
+        <Input id={id("label")} maxLength={120} onChange={(event) => setLabel(event.target.value)} value={label} />
+      </Field>
+      <div className={styles.limits}>
+        <Field description="Vacío: no caduca." label="Caduca el" labelFor={id("expires")}>
+          <Input id={id("expires")} onChange={(event) => setExpires(event.target.value)} type="date" value={expires} />
+        </Field>
+        <Field description={`Vacío: ilimitado. Ya lo usaron ${plural(code.uses, "persona", "personas")}.`} label="Usos máximos" labelFor={id("uses")}>
+          <Input id={id("uses")} inputMode="numeric" min={1} onChange={(event) => setMaxUses(event.target.value)} type="number" value={maxUses} />
+        </Field>
+      </div>
+      {willBeFull || willBeExpired ? (
+        <p className={styles.warning} role="status">
+          {willBeExpired
+            ? "Con esa fecha el código queda caducado: nadie más podrá entrar con él."
+            : "Con ese tope el código queda agotado para personas nuevas; quien ya entró puede volver."}
+        </p>
+      ) : null}
+      {error ? (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className={styles.actions}>
+        <Button disabled={busy} size="sm" type="submit">
+          {busy ? "Guardando…" : "Guardar cambios"}
+        </Button>
+        <Button disabled={busy} onClick={() => onDone(null)} size="sm" type="button" variant="quiet">
+          Cancelar
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 function CodesList({
   codes,
   events,
@@ -150,6 +218,7 @@ function CodesList({
   onChanged: () => void;
 }) {
   const [message, setMessage] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
   const summaries = useMemo(() => summarizeCodes(codes, events), [codes, events]);
   const origin = typeof window === "undefined" ? "" : window.location.origin;
 
@@ -209,18 +278,35 @@ function CodesList({
                 {code.uses.toLocaleString("es")}
                 {code.max_uses !== null ? ` de ${code.max_uses.toLocaleString("es")}` : ""}{" "}
                 {code.max_uses === null && code.uses === 1 ? "uso" : "usos"} ·{" "}
-                {plural(summary?.people ?? 0, "persona", "personas")} · {plural(summary?.devices ?? 0, "equipo", "equipos")}
+                {plural(summary?.entries ?? 0, "entrada", "entradas")} · {plural(summary?.devices ?? 0, "equipo", "equipos")}
                 {summary?.lastEntry ? ` · última entrada ${shortDate(summary.lastEntry)}` : ""}
               </small>
               <small>
                 Creado el {dayDate(code.created_at)}
                 {code.expires_at ? ` · caduca el ${dayDate(code.expires_at)}` : " · no caduca"}
               </small>
+              {editing === code.id ? (
+                <EditCodeForm
+                  code={code}
+                  onDone={(done) => {
+                    setEditing(null);
+                    if (done) {
+                      setMessage(done);
+                      onChanged();
+                    }
+                  }}
+                />
+              ) : null}
               <div className={styles.codeActions}>
                 <Button onClick={() => void copy(code)} size="sm" variant="secondary">
                   <Icon name="copy" size={16} />
                   Copiar enlace
                 </Button>
+                {editing === code.id ? null : (
+                  <Button onClick={() => setEditing(code.id)} size="sm" variant="quiet">
+                    Editar
+                  </Button>
+                )}
                 <Button onClick={() => void toggle(code)} size="sm" variant="quiet">
                   {code.active ? "Desactivar" : "Activar"}
                 </Button>
@@ -241,9 +327,60 @@ function CodesList({
   );
 }
 
-function EventsList({ codes, events }: { codes: readonly AccessCodeRow[]; events: readonly AccessEventRow[] }) {
+function EventsList({
+  codes,
+  events,
+  onChanged,
+}: {
+  codes: readonly AccessCodeRow[];
+  events: readonly AccessEventRow[];
+  onChanged: () => void;
+}) {
   const [filter, setFilter] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<number | null>(null);
   const byId = useMemo(() => new Map(codes.map((code) => [code.id, code.code])), [codes]);
+  const returning = useMemo(() => returningEntries(events), [events]);
+
+  /**
+   * Quitar a una persona: se borran todas sus entradas con ese código desde ese equipo (también
+   * las que no caben en la lista), se libera su uso y su sesión deja de valer en la próxima visita.
+   */
+  async function removeVisitor(event: AccessEventRow) {
+    const client = cloudClient();
+    if (!client) return;
+    const code = codes.find((item) => item.id === event.code_id);
+    const { data, error: readError } = await client
+      .from("library_access_events")
+      .select("id,visitor_name")
+      .eq("code_id", event.code_id)
+      .eq("device_id", event.device_id);
+    if (readError) {
+      setMessage(describeError(readError));
+      return;
+    }
+    const name = event.visitor_name.trim().toLocaleLowerCase("es");
+    const ids = ((data ?? []) as Array<{ id: number; visitor_name: string }>)
+      .filter((row) => row.visitor_name.trim().toLocaleLowerCase("es") === name)
+      .map((row) => row.id);
+    const confirmed = await confirmAction({
+      confirmLabel: "Quitar",
+      description: `Se borran sus ${plural(Math.max(ids.length, 1), "entrada", "entradas")}${code ? ` con ${code.code}` : ""} desde este equipo y se libera su uso.`,
+      icon: "trash",
+      note: "Si está dentro, sale en su próxima visita. Con el código puede volver a entrar, y contará como un uso nuevo; para impedirlo, desactiva el código.",
+      title: `¿Quitar a ${event.visitor_name}?`,
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    setRemoving(event.id);
+    const { error } = await client.from("library_access_events").delete().in("id", ids.length ? ids : [event.id]);
+    if (!error && code && code.uses > 0) {
+      await client.from("library_access_codes").update({ uses: code.uses - 1 }).eq("id", code.id);
+    }
+    setRemoving(null);
+    setMessage(error ? describeError(error) : `${event.visitor_name} quitado${code ? ` de ${code.code}` : ""}: sale en su próxima visita.`);
+    onChanged();
+  }
   const visible = filter ? events.filter((event) => event.code_id === filter) : events;
 
   return (
@@ -265,8 +402,19 @@ function EventsList({ codes, events }: { codes: readonly AccessCodeRow[]; events
         <ol className={styles.events}>
           {visible.map((event) => (
             <li key={event.id}>
-              <strong>{event.visitor_name}</strong>
+              <strong>
+                {event.visitor_name}
+                {returning.has(event.id) ? <span className={styles.returned}>volvió</span> : null}
+              </strong>
               <span className={styles.mono}>{byId.get(event.code_id) ?? "—"}</span>
+              <IconButton
+                className={styles.removeEntry}
+                disabled={removing !== null}
+                icon="trash"
+                label={`Quitar a ${event.visitor_name}`}
+                onClick={() => void removeVisitor(event)}
+                size="sm"
+              />
               <small>
                 {shortDate(event.created_at)} · {describeBrowser(event.user_agent)} · equipo {event.device_id.slice(0, 6)}
               </small>
@@ -276,7 +424,15 @@ function EventsList({ codes, events }: { codes: readonly AccessCodeRow[]; events
       ) : (
         <p className={styles.note}>Nadie ha entrado todavía{filter ? " con este código" : ""}.</p>
       )}
-      <p className={styles.note}>Se muestran las últimas 300 entradas. El nombre es el que escribe cada visitante.</p>
+      {message ? (
+        <p className={styles.note} role="status">
+          {message}
+        </p>
+      ) : null}
+      <p className={styles.note}>
+        Se muestran las últimas 300 entradas. El nombre es el que escribe cada visitante; «volvió» es quien ya había entrado
+        con ese código desde el mismo equipo, y no gasta otro uso.
+      </p>
     </section>
   );
 }
@@ -397,7 +553,7 @@ export function LibraryAdminPanel() {
         </div>
         {loaded ? <CodesList codes={codes} events={events} onChanged={() => void load()} /> : <p className={styles.note}>Cargando…</p>}
       </section>
-      {loaded ? <EventsList codes={codes} events={events} /> : null}
+      {loaded ? <EventsList codes={codes} events={events} onChanged={load} /> : null}
     </Card>
   );
 }

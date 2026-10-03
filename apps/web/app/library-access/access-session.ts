@@ -99,6 +99,8 @@ export function normalizeAccessCode(value: string) {
 
 /** El nombre que da el visitante, limpio: sin saltos ni espacios de más, hasta 60 caracteres. */
 export function normalizeVisitorName(value: string) {
-  const name = value.normalize("NFC").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+  const cleaned = value.normalize("NFC").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+  // Por caracteres, no por unidades UTF-16: igual que left(…, 60) en la base, con emojis incluidos.
+  const name = Array.from(cleaned).slice(0, 60).join("").trim();
   return name.length ? name : null;
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  accessCodeId,
   accessCodeStillValid,
   readGeneralLibraryAccess,
   readLibraryServerConfig,
@@ -49,16 +50,17 @@ describe("sesión firmada", () => {
     expect(normalizeVisitorName("  Ana \n María  ")).toBe("Ana María");
     expect(normalizeVisitorName("   ")).toBeNull();
     expect(normalizeVisitorName("x".repeat(80))).toHaveLength(60);
+    expect(Array.from(normalizeVisitorName("😀".repeat(80)) ?? "")).toHaveLength(60);
   });
 });
 
 /** Un Supabase de mentira que responde al canje y a la consulta del código. */
-function supabase(rows: { redeem?: unknown; code?: unknown; status?: number }) {
+function supabase(rows: { redeem?: unknown; code?: unknown; events?: unknown; status?: number }) {
   const calls: Array<{ body: unknown; headers: Record<string, string>; url: string }> = [];
   const fetcher = (async (url: string, init?: RequestInit) => {
     calls.push({ body: init?.body ? JSON.parse(String(init.body)) : null, headers: init?.headers as Record<string, string>, url });
     if (rows.status) return new Response("{}", { status: rows.status });
-    const payload = url.includes("/rpc/") ? rows.redeem : rows.code;
+    const payload = url.includes("/rpc/") ? rows.redeem : url.includes("/library_access_events") ? (rows.events ?? [{ visitor_name: "Ana" }]) : rows.code;
     return new Response(JSON.stringify(payload), { headers: { "Content-Type": "application/json" }, status: 200 });
   }) as typeof fetch;
   return { calls, fetcher };
@@ -102,17 +104,35 @@ describe("canjear un código", () => {
 });
 
 describe("leer el acceso en cada visita", () => {
-  it("vale con la cookie buena y el código activo; deja de valer si se desactiva o caduca", async () => {
+  it("vale con la cookie buena, el código activo y la persona en el registro; deja de valer si no", async () => {
     const cookie = await signSession(session, "secreto");
     const active = supabase({ code: [{ active: true, expires_at: null }] });
     expect(await readGeneralLibraryAccess(cookie, { config, fetcher: active.fetcher, now: () => now })).toEqual({ folderId: "carpeta", session });
-    expect(active.calls[0]?.url).toBe("https://db.example/rest/v1/library_access_codes?id=eq.c1&select=active%2Cexpires_at");
+    expect(active.calls.map((call) => call.url).sort()).toEqual([
+      "https://db.example/rest/v1/library_access_codes?id=eq.c1&select=active%2Cexpires_at",
+      "https://db.example/rest/v1/library_access_events?code_id=eq.c1&device_id=eq.d1&select=visitor_name",
+    ]);
+
+    // El administrador la quitó del registro: fuera en la próxima visita. Una vuelta con otras mayúsculas sigue valiendo.
+    const removed = supabase({ code: [{ active: true, expires_at: null }], events: [{ visitor_name: "Luis" }] });
+    expect(await readGeneralLibraryAccess(cookie, { config, fetcher: removed.fetcher, now: () => now })).toBeNull();
+    const otherCase = supabase({ code: [{ active: true, expires_at: null }], events: [{ visitor_name: "ANA" }] });
+    expect(await readGeneralLibraryAccess(cookie, { config, fetcher: otherCase.fetcher, now: () => now })).toEqual({ folderId: "carpeta", session });
 
     const off = supabase({ code: [{ active: false, expires_at: null }] });
     expect(await readGeneralLibraryAccess(cookie, { config, fetcher: off.fetcher, now: () => now })).toBeNull();
     expect(await accessCodeStillValid("c1", { config, fetcher: supabase({ code: [{ active: true, expires_at: "2026-10-03T11:00:00.000Z" }] }).fetcher, now: () => now })).toBe(false);
     expect(await accessCodeStillValid("c1", { config, fetcher: supabase({ code: [] }).fetcher, now: () => now })).toBe(false);
     expect(await readGeneralLibraryAccess("falsa.firma", { config, fetcher: active.fetcher, now: () => now })).toBeNull();
+  });
+
+  it("busca el código de un enlace para saber si es el mismo con el que se entró", async () => {
+    const db = supabase({ code: [{ id: "c1" }] });
+    expect(await accessCodeId(" oct2026arequipa ", { config, fetcher: db.fetcher })).toBe("c1");
+    expect(db.calls[0]?.url).toBe("https://db.example/rest/v1/library_access_codes?code=eq.OCT2026AREQUIPA&library=eq.general&select=id");
+    expect(await accessCodeId("x", { config, fetcher: db.fetcher })).toBeNull();
+    expect(db.calls).toHaveLength(1);
+    expect(await accessCodeId("NOEXISTE", { config, fetcher: supabase({ code: [] }).fetcher })).toBeNull();
   });
 
   it("lee la configuración del entorno y no arranca a medias", () => {

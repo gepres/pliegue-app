@@ -4,7 +4,11 @@ import { normalizeAccessCode } from "./access-session";
 import {
   accessLink,
   codeStatus,
+  dateInputValue,
   describeBrowser,
+  endOfDay,
+  parseMaxUses,
+  returningEntries,
   suggestAccessCode,
   summarizeCodes,
   type AccessCodeRow,
@@ -39,8 +43,8 @@ describe("panel de la biblioteca general", () => {
         event({ created_at: "2026-10-02T12:00:00.000Z", device_id: "d2", id: 3, visitor_name: "Luis" }),
       ],
     );
-    expect(summaries.get("c1")).toEqual({ devices: 2, lastEntry: "2026-10-03T09:00:00.000Z", people: 2 });
-    expect(summaries.get("c2")).toEqual({ devices: 0, lastEntry: null, people: 0 });
+    expect(summaries.get("c1")).toEqual({ devices: 2, entries: 3, lastEntry: "2026-10-03T09:00:00.000Z", people: 2 });
+    expect(summaries.get("c2")).toEqual({ devices: 0, entries: 0, lastEntry: null, people: 0 });
   });
 
   it("reconoce el navegador y el sistema", () => {
@@ -60,4 +64,26 @@ describe("panel de la biblioteca general", () => {
     for (let attempt = 0; attempt < 20; attempt += 1) expect(normalizeAccessCode(suggestAccessCode(october))).not.toBeNull();
     expect(accessLink("https://pliegue.genaropretill.com/", "OCT2026AREQUIPA")).toBe("https://pliegue.genaropretill.com/biblioteca/general/OCT2026AREQUIPA");
   });
+  it("marca como vuelta a quien ya entró con el mismo código, equipo y nombre", () => {
+    const returning = returningEntries([
+      event({ created_at: "2026-10-02T10:00:00.000Z", device_id: "d1", id: 1, visitor_name: "Ana" }),
+      event({ created_at: "2026-10-03T10:00:00.000Z", device_id: "d1", id: 4, visitor_name: " ANA " }),
+      event({ created_at: "2026-10-02T11:00:00.000Z", device_id: "d2", id: 2, visitor_name: "Ana" }),
+      event({ code_id: "c2", created_at: "2026-10-02T12:00:00.000Z", device_id: "d1", id: 3, visitor_name: "Ana" }),
+    ]);
+    expect([...returning]).toEqual([4]);
+  });
+
+  it("pasa la caducidad y los usos máximos entre la base y los campos", () => {
+    const end = endOfDay("2026-10-31");
+    expect(end).not.toBeNull();
+    expect(dateInputValue(end)).toBe("2026-10-31");
+    expect(dateInputValue(null)).toBe("");
+    expect(endOfDay("")).toBeNull();
+    expect(parseMaxUses("")).toBeNull();
+    expect(parseMaxUses(" 50 ")).toBe(50);
+    expect(parseMaxUses("0")).toBe("invalid");
+    expect(parseMaxUses("2.5")).toBe("invalid");
+  });
+
 });
