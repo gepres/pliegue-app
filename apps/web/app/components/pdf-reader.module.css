@@ -100,6 +100,25 @@
   width: 100%;
 }
 
+/* ---- PDF en modo noche (filtro de lectura) ---------------------------------------------
+   Se invierte el dibujo de la página, no la app: fondo oscuro y letra clara. `hue-rotate`
+   devuelve los colores a su tono (un rojo sigue rojo, más oscuro). La capa de traducción se
+   invierte con ella: si no, sus cajas color papel quedarían blancas sobre la página oscura.
+   «Con tema oscuro» sigue al tema efectivo: el elegido o, en automático, el del sistema. */
+:global([data-pdf-night="always"]) .canvas,
+:global([data-pdf-night="always"]) .translationLayer,
+:global(:root[data-theme="dark"] [data-pdf-night="dark"]) .canvas,
+:global(:root[data-theme="dark"] [data-pdf-night="dark"]) .translationLayer {
+  filter: invert(0.9) hue-rotate(180deg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :global(:root:not([data-theme]) [data-pdf-night="dark"]) .canvas,
+  :global(:root:not([data-theme]) [data-pdf-night="dark"]) .translationLayer {
+    filter: invert(0.9) hue-rotate(180deg);
+  }
+}
+
 /* ---- Original y traducción enfrentados -----------------------------------------------
    Como un libro abierto: la página original a la izquierda del medianil y su gemela
    traducida a la derecha, a la misma altura. */
