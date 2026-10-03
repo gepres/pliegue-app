@@ -93,16 +93,31 @@ function wait(ms: number, signal?: AbortSignal) {
   });
 }
 
+/**
+ * Con qué se lee Drive: el token de la persona (su Drive, con su permiso) o la clave de API de
+ * Pliegue, que solo alcanza lo compartido como «cualquiera con el enlace» (la biblioteca
+ * general, sin cuenta de Google).
+ */
+export type DriveCredential = string | { apiKey: string };
+
+function authorize(url: string, credential: DriveCredential): { headers: HeadersInit; url: string } {
+  if (typeof credential === "string") return { headers: { Authorization: `Bearer ${credential}` }, url };
+  const keyed = new URL(url);
+  keyed.searchParams.set("key", credential.apiKey);
+  return { headers: {}, url: keyed.toString() };
+}
+
 /** Una petición autenticada con reintentos para lo pasajero (cuota, 5xx, red). */
-export async function driveRequest(url: string, token: string, options: DriveRequestOptions = {}) {
+export async function driveRequest(url: string, token: DriveCredential, options: DriveRequestOptions = {}) {
   const fetcher = options.fetcher ?? fetch;
   const delays = options.retryDelaysMs ?? defaultRetryDelays;
+  const request = authorize(url, token);
 
   for (let attempt = 0; ; attempt += 1) {
     let response: Response;
     try {
-      response = await fetcher(url, {
-        headers: { Authorization: `Bearer ${token}` },
+      response = await fetcher(request.url, {
+        headers: request.headers,
         signal: options.signal ?? null,
       });
     } catch (error) {
@@ -124,11 +139,11 @@ export async function driveRequest(url: string, token: string, options: DriveReq
   }
 }
 
-async function driveJson<Result>(url: string, token: string, options?: DriveRequestOptions) {
+async function driveJson<Result>(url: string, token: DriveCredential, options?: DriveRequestOptions) {
   return (await (await driveRequest(url, token, options)).json()) as Result;
 }
 
-export function getDriveFile(fileId: string, token: string, options?: DriveRequestOptions) {
+export function getDriveFile(fileId: string, token: DriveCredential, options?: DriveRequestOptions) {
   const query = new URLSearchParams({ fields: driveFileFields, supportsAllDrives: "true" });
   return driveJson<DriveFileMeta>(`${driveApiBase}/files/${encodeURIComponent(fileId)}?${query}`, token, options);
 }
@@ -144,7 +159,7 @@ export async function getDriveUser(token: string, options?: DriveRequestOptions)
 }
 
 /** Los hijos directos de una carpeta, página a página. En Shared Drives también. */
-export async function listDriveChildren(folderId: string, token: string, options?: DriveRequestOptions) {
+export async function listDriveChildren(folderId: string, token: DriveCredential, options?: DriveRequestOptions) {
   const children: DriveFileMeta[] = [];
   let pageToken: string | undefined;
 
@@ -181,7 +196,7 @@ export interface DriveFolderWalk {
  */
 export async function walkDriveFolder(
   folderId: string,
-  token: string,
+  token: DriveCredential,
   options: DriveRequestOptions & { concurrency?: number; limit?: number; onFolder?: (visited: number) => void } = {},
 ): Promise<DriveFolderWalk> {
   const limit = options.limit ?? maxLinkedFolderFiles;
@@ -239,7 +254,7 @@ export async function walkDriveFolder(
 /** Descarga el contenido, con avance si Drive dice cuánto ocupa. */
 export async function downloadDriveFile(
   file: Pick<DriveFileMeta, "id" | "mimeType">,
-  token: string,
+  token: DriveCredential,
   options: DriveRequestOptions & { onProgress?: (loaded: number, total: number | null) => void } = {},
 ): Promise<Blob> {
   const response = await driveRequest(driveContentUrl(file), token, options);

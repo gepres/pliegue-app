@@ -37,6 +37,18 @@ valor no existe o no es válido, usa `development`.
 Las tres son públicas por diseño y ninguna es un secreto: el token de acceso lo emite Google a
 cada persona y vive solo en la memoria de su pestaña. Pasos en `docs/google-drive.md`.
 
+## Biblioteca general (opcional, solo servidor)
+
+- `SUPABASE_SECRET_KEY` (o `SUPABASE_SERVICE_ROLE_KEY`): canjea los códigos de acceso en
+  Supabase. **Es un secreto**: solo la lee el servidor y nunca lleva `NEXT_PUBLIC_`.
+- `PLIEGUE_GENERAL_FOLDER_ID`: la carpeta de Drive compartida como «cualquiera con el enlace».
+  Solo se entrega a quien entra con un código válido.
+- `PLIEGUE_LIBRARY_SECRET` (opcional): firma las sesiones; si falta, se usa la clave secreta.
+
+Sin las dos primeras, `/biblioteca/general` dice que aún no está abierta. Además, la clave
+`NEXT_PUBLIC_GOOGLE_API_KEY` debe permitir la Google Drive API. Pasos en
+`docs/biblioteca-general.md`.
+
 Las flags se leen a través de `apps/web/app/config/public-config.ts`. No se deben
 consultar variables de entorno directamente desde componentes.
 
