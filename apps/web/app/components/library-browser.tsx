@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button, Card, Field, Select, Switch, Tag, buttonClassName, cx } from "@pliegue/ui";
 
@@ -51,6 +51,7 @@ import {
   type LibraryView,
 } from "./library/library-document-tile";
 import libraryStyles from "./library/library.module.css";
+import { categoryChipLimit, sortLabels, usePhoneWidth } from "./library/library-view-options";
 import { LinkingUnavailableNotice } from "./library/linking-unavailable-notice";
 import { useCatalogAi } from "../ai/ai-readiness";
 import { afterLibraryGrowth } from "../guide/next-steps";
@@ -59,37 +60,6 @@ import { suggestNextStep } from "./app-ui/next-step-dialog";
 import { forgetLinkedFiles, unlinkFilesConfirmation } from "./linked-files-panel";
 import { StaleIndexNotice } from "./stale-index-notice";
 import styles from "../(workspace)/app/workspace.module.css";
-
-const sortLabels: Record<DocumentSortOrder, string> = {
-  author: "Autor",
-  recent: "Orden de llegada",
-  series: "Serie y tomo",
-  title: "Título",
-  year: "Año, más reciente primero",
-};
-
-/** Cuántas categorías caben como atajo bajo el buscador antes de pedir el panel de filtros. */
-const categoryChipLimit = 8;
-
-/**
- * En el teléfono el buscador deja unos 170 px para escribir y «Buscar por título, autor o
- * concepto» se cortaba a media palabra: ahí va una ayuda que cabe entera.
- */
-const phoneWidthQuery = "(max-width: 640px)";
-
-function subscribeToPhoneWidth(onChange: () => void) {
-  const query = window.matchMedia(phoneWidthQuery);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-}
-
-function usePhoneWidth() {
-  return useSyncExternalStore(
-    subscribeToPhoneWidth,
-    () => window.matchMedia(phoneWidthQuery).matches,
-    () => false,
-  );
-}
 
 const availabilityLabels: Record<AvailabilityState, string> = {
   available: "Disponible",

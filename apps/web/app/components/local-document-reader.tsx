@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { Button, Card, Tag, buttonClassName } from "@pliegue/ui";
 
@@ -106,6 +106,27 @@ import { PageHeader } from "./workspace-page";
 import styles from "./local-document-reader.module.css";
 
 type LocalDocument = LocalReaderDocument;
+
+/**
+ * Dónde está el lector: adónde se vuelve y, si el libro no es de la biblioteca personal, de
+ * dónde se carga su archivo. La biblioteca general lo usa para leer de su carpeta pública de
+ * Drive y volver a ella; en la personal vale lo de siempre.
+ */
+export interface ReaderPlacement {
+  backHref: string;
+  /** «la Biblioteca», «la biblioteca general»: completa «Volver a…». */
+  backLabel: string;
+  /** Lo que se lee junto a la flecha de la barra: «Biblioteca», «Biblioteca general». */
+  backShortLabel: string;
+  loadFile?: ((onProgress: (loaded: number, total: number | null) => void) => Promise<Blob>) | undefined;
+}
+
+const ReaderPlacementContext = createContext<ReaderPlacement>({
+  backHref: "/app/biblioteca",
+  backLabel: "la Biblioteca",
+  backShortLabel: "Biblioteca",
+});
+export const ReaderPlacementProvider = ReaderPlacementContext.Provider;
 
 
 type PreviewState =
@@ -386,6 +407,8 @@ function PreviewCanvas({
   resumeRequested: boolean;
   structured: StructuredTranslationProps;
 }) {
+  const placement = useContext(ReaderPlacementContext);
+  const loadFileRef = useRef(placement.loadFile);
   // El archivo sale de la copia elegida; las copias de un libro tienen el mismo contenido.
   const documentId = source.id;
   const format = source.format;
@@ -402,7 +425,14 @@ function PreviewCanvas({
 
     async function loadPreview() {
       try {
-        const record = sourceId
+        const loadFile = loadFileRef.current;
+        const record = loadFile
+          ? {
+              blob: await loadFile((loaded, total) => {
+                if (active) setDownload({ loaded, total });
+              }),
+            }
+          : sourceId
           ? await readLinkedDocumentFile(documentId, sourceId)
           : referenceKind === "local-file"
             ? await readLinkedFile(documentId)
@@ -532,9 +562,9 @@ function PreviewCanvas({
           ) : null}
           <Link
             className={buttonClassName({ size: "md", variant: "quiet" })}
-            href="/app/biblioteca"
+            href={placement.backHref}
           >
-            Volver a Biblioteca
+            Volver a {placement.backLabel}
           </Link>
         </div>
       </Card>
@@ -628,6 +658,7 @@ function PermissionPanel({
   /** `drive`: no es un permiso del navegador sino conectar la cuenta de Google. */
   variant?: "drive" | "local";
 }) {
+  const placement = useContext(ReaderPlacementContext);
   const [requestState, setRequestState] = useState<
     "denied" | "error" | "idle" | "requesting" | "unanswered"
   >("idle");
@@ -679,9 +710,9 @@ function PermissionPanel({
         ) : null}
         <Link
           className={buttonClassName({ size: "md", variant: "quiet" })}
-          href="/app/biblioteca"
+          href={placement.backHref}
         >
-          Volver a Biblioteca
+          Volver a {placement.backLabel}
         </Link>
       </div>
       <p aria-live="polite" className={styles.permissionStatus} role="status">
@@ -899,7 +930,7 @@ function pageUnitId(unit: number) {
   return `page:${unit}`;
 }
 
-function LocalReaderShell({
+export function LocalReaderShell({
   alternateCopy,
   document,
   permissionRequired = false,
@@ -919,6 +950,7 @@ function LocalReaderShell({
   resumeRequested: boolean;
   sourceName?: string | undefined;
 }) {
+  const placement = useContext(ReaderPlacementContext);
   const [contentReady, setContentReady] = useState(false);
   // El visor de PDF cuenta las páginas él mismo; el resto de formatos se miden por
   // desplazamiento. `null` es lo que distingue un caso del otro.
@@ -1293,12 +1325,12 @@ function LocalReaderShell({
 
       <header className={styles.appBar} onFocus={chrome.show}>
         <Link
-          aria-label="Volver a la Biblioteca"
+          aria-label={`Volver a ${placement.backLabel}`}
           className={styles.appBarBack}
-          href="/app/biblioteca"
+          href={placement.backHref}
         >
           <Icon name="back" />
-          <span>Biblioteca</span>
+          <span>{placement.backShortLabel}</span>
         </Link>
 
         <div className={styles.appBarTitle}>
@@ -1570,7 +1602,7 @@ function useScrollPosition(rootRef: React.RefObject<HTMLElement | null>, active:
   return position;
 }
 
-function ReaderMessage({
+export function ReaderMessage({
   description,
   eyebrow,
   title,
@@ -1579,16 +1611,17 @@ function ReaderMessage({
   eyebrow: string;
   title: string;
 }) {
+  const placement = useContext(ReaderPlacementContext);
   return (
     <>
       <PageHeader description={description} eyebrow={eyebrow} title={title} />
       <Card className={styles.readerStatus} tone="subtle">
-        <h2>Regresa a la Biblioteca</h2>
+        <h2>Regresa a {placement.backLabel}</h2>
         <p>{description}</p>
         <div>
           <Link
             className={buttonClassName({ size: "md", variant: "primary" })}
-            href="/app/biblioteca"
+            href={placement.backHref}
           >
             Explorar documentos
           </Link>

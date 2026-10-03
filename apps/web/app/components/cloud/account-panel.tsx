@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { Button, Card, Field, Input, Switch, Tag } from "@pliegue/ui";
@@ -17,6 +18,7 @@ import {
   useSyncChoices,
   useSyncStatus,
 } from "../../cloud/sync/sync-controller";
+import { useIsPliegueAdmin } from "../../cloud/admin-store";
 import { describeChanges } from "../../cloud/sync/sync-activity";
 import { confirmAction } from "../app-ui/confirm-dialog";
 import { Icon } from "../app-ui/icons";
@@ -325,6 +327,17 @@ function SignedIn({ email, provider, userId }: { email: string | null; provider:
 }
 
 /** Ajustes → Cuenta. Opcional: sin ella, Pliegue sigue siendo local, como siempre. */
+/** Solo para quien administra la biblioteca general: un acceso a sus códigos. */
+function AdminLink() {
+  const admin = useIsPliegueAdmin();
+  if (!admin) return null;
+  return (
+    <p className={styles.note}>
+      Administras la <Link href="/app/ajustes/biblioteca-general">biblioteca general</Link>: códigos de acceso y quién entró.
+    </p>
+  );
+}
+
 export function AccountPanel() {
   const account = useAccount();
 
@@ -351,6 +364,7 @@ export function AccountPanel() {
       ) : (
         <SignInForm linkError={account.linkError} />
       )}
+      <AdminLink />
     </Card>
   );
 }

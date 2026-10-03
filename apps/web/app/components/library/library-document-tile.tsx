@@ -60,6 +60,7 @@ export function LibraryDocumentTile({
   isFavorite,
   onToggleFavorite,
   originLabel,
+  readerHref,
   showDetails = false,
   view,
 }: {
@@ -71,6 +72,8 @@ export function LibraryDocumentTile({
   isFavorite: boolean;
   onToggleFavorite: () => void;
   originLabel: string;
+  /** Adónde lleva abrirlo; por defecto, al lector de la biblioteca personal. */
+  readerHref?: ((resume: boolean) => string) | undefined;
   /** En cuadrícula, muestra también la ficha. La lista la muestra siempre. */
   showDetails?: boolean;
   view: LibraryView;
@@ -82,10 +85,12 @@ export function LibraryDocumentTile({
     ? document.catalog.authors.join(", ")
     : document.author;
   const readable = document.reference.kind === "local-copy" || Boolean(document.linked);
-  const href = {
-    pathname: "/app/lector",
-    query: percent > 1 ? { document: document.id, resume: "1" } : { document: document.id },
-  };
+  const href = readerHref
+    ? readerHref(percent > 1)
+    : {
+        pathname: "/app/lector",
+        query: percent > 1 ? { document: document.id, resume: "1" } : { document: document.id },
+      };
   const unavailable = document.availability !== "available" && document.reference.kind !== "local-copy";
   const volume = document.bibliographic?.volume ?? null;
   const duplicate = Boolean(document.organization?.duplicateOf);
