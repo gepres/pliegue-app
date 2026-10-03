@@ -11,6 +11,81 @@
   gap: 6px;
 }
 
+/* ---- Filtro de lectura -------------------------------------------------------------------
+   Capas fijas entre la página (las capas del PDF llegan a 3) y los mandos del lector (el dock
+   del PDF va en 5, las barras en 30, notas y paneles desde 60): tiñen y atenúan lo que se lee,
+   no los botones. Ninguna recibe clics. */
+.toneLayer,
+.dimLayer,
+.focusMask {
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  z-index: 4;
+}
+
+/* El modo de mezcla de cada capa de tono va en línea: «multiply» para el color del papel,
+   «saturation» para quitar el color en el gris. */
+
+.dimLayer {
+  background: #000;
+}
+
+.focusMask {
+  background: rgb(10 10 12 / 58%);
+  bottom: auto;
+  transition:
+    top 90ms linear,
+    height 90ms linear;
+}
+
+.focusMask[data-focus-edge="top"] {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 18%);
+}
+
+.focusMask[data-focus-edge="bottom"] {
+  box-shadow: 0 -1px 0 rgb(255 255 255 / 18%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focusMask {
+    transition: none;
+  }
+}
+
+.appearanceSection {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  padding-top: var(--pliegue-spacing-md);
+}
+
+.appearanceRange {
+  accent-color: var(--pliegue-color-action-primary);
+  width: 100%;
+}
+
+.appearanceRangeRow {
+  align-items: center;
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: minmax(0, 1fr) 3.5ch;
+}
+
+.appearanceRangeRow output {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+.appearanceHint {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
 .appearanceLabel {
   align-items: center;
   color: var(--pliegue-color-text-secondary);

@@ -88,6 +88,7 @@ import {
   resolveLocalReaderDocument,
   type LocalReaderDocument,
 } from "../library/local-reader-state";
+import { useReadingFilter } from "../preferences/reading-filter-store";
 import { PdfReader, type PdfLayoutBlock, type PdfPageTranslationView, type PdfReaderProps } from "./pdf-reader";
 import type { StructuredDocumentBlock, StructuredDocumentSection } from "../library/structured-document-extractor";
 import { ParallelBlocks } from "./reader/parallel-blocks";
@@ -101,6 +102,7 @@ import {
   type TranslationLayout,
   type TranslationView,
 } from "./reader/translation-view";
+import { ReadingFilterLayer } from "./reader/reading-filter-layer";
 import { useBookTranslation } from "./reader/use-book-translation";
 import { PageHeader } from "./workspace-page";
 import styles from "./local-document-reader.module.css";
@@ -951,6 +953,7 @@ export function LocalReaderShell({
   sourceName?: string | undefined;
 }) {
   const placement = useContext(ReaderPlacementContext);
+  const readingFilter = useReadingFilter();
   const [contentReady, setContentReady] = useState(false);
   // El visor de PDF cuenta las páginas él mismo; el resto de formatos se miden por
   // desplazamiento. `null` es lo que distingue un caso del otro.
@@ -1317,8 +1320,10 @@ export function LocalReaderShell({
       data-chrome={chrome.hidden ? "hidden" : "visible"}
       data-panel={panelOpen ? "open" : "closed"}
       data-parallel={parallel ? "true" : undefined}
+      data-pdf-night={readingFilter.pdfNight}
       data-self-scrolling={selfScrolling ? "true" : "false"}
     >
+      <ReadingFilterLayer />
       <div aria-hidden="true" className={styles.progressLine}>
         <span style={{ transform: `scaleX(${(selfScrolling ? progressPercent : position) / 100})` }} />
       </div>
