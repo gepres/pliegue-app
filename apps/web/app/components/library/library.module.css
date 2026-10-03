@@ -198,6 +198,17 @@
   scrollbar-width: none;
 }
 
+/*
+ * Con ratón no hay gesto para deslizar de lado y la barra va oculta: los últimos atajos
+ * quedaban tapados. Ahí bajan a otra línea; en pantallas táctiles se siguen deslizando.
+ */
+@media (hover: hover) and (pointer: fine) {
+  .chips {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
+
 .chip {
   align-items: center;
   background: transparent;
