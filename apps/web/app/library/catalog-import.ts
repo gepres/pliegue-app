@@ -354,9 +354,17 @@ export function documentMatchKeys(document: LibraryDocument) {
   const record = document as LibraryDocument & {
     fingerprint?: string;
     originalName?: string;
+    relativePath?: string;
+    sourceId?: string | null;
   };
+  // Una carpeta de Drive vinculada tiene rutas relativas como una local: si es la misma
+  // biblioteca sincronizada, el índice JSON encaja por ruta aunque la huella cambie.
   const relativePath =
-    document.reference.kind === "local-folder" ? document.reference.relativePath : null;
+    document.reference.kind === "local-folder"
+      ? document.reference.relativePath
+      : document.reference.kind === "google-drive" && record.sourceId
+        ? (record.relativePath ?? null)
+        : null;
   const fileName = record.originalName ?? relativePath?.split("/").at(-1) ?? null;
 
   return catalogMatchKeys({

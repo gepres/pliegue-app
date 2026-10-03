@@ -88,12 +88,18 @@ export function reconcileReadingProgress(
   current: ReadingProgressRecord | undefined,
   incoming: ReadingProgressRecord,
   allowRegression = false,
+  /**
+   * Lo entrante ya ganó fuera —la sincronización resolvió el conflicto, «gana el avance
+   * mayor»—: se escribe tal cual, aunque su fecha sea anterior. Si no, este equipo conservaría
+   * su avance menor, la vuelta siguiente lo subiría y la nube retrocedería (06.3d).
+   */
+  authoritative = false,
 ) {
   const normalizedIncoming = {
     ...incoming,
     percent: normalizePercent(incoming.percent),
   };
-  if (!current) return normalizedIncoming;
+  if (!current || authoritative) return normalizedIncoming;
 
   const currentTimestamp = timestamp(current.updatedAt);
   const incomingTimestamp = timestamp(normalizedIncoming.updatedAt);
@@ -191,7 +197,7 @@ function subscribe(onStoreChange: () => void) {
 export function saveReadingProgress(
   document: Pick<LibraryDocument, "format" | "id" | "origin" | "title">,
   percent: number,
-  options: { allowRegression?: boolean; updatedAt?: string } = {},
+  options: { allowRegression?: boolean; authoritative?: boolean; updatedAt?: string } = {},
 ) {
   const entries = readProgress();
   const current = entries.find((entry) => entry.documentId === document.id);
@@ -207,6 +213,7 @@ export function saveReadingProgress(
     current,
     incoming,
     options.allowRegression,
+    options.authoritative,
   );
   const nextEntries = [nextRecord, ...entries.filter((entry) => entry.documentId !== document.id)];
   writeProgress(nextEntries);
@@ -223,4 +230,29 @@ export function useReadingProgressEntries() {
 
 export function useReadingProgress(documentId: string) {
   return useReadingProgressEntries().find((entry) => entry.documentId === documentId);
+}
+
+/**
+ * El avance de una copia pasa a la que guarda el estado del libro. Se queda el mayor de los
+ * dos, con la fecha más reciente: juntar copias nunca hace retroceder la lectura.
+ */
+export function transferReadingProgress(fromId: string, toId: string) {
+  const entries = readProgress();
+  const from = entries.find((entry) => entry.documentId === fromId);
+  if (fromId === toId || !from) return false;
+  const to = entries.find((entry) => entry.documentId === toId);
+  const latest = [from.updatedAt, to?.updatedAt ?? ""].sort().at(-1) ?? from.updatedAt;
+  const merged: ReadingProgressRecord = to
+    ? { ...to, percent: Math.max(to.percent, from.percent), updatedAt: latest }
+    : { ...from, documentId: toId };
+  writeProgress([
+    merged,
+    ...entries.filter((entry) => entry.documentId !== fromId && entry.documentId !== toId),
+  ]);
+  return true;
+}
+
+/** El avance guardado, fuera de React. */
+export function readReadingProgressEntries() {
+  return readProgress();
 }

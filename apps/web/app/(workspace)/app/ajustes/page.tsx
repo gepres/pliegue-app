@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
-import { Card, Tag } from "@pliegue/ui";
-
 import { AiSettingsPanel } from "../../../components/ai-settings-panel";
 import { AccountPanel } from "../../../components/cloud/account-panel";
 import { InstallAppCard } from "../../../components/pwa/install-app";
 import { PreferencesPanel } from "../../../components/preferences-panel";
+import { DataSettingsPanel } from "../../../components/settings/data-settings-panel";
 import { SettingsLayout } from "../../../components/settings/settings-layout";
+import { SourcesSettingsPanel } from "../../../components/settings/sources-settings-panel";
 import { WorkspaceModePanel } from "../../../components/workspace-mode-panel";
 import styles from "../workspace.module.css";
 
@@ -53,27 +53,15 @@ export default function SettingsPage() {
           label: "Inteligencia artificial",
         },
         {
-          content: (
-            <Card className={styles.settingsCard}>
-              <Tag>Próximo incremento</Tag>
-              <h2>Drive y archivos locales</h2>
-              <p>Administra ubicaciones conectadas, permisos y disponibilidad offline.</p>
-            </Card>
-          ),
-          description: "Ubicaciones conectadas y permisos",
+          content: <SourcesSettingsPanel />,
+          description: "Ubicaciones, permisos y datos guardados",
           icon: "folder",
           id: "fuentes",
           label: "Fuentes",
         },
         {
-          content: (
-            <Card className={styles.settingsCard}>
-              <Tag>Política en definición</Tag>
-              <h2>Datos y portabilidad</h2>
-              <p>Revisa retención, exportación, copias de seguridad y borrado.</p>
-            </Card>
-          ),
-          description: "Retención, exportación y borrado",
+          content: <DataSettingsPanel />,
+          description: "Copia de seguridad, exportación y borrado",
           icon: "database",
           id: "datos",
           label: "Datos y portabilidad",

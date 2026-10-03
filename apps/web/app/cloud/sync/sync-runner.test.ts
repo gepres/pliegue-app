@@ -94,14 +94,16 @@ function device(documents: LibraryDocument[]) {
   const state = memoryState();
 
   return {
+    /** Los documentos de este equipo: un test puede cambiarlos entre una vuelta y otra. */
+    documents,
     favorites,
-    async sync(cloud: ReturnType<typeof memoryCloud>, now: string) {
+    async sync(cloud: ReturnType<typeof memoryCloud>, now: string, options: { allowMassDeletion?: boolean } = {}) {
       const context: SyncContext = {
         keys: await indexLibraryKeys(documents),
         local: { favorites: [...favorites] } as unknown as LocalSnapshot,
         now,
       };
-      return runSync({ collections: [collection], context, enabled: () => true, remote: cloud.store(), stateStore: state });
+      return runSync({ collections: [collection], context, enabled: () => true, remote: cloud.store(), stateStore: state, ...options });
     },
   };
 }
@@ -147,5 +149,134 @@ describe("sincronización entre dos equipos", () => {
     await pc.sync(cloud, "2026-09-30T12:01:00.000Z");
     const again = await pc.sync(cloud, "2026-09-30T12:06:00.000Z");
     expect(again).toMatchObject({ applied: 0, pushed: 0 });
+  });
+});
+
+describe("un libro que cambia de documento en este equipo (06.3b)", () => {
+  it("moverlo de carpeta no borra su favorito en la nube: el documento nuevo lo recibe", async () => {
+    const cloud = memoryCloud();
+    const pc = device([book("pc-raíz-morel", "Morel.pdf")]);
+    pc.favorites.add("pc-raíz-morel");
+    await pc.sync(cloud, "2026-10-02T12:00:00.000Z");
+
+    // «Buscar cambios» tras moverlo: el mismo archivo es ahora otro documento, y el favorito
+    // sigue guardado con el identificador viejo.
+    pc.documents.splice(0, 1, book("pc-literatura-morel", "Morel.pdf"));
+    const summary = await pc.sync(cloud, "2026-10-02T12:01:00.000Z");
+
+    expect(summary.pushed).toBe(0);
+    expect([...cloud.rows.values()].every((row) => !row.deleted)).toBe(true);
+    expect(pc.favorites.has("pc-literatura-morel")).toBe(true);
+  });
+
+  it("si el libro vuelve a moverse, se sigue reconociendo", async () => {
+    const cloud = memoryCloud();
+    const pc = device([book("a", "Morel.pdf")]);
+    pc.favorites.add("a");
+    await pc.sync(cloud, "2026-10-02T12:00:00.000Z");
+    pc.documents.splice(0, 1, book("b", "Morel.pdf"));
+    await pc.sync(cloud, "2026-10-02T12:01:00.000Z");
+    pc.documents.splice(0, 1, book("c", "Morel.pdf"));
+    await pc.sync(cloud, "2026-10-02T12:02:00.000Z");
+    expect(pc.favorites.has("c")).toBe(true);
+    expect([...cloud.rows.values()].every((row) => !row.deleted)).toBe(true);
+  });
+
+  it("quitar el favorito del libro movido, después, sí se sube como borrado", async () => {
+    const cloud = memoryCloud();
+    const pc = device([book("a", "Morel.pdf")]);
+    pc.favorites.add("a");
+    await pc.sync(cloud, "2026-10-02T12:00:00.000Z");
+    pc.documents.splice(0, 1, book("b", "Morel.pdf"));
+    await pc.sync(cloud, "2026-10-02T12:01:00.000Z");
+
+    pc.favorites.delete("a");
+    pc.favorites.delete("b");
+    await pc.sync(cloud, "2026-10-02T12:02:00.000Z");
+    expect([...cloud.rows.values()][0]?.deleted).toBe(true);
+  });
+});
+
+describe("recuento de lo que hay en la cuenta (06.3c)", () => {
+  it("cuenta lo que hay en la nube, lo de este equipo y lo que espera su libro", async () => {
+    const cloud = memoryCloud();
+    const pc = device([book("pc-1", "Morel.pdf"), book("pc-2", "Ficciones.pdf")]);
+    pc.favorites.add("pc-1");
+    pc.favorites.add("pc-2");
+    const first = await pc.sync(cloud, "2026-10-02T12:00:00.000Z");
+    expect(first.collections.favorites).toEqual({ applied: 0, cloud: 2, disabled: false, local: 2, pushed: 2, waiting: 0 });
+    expect(first.booksWithState).toBe(2);
+
+    // El portátil solo tiene «Morel»: el favorito de «Ficciones» espera su libro.
+    const laptop = device([book("lap-9", "Morel.pdf")]);
+    const second = await laptop.sync(cloud, "2026-10-02T12:01:00.000Z");
+    expect(second.collections.favorites).toEqual({ applied: 1, cloud: 2, disabled: false, local: 0, pushed: 0, waiting: 1 });
+    expect(second.booksWithState).toBe(1);
+  });
+
+  it("antes de subir avisa de cuánto va a subir: si la subida falla, se sabe qué quedó pendiente", async () => {
+    const cloud = memoryCloud();
+    const pc = device([book("pc-1", "Morel.pdf"), book("pc-2", "Ficciones.pdf")]);
+    pc.favorites.add("pc-1");
+    pc.favorites.add("pc-2");
+    const failing: RemoteStore = {
+      pull: () => cloud.store().pull(null),
+      push: async () => {
+        throw new Error("sin conexión");
+      },
+    };
+    let planned = -1;
+    const context: SyncContext = {
+      keys: await indexLibraryKeys(pc.documents),
+      local: { favorites: [...pc.favorites] } as unknown as LocalSnapshot,
+      now: "2026-10-02T12:00:00.000Z",
+    };
+    const collection = {
+      apply: async () => undefined,
+      docKeyOf: (key: string) => key,
+      name: "favorites",
+      snapshot: (ctx: SyncContext) =>
+        new Map([...pc.favorites].map((id) => [ctx.keys.keyById.get(id)!, entry(ctx.keys.keyById.get(id)!, { favorite: true }, ctx.now, ctx.keys.keyById.get(id)!)])),
+    } satisfies SyncCollection;
+    await expect(
+      runSync({
+        collections: [collection],
+        context,
+        enabled: () => true,
+        onPlanned: (summary) => {
+          planned = summary.pushed;
+        },
+        remote: failing,
+        stateStore: memoryState(),
+      }),
+    ).rejects.toThrow("sin conexión");
+    expect(planned).toBe(2);
+  });
+});
+
+describe("red de seguridad contra borrados masivos", () => {
+  const many = (prefix: string) => Array.from({ length: 12 }, (_, index) => book(`${prefix}-${index}`, `Libro ${index}.pdf`));
+
+  it("una vuelta que iba a borrar más de 10 elementos se detiene sin subir nada", async () => {
+    const cloud = memoryCloud();
+    const pc = device(many("pc"));
+    for (const document of pc.documents) pc.favorites.add(document.id);
+    await pc.sync(cloud, "2026-10-02T12:00:00.000Z");
+
+    pc.favorites.clear();
+    await expect(pc.sync(cloud, "2026-10-02T12:01:00.000Z")).rejects.toMatchObject({ deletions: 12, name: "MassDeletionError" });
+    expect([...cloud.rows.values()].every((row) => !row.deleted)).toBe(true);
+  });
+
+  it("con permiso explícito, los borrados se suben", async () => {
+    const cloud = memoryCloud();
+    const pc = device(many("pc"));
+    for (const document of pc.documents) pc.favorites.add(document.id);
+    await pc.sync(cloud, "2026-10-02T12:00:00.000Z");
+
+    pc.favorites.clear();
+    const summary = await pc.sync(cloud, "2026-10-02T12:01:00.000Z", { allowMassDeletion: true });
+    expect(summary.pushed).toBe(12);
+    expect([...cloud.rows.values()].every((row) => row.deleted)).toBe(true);
   });
 });

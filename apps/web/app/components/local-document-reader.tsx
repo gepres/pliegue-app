@@ -58,6 +58,11 @@ import {
 } from "../library/local-document-preview";
 import { ExtractedBlocks } from "./extracted-blocks";
 import type { LinkedFileDocument } from "../library/local-file-reference";
+import { connectDrive, preloadDriveConnection, useDriveConnection } from "../drive/drive-connection";
+import type { DriveDocument } from "../library/drive-document";
+import { readDriveDocumentFile, useDriveLibrary } from "../library/drive-library-store";
+import { compareCopyPreference } from "../library/book-copies";
+import { copyGroupOf, useCopyGroups } from "../library/book-copies-store";
 import {
   readLinkedFile,
   requestLinkedFileReadPermission,
@@ -70,7 +75,7 @@ import {
   useLinkedFolders,
   type PermissionRequestOutcome,
 } from "../library/local-folder-store";
-import type { ImportedDocument } from "../library/local-file-metadata";
+import { formatFileSize } from "../library/local-file-metadata";
 import {
   readImportedDocumentFile,
   useImportedDocuments,
@@ -121,8 +126,8 @@ function isLinkedFileDocument(document: LocalDocument): document is LinkedFileDo
   return document.reference.kind === "local-file";
 }
 
-function isImportedDocument(document: LocalDocument): document is ImportedDocument {
-  return document.reference.kind === "local-copy";
+function isDriveDocument(document: LocalDocument): document is DriveDocument {
+  return document.reference.kind === "google-drive";
 }
 
 function ImagePreview({
@@ -353,6 +358,7 @@ interface StructuredTranslationProps {
 
 function PreviewCanvas({
   document,
+  source,
   initialPercent,
   pdf,
   structured,
@@ -366,6 +372,8 @@ function PreviewCanvas({
   resumeRequested,
 }: {
   document: LocalDocument;
+  /** La copia del libro de la que se lee el archivo; el estado va con `document`. */
+  source: LocalDocument;
   initialPercent: number;
   onKindChange: (kind: LocalDocumentPreview["kind"] | null) => void;
   onOutline: (items: OutlineItem[]) => void;
@@ -378,12 +386,15 @@ function PreviewCanvas({
   resumeRequested: boolean;
   structured: StructuredTranslationProps;
 }) {
-  const documentId = document.id;
-  const format = document.format;
-  const sourceId = isFolderDocument(document) ? document.sourceId : null;
-  const referenceKind = document.reference.kind;
+  // El archivo sale de la copia elegida; las copias de un libro tienen el mismo contenido.
+  const documentId = source.id;
+  const format = source.format;
+  const sourceId = isFolderDocument(source) ? source.sourceId : null;
+  const referenceKind = source.reference.kind;
   const [state, setState] = useState<PreviewState>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
+  // Solo los documentos de Drive se descargan: lo demás ya está en el equipo.
+  const [download, setDownload] = useState<{ loaded: number; total: number | null } | null>(null);
   const [showIndexedFallback, setShowIndexedFallback] = useState(false);
 
   useEffect(() => {
@@ -395,9 +406,19 @@ function PreviewCanvas({
           ? await readLinkedDocumentFile(documentId, sourceId)
           : referenceKind === "local-file"
             ? await readLinkedFile(documentId)
-            : await readImportedDocumentFile(documentId);
+            : referenceKind === "google-drive"
+              ? await readDriveDocumentFile(documentId, (loaded, total) => {
+                  if (active) setDownload({ loaded, total });
+                })
+              : await readImportedDocumentFile(documentId);
 
-        if (!record) throw new Error("El archivo ya no está disponible en su origen local.");
+        if (!record) {
+          throw new Error(
+            referenceKind === "google-drive"
+              ? "El documento ya no está entre tus archivos de Google Drive en Pliegue."
+              : "El archivo ya no está disponible en su origen local.",
+          );
+        }
 
         const blob = "file" in record ? record.file : record.blob;
         const preview = await createLocalDocumentPreview(format, blob);
@@ -450,6 +471,7 @@ function PreviewCanvas({
 
   function retryOpening() {
     setShowIndexedFallback(false);
+    setDownload(null);
     setState({ status: "loading" });
     setAttempt((currentAttempt) => currentAttempt + 1);
   }
@@ -462,9 +484,17 @@ function PreviewCanvas({
   if (state.status === "loading") {
     return (
       <Card aria-live="polite" className={styles.readerStatus} role="status" tone="subtle">
-        <Tag>Preparando</Tag>
-        <h2>Abriendo el documento en este dispositivo…</h2>
-        <p>El contenido no se está enviando a ningún servidor.</p>
+        <Tag>{referenceKind === "google-drive" ? "Google Drive" : "Preparando"}</Tag>
+        <h2>
+          {referenceKind === "google-drive"
+            ? "Descargando de Google Drive…"
+            : "Abriendo el documento en este dispositivo…"}
+        </h2>
+        <p>
+          {referenceKind === "google-drive"
+            ? `${download ? `${formatFileSize(download.loaded)}${download.total ? ` de ${formatFileSize(download.total)}` : ""}. ` : ""}Llega directamente de Google a esta pestaña: no pasa por ningún servidor de Pliegue.`
+            : "El contenido no se está enviando a ningún servidor."}
+        </p>
       </Card>
     );
   }
@@ -586,18 +616,28 @@ function PreviewCanvas({
 }
 
 function PermissionPanel({
+  alternate,
   onRequestPermission,
   sourceName,
+  variant = "local",
 }: {
+  /** Otra copia del mismo libro que se puede abrir en su lugar. */
+  alternate?: { label: string; onSelect: () => void } | undefined;
   onRequestPermission: () => Promise<PermissionRequestOutcome>;
   sourceName: string;
+  /** `drive`: no es un permiso del navegador sino conectar la cuenta de Google. */
+  variant?: "drive" | "local";
 }) {
   const [requestState, setRequestState] = useState<
     "denied" | "error" | "idle" | "requesting" | "unanswered"
   >("idle");
 
+  useEffect(() => {
+    if (variant === "drive") preloadDriveConnection();
+  }, [variant]);
+
   async function requestAccess() {
-    if (!(await beforeFilePermission("regrant"))) return;
+    if (variant === "local" && !(await beforeFilePermission("regrant"))) return;
     setRequestState("requesting");
 
     try {
@@ -613,16 +653,30 @@ function PermissionPanel({
 
   return (
     <Card className={styles.permissionPanel} tone="subtle">
-      <Tag>Permiso local</Tag>
-      <h2>Vuelve a autorizar «{sourceName}»</h2>
+      <Tag>{variant === "drive" ? "Google Drive" : "Permiso local"}</Tag>
+      <h2>
+        {variant === "drive"
+          ? `Conecta Google Drive para abrir «${sourceName}»`
+          : `Vuelve a autorizar «${sourceName}»`}
+      </h2>
       <p>
-        El navegador recuerda el vínculo, pero requiere tu permiso para leer el archivo. Pliegue
-        no copiará ni subirá el contenido.
+        {variant === "drive"
+          ? "El documento está en tu Drive. Pliegue lo descarga a esta pestaña para leerlo; no lo copia ni lo modifica."
+          : "El navegador recuerda el vínculo, pero requiere tu permiso para leer el archivo. Pliegue no copiará ni subirá el contenido."}
       </p>
       <div className={styles.permissionActions}>
         <Button disabled={requestState === "requesting"} onClick={() => void requestAccess()}>
-          {requestState === "requesting" ? "Solicitando…" : "Permitir lectura"}
+          {requestState === "requesting"
+            ? "Solicitando…"
+            : variant === "drive"
+              ? "Conectar Google Drive"
+              : "Permitir lectura"}
         </Button>
+        {alternate ? (
+          <Button onClick={alternate.onSelect} variant="secondary">
+            {alternate.label}
+          </Button>
+        ) : null}
         <Link
           className={buttonClassName({ size: "md", variant: "quiet" })}
           href="/app/biblioteca"
@@ -631,7 +685,15 @@ function PermissionPanel({
         </Link>
       </div>
       <p aria-live="polite" className={styles.permissionStatus} role="status">
-        {requestState === "denied"
+        {variant === "drive"
+          ? requestState === "denied"
+            ? "No se concedió el acceso. Puedes intentarlo de nuevo cuando quieras."
+            : requestState === "unanswered"
+              ? "El navegador bloqueó la ventana de Google. Permite las ventanas emergentes de este sitio y vuelve a intentarlo."
+              : requestState === "error"
+                ? "No fue posible conectar con Google Drive."
+                : "Google abrirá una ventana para confirmar tu cuenta."
+          : requestState === "denied"
           ? "El permiso no fue concedido. Puedes intentarlo de nuevo cuando quieras."
           : requestState === "unanswered"
             ? "El navegador no llegó a mostrar la ventana de permiso. Ocurre cuando esta pestaña no está en primer plano o cuando otra ventana de Pliegue tiene la petición abierta: déjala visible, cierra las demás y vuelve a intentarlo."
@@ -838,14 +900,21 @@ function pageUnitId(unit: number) {
 }
 
 function LocalReaderShell({
+  alternateCopy,
   document,
   permissionRequired = false,
+  permissionVariant = "local",
   requestPermission,
   resumeRequested,
+  source,
   sourceName,
 }: {
+  alternateCopy?: { label: string; onSelect: () => void } | undefined;
   document: LocalDocument;
+  /** La copia de la que se lee; si no se indica, el propio documento. */
+  source?: LocalDocument | undefined;
   permissionRequired?: boolean;
+  permissionVariant?: "drive" | "local";
   requestPermission?: (() => Promise<PermissionRequestOutcome>) | undefined;
   resumeRequested: boolean;
   sourceName?: string | undefined;
@@ -1342,12 +1411,15 @@ function LocalReaderShell({
       >
         {permissionRequired && requestPermission ? (
           <PermissionPanel
+            alternate={alternateCopy}
             onRequestPermission={requestPermission}
             sourceName={sourceName ?? "el origen"}
+            variant={permissionVariant}
           />
         ) : (
           <PreviewCanvas
             document={document}
+            source={source ?? document}
             initialPercent={progressPercent}
             onKindChange={setPreviewKind}
             onOutline={setOutline}
@@ -1526,6 +1598,19 @@ function ReaderMessage({
   );
 }
 
+type PermissionProps = {
+  permissionRequired: boolean;
+  permissionVariant: "drive" | "local";
+  requestPermission?: () => Promise<PermissionRequestOutcome>;
+  sourceName?: string | undefined;
+};
+
+/**
+ * Abre un libro. Si tiene varias copias idénticas (`book-copies.ts`), el estado —progreso,
+ * notas, traducciones, ficha— va siempre con la principal, y el archivo se lee de la mejor
+ * copia disponible: la local con permiso, la importada o, con sesión, la de Drive. Si la copia
+ * preferida necesita permiso, el panel ofrece abrir la otra.
+ */
 export function LocalDocumentReader({
   documentId,
   resumeRequested = false,
@@ -1536,11 +1621,15 @@ export function LocalDocumentReader({
   const importedLibrary = useImportedDocuments();
   const linkedFiles = useLinkedFiles();
   const linkedFolders = useLinkedFolders();
-  const resolution = resolveLocalReaderDocument(documentId, [
-    importedLibrary,
-    linkedFiles,
-    linkedFolders,
-  ]);
+  const driveLibrary = useDriveLibrary();
+  const connection = useDriveConnection();
+  const groups = useCopyGroups();
+  const [chosenCopyId, setChosenCopyId] = useState<string | null>(null);
+  const stores = [importedLibrary, linkedFiles, linkedFolders, driveLibrary];
+  const group = copyGroupOf(groups, documentId);
+  let resolution = resolveLocalReaderDocument(group?.canonicalId ?? documentId, stores);
+  // Si la principal acaba de desaparecer, se abre la pedida mientras su estado se traslada.
+  if (group && resolution.status === "missing") resolution = resolveLocalReaderDocument(documentId, stores);
 
   if (resolution.status === "loading") {
     return (
@@ -1573,42 +1662,77 @@ export function LocalDocumentReader({
   }
 
   const document = resolution.document;
-
-  if (isImportedDocument(document)) {
-    return (
-      <LocalReaderShell
-        document={document}
-        key={document.id}
-        resumeRequested={resumeRequested}
-      />
+  const copies = (group?.copyIds ?? [document.id])
+    .map((id) => resolveLocalReaderDocument(id, stores))
+    .flatMap((found) => (found.status === "found" ? [found.document] : []))
+    .sort((left, right) =>
+      // La copia que se pidió expresamente (desde Drive, por ejemplo) va primero.
+      left.id === documentId ? -1 : right.id === documentId ? 1 : compareCopyPreference(left, right),
     );
+
+  function canOpen(copy: LocalDocument) {
+    if (isFolderDocument(copy)) {
+      return linkedFolders.sources.find((item) => item.id === copy.sourceId)?.permission === "granted";
+    }
+    if (isLinkedFileDocument(copy)) return copy.availability === "available";
+    if (isDriveDocument(copy)) return connection.tokenReady;
+    return true;
   }
 
-  if (isLinkedFileDocument(document)) {
-    return (
-      <LocalReaderShell
-        document={document}
-        key={document.id}
-        permissionRequired={document.availability !== "available"}
-        requestPermission={() => requestLinkedFileReadPermission(document.id)}
-        resumeRequested={resumeRequested}
-        sourceName={document.originalName}
-      />
-    );
+  function access(copy: LocalDocument): PermissionProps {
+    if (isFolderDocument(copy)) {
+      const folder = linkedFolders.sources.find((item) => item.id === copy.sourceId);
+      return {
+        permissionRequired: folder?.permission !== "granted",
+        permissionVariant: "local",
+        requestPermission: () => requestLinkedFolderReadPermission(copy.sourceId),
+        sourceName: folder?.name,
+      };
+    }
+    if (isLinkedFileDocument(copy)) {
+      return {
+        permissionRequired: copy.availability !== "available",
+        permissionVariant: "local",
+        requestPermission: () => requestLinkedFileReadPermission(copy.id),
+        sourceName: copy.originalName,
+      };
+    }
+    if (isDriveDocument(copy)) {
+      return {
+        permissionRequired: !connection.tokenReady,
+        permissionVariant: "drive",
+        requestPermission: async () => {
+          const outcome = await connectDrive();
+          return outcome === "granted" ? "granted" : outcome === "blocked" ? "unanswered" : "denied";
+        },
+        sourceName: copy.originalName,
+      };
+    }
+    return { permissionRequired: false, permissionVariant: "local" };
   }
 
-  if (isFolderDocument(document)) {
-    const source = linkedFolders.sources.find((item) => item.id === document.sourceId);
+  const source =
+    copies.find((copy) => copy.id === chosenCopyId) ?? copies.find(canOpen) ?? copies[0] ?? document;
+  const sourceAccess = access(source);
+  const other = sourceAccess.permissionRequired
+    ? copies.find((copy) => copy.id !== source.id && copy.reference.kind !== source.reference.kind)
+    : undefined;
 
-    return (
-      <LocalReaderShell
-        document={document}
-        key={document.id}
-        permissionRequired={source?.permission !== "granted"}
-        requestPermission={() => requestLinkedFolderReadPermission(document.sourceId)}
-        resumeRequested={resumeRequested}
-        sourceName={source?.name}
-      />
-    );
-  }
+  return (
+    <LocalReaderShell
+      alternateCopy={
+        other
+          ? {
+              label: isDriveDocument(other) ? "Abrir la copia de Google Drive" : "Abrir la copia local",
+              onSelect: () => setChosenCopyId(other.id),
+            }
+          : undefined
+      }
+      document={document}
+      key={document.id}
+      {...sourceAccess}
+      resumeRequested={resumeRequested}
+      source={source}
+    />
+  );
 }

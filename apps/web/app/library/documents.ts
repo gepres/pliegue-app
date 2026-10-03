@@ -10,6 +10,7 @@ import type {
   CatalogCover,
   CatalogOrganization,
 } from "./catalog-import";
+import type { DocumentCopy } from "./book-copies";
 import { normalizeLanguage } from "./language";
 
 export const documentFormats = [
@@ -47,6 +48,11 @@ export interface LibraryDocument {
   catalogError?: string;
   catalogSource?: CatalogSource;
   catalogStatus?: CatalogAnalysisStatus;
+  /**
+   * Las copias del mismo libro (en local, en Drive, importadas) cuando tiene más de una: este
+   * documento es la que guarda su estado. Ver `book-copies.ts`.
+   */
+  copies?: DocumentCopy[];
   /**
    * La portada de la ficha importada o, si no trae, la que el índice sacó del propio archivo.
    * `null` cuando el archivo no tiene una reconocible.
@@ -120,7 +126,14 @@ export function filterDocuments(
   const query = normalizeSearchText(filters.query.trim());
 
   return documents.filter((document) => {
-    if (filters.origin !== "all" && document.origin !== filters.origin) return false;
+    // Un libro con varias copias está en todos sus orígenes: en «Drive» y en «Local».
+    if (
+      filters.origin !== "all" &&
+      document.origin !== filters.origin &&
+      !document.copies?.some((copy) => copy.origin === filters.origin)
+    ) {
+      return false;
+    }
     if (filters.format !== "all" && document.format !== filters.format) return false;
     if (filters.availability !== "all" && document.availability !== filters.availability) {
       return false;

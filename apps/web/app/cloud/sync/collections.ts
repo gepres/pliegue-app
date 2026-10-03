@@ -107,7 +107,8 @@ const readingProgress: SyncCollection = {
       const document = documentOf(context, item.key);
       if (!document) continue;
       if (item.deleted) clearReadingProgress(document.id);
-      else saveReadingProgress(document, percentOf(item), { allowRegression: true, updatedAt: item.updatedAt });
+      // La fusión ya decidió («gana el avance mayor»): se escribe aunque sea más antiguo (06.3d).
+      else saveReadingProgress(document, percentOf(item), { authoritative: true, updatedAt: item.updatedAt });
     }
   },
   docKeyOf: (key) => key,

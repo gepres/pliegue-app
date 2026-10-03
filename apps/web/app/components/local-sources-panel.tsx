@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button, Card, Tag } from "@pliegue/ui";
 
 import { removeDocumentCatalogRecords } from "../ai/document-catalog-store";
+import { copyReleaseNote, releaseCopies } from "../library/book-copies-store";
 import {
   linkLocalFolder,
   scanLinkedFolder,
@@ -42,6 +43,7 @@ function describeScan(result: FolderSyncResult) {
   const changes = [
     result.added ? `${result.added} nuevo${result.added === 1 ? "" : "s"}` : "",
     result.changed ? `${result.changed} modificado${result.changed === 1 ? "" : "s"}` : "",
+    result.moved ? `${result.moved} movido${result.moved === 1 ? "" : "s"} o renombrado${result.moved === 1 ? "" : "s"}, con sus notas y avance` : "",
     result.removed ? `${result.removed} eliminado${result.removed === 1 ? "" : "s"}` : "",
   ].filter(Boolean);
 
@@ -145,9 +147,11 @@ export function LocalSourcesPanel() {
   }
 
   async function unlinkFolder(source: LinkedFolderSource) {
-    const affected = linkedFolders.documents.filter(
-      (document) => document.sourceId === source.id,
-    ).length;
+    const folderDocumentIds = linkedFolders.documents
+      .filter((document) => document.sourceId === source.id)
+      .map((document) => document.id);
+    const affected = folderDocumentIds.length;
+    const copies = copyReleaseNote(folderDocumentIds);
     // El aviso enumera lo que realmente se pierde. Decir solo «el permiso y sus metadatos»
     // llevó a desvincular una carpeta creyendo que se renovaba el acceso, y con ella se fueron
     // el índice de texto y las fichas que costaron llamadas al proveedor.
@@ -160,7 +164,7 @@ export function LocalSourcesPanel() {
         "sus fichas del catálogo IA",
       ],
       icon: "folder",
-      note: "Los archivos originales no cambian. Volver a vincularla obliga a extraer el texto y a analizarlo otra vez. Si solo quieres recuperar el acceso, cancela y usa «Conceder acceso».",
+      note: `${copies ? `${copies} ` : ""}Los archivos originales no cambian. Volver a vincularla obliga a extraer el texto y a analizarlo otra vez. Si solo quieres recuperar el acceso, cancela y usa «Conceder acceso».`,
       title: `¿Desvincular «${source.name}»?`,
       tone: "danger",
     });
@@ -169,9 +173,9 @@ export function LocalSourcesPanel() {
     setBusySourceId(source.id);
 
     try {
-      const documentIds = linkedFolders.documents
-        .filter((document) => document.sourceId === source.id)
-        .map((document) => document.id);
+      const documentIds = folderDocumentIds;
+      // Los libros que siguen en Drive (u otra copia) se llevan su estado antes de borrar nada.
+      await releaseCopies(documentIds);
       await unlinkLocalFolder(source.id);
       await removeDocumentCatalogRecords(documentIds).catch(() => undefined);
       setStatusMessage(`«${source.name}» se desvinculó. Los originales permanecen intactos.`);

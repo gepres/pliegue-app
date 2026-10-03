@@ -72,3 +72,19 @@ export function setFavorite(documentId: string, favorite: boolean) {
 export function useFavorites() {
   return useSyncExternalStore(subscribe, readFavorites, () => emptyFavorites);
 }
+
+/**
+ * Una copia del libro pasa su favorito a la que guarda el estado: el libro es favorito si lo
+ * era cualquiera de las dos. Ver `book-copies.ts`.
+ */
+export function transferFavorite(fromId: string, toId: string) {
+  if (fromId === toId || !readFavorites().includes(fromId)) return false;
+  setFavorite(toId, true);
+  setFavorite(fromId, false);
+  return true;
+}
+
+/** Los favoritos de ahora, fuera de React. */
+export function readFavoriteIds() {
+  return readFavorites();
+}

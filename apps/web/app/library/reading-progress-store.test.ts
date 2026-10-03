@@ -34,6 +34,15 @@ describe("reconcileReadingProgress", () => {
     expect(reconcileReadingProgress(current, stale)).toBe(current);
   });
 
+  it("lo que la sincronización ya resolvió se escribe aunque sea más antiguo (06.3d)", () => {
+    // Otro equipo subió un 55 % hace horas; aquí hay un 37 % de ahora. Gana el avance mayor: si
+    // el almacén se quedara con el 37 %, la vuelta siguiente lo subiría y la nube retrocedería.
+    const current = progress(37, "2026-10-02T12:00:00.000Z");
+    const fromCloud = progress(55, "2026-10-02T09:00:00.000Z");
+
+    expect(reconcileReadingProgress(current, fromCloud, true, true)).toMatchObject({ percent: 55 });
+  });
+
   it("evita que un conflicto nuevo reduzca el avance", () => {
     const merged = reconcileReadingProgress(
       progress(65),

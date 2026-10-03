@@ -25,10 +25,23 @@ export interface LinkedFolderDocument extends LibraryDocument {
 export interface FolderChangeSummary {
   added: number;
   changed: number;
+  /** Archivos que cambiaron de carpeta o de nombre: conservan su índice y su estado. */
+  moved?: number;
   removed: number;
   total: number;
   unchanged: number;
 }
+
+/** Un archivo que cambió de carpeta o de nombre entre dos escaneos. */
+export interface FolderMove {
+  /** El documento que desaparece. */
+  from: string;
+  renamed: boolean;
+  /** El documento que aparece en su lugar. */
+  to: string;
+}
+
+type MoveCandidate = Pick<LinkedFolderDocument, "id" | "lastModified" | "relativePath" | "sizeBytes">;
 
 function normalizeRelativePath(path: string) {
   return path.replaceAll("\\", "/").replace(/^\/+/, "");
@@ -134,9 +147,64 @@ export function createLinkedFolderDocument(
   };
 }
 
+function fileNameOf(document: MoveCandidate) {
+  return (document.relativePath.split("/").at(-1) ?? document.relativePath).normalize("NFC").toLocaleLowerCase("es");
+}
+
+/**
+ * Empareja lo que desapareció con lo que apareció en el mismo escaneo: el mismo archivo movido
+ * de carpeta o renombrado. Mover o renombrar conserva el tamaño y la fecha de modificación, y
+ * dos archivos distintos casi nunca comparten los dos al milisegundo. Si varios coinciden,
+ * desempata el nombre; si aun así hay duda, no se empareja: es mejor un libro «nuevo» que el
+ * avance o las notas de un libro puestos en otro.
+ */
+export function pairMovedDocuments(
+  previous: readonly MoveCandidate[],
+  current: readonly MoveCandidate[],
+): FolderMove[] {
+  const previousIds = new Set(previous.map((document) => document.id));
+  const currentIds = new Set(current.map((document) => document.id));
+  const signature = (document: MoveCandidate) =>
+    document.sizeBytes > 0 && document.lastModified > 0 ? `${document.sizeBytes}:${document.lastModified}` : null;
+  const group = (documents: readonly MoveCandidate[], keep: (document: MoveCandidate) => boolean) => {
+    const groups = new Map<string, MoveCandidate[]>();
+    for (const document of documents) {
+      const key = keep(document) ? signature(document) : null;
+      if (key) groups.set(key, [...(groups.get(key) ?? []), document]);
+    }
+    return groups;
+  };
+  const gone = group(previous, (document) => !currentIds.has(document.id));
+  const arrived = group(current, (document) => !previousIds.has(document.id));
+  const move = (from: MoveCandidate, to: MoveCandidate): FolderMove => ({
+    from: from.id,
+    renamed: fileNameOf(from) !== fileNameOf(to),
+    to: to.id,
+  });
+
+  const moves: FolderMove[] = [];
+  for (const [key, from] of gone) {
+    const to = arrived.get(key);
+    if (!to) continue;
+    if (from.length === 1 && to.length === 1) {
+      moves.push(move(from[0]!, to[0]!));
+      continue;
+    }
+    // Varios con la misma firma: solo los que además conservan un nombre que no se repite.
+    for (const candidate of from) {
+      const name = fileNameOf(candidate);
+      const sameName = to.filter((document) => fileNameOf(document) === name);
+      const rivals = from.filter((document) => fileNameOf(document) === name);
+      if (sameName.length === 1 && rivals.length === 1) moves.push(move(candidate, sameName[0]!));
+    }
+  }
+  return moves;
+}
+
+/** Solo mira el id y la huella: la comparten las carpetas locales y las de Google Drive. */
 export function compareFolderDocuments(
-  previous: readonly LinkedFolderDocument[],
-  current: readonly LinkedFolderDocument[],
+  previous: readonly Pick<LinkedFolderDocument, "fingerprint" | "id">[],
+  current: readonly Pick<LinkedFolderDocument, "fingerprint" | "id">[],
 ): FolderChangeSummary {
   const previousById = new Map(previous.map((document) => [document.id, document]));
   const currentIds = new Set(current.map((document) => document.id));

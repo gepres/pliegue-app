@@ -15,7 +15,8 @@ valor no existe o no es válido, usa `development`.
 
 ## Feature flags públicas
 
-- `NEXT_PUBLIC_FEATURE_DRIVE`: conector de Google Drive; apagado por defecto.
+- `NEXT_PUBLIC_FEATURE_DRIVE`: conector de Google Drive. Encendido por defecto, pero solo aparece
+  si están las tres credenciales de Google (abajo); `false` lo apaga aunque estén.
 - `NEXT_PUBLIC_FEATURE_LOCAL_FILES`: flujos de archivos locales; encendido por defecto.
 - `NEXT_PUBLIC_FEATURE_AI_PANEL`: superficie de IA; encendida por defecto, sin proveedor conectado.
 
@@ -24,6 +25,17 @@ valor no existe o no es válido, usa `development`.
 - `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: el proyecto de Supabase
   de la cuenta y la sincronización. La clave publicable es pública por diseño (los datos los
   protege RLS). Sin las dos, Pliegue funciona solo en local. Ver `docs/cloud-sync.md`.
+
+## Google Drive (opcional)
+
+- `NEXT_PUBLIC_GOOGLE_CLIENT_ID`: el ID de cliente OAuth «Aplicación web» (acaba en
+  `.apps.googleusercontent.com`).
+- `NEXT_PUBLIC_GOOGLE_API_KEY`: la clave de API del selector de Google Picker, restringida en
+  Google Cloud a la Picker API y a los dominios de Pliegue.
+- `NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER`: el número del proyecto de Google Cloud (solo cifras).
+
+Las tres son públicas por diseño y ninguna es un secreto: el token de acceso lo emite Google a
+cada persona y vive solo en la memoria de su pestaña. Pasos en `docs/google-drive.md`.
 
 Las flags se leen a través de `apps/web/app/config/public-config.ts`. No se deben
 consultar variables de entorno directamente desde componentes.

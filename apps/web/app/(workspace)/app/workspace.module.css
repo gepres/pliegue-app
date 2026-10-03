@@ -810,6 +810,15 @@
   grid-column: 1 / -1;
 }
 
+/* Entre ~860 y ~1100 px la navegación de Ajustes deja su panel (el contenedor) en 290-400 px y,
+   a dos columnas, cada control se quedaba en 118 px. Por debajo de dos columnas de ~15rem, una
+   sola (02.2d). */
+@container (max-width: 34rem) {
+  .aiSettingsForm {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .aiSecretControl {
   align-items: center;
   display: grid;

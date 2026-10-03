@@ -41,7 +41,9 @@ export function indexedDbSyncState(userId: string): SyncStateStore {
           request.addEventListener("success", () => resolve(request.result as StoredState | undefined));
           request.addEventListener("error", () => reject(request.error));
         });
-        return stored ? { base: stored.base, cursor: stored.cursor, pending: stored.pending } : emptySyncState;
+        return stored
+          ? { base: stored.base, cursor: stored.cursor, docIds: stored.docIds ?? {}, pending: stored.pending }
+          : emptySyncState;
       } finally {
         database.close();
       }

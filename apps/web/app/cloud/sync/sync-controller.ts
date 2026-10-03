@@ -7,7 +7,16 @@ import { currentAccount } from "../account-store";
 import { cloudClient } from "../supabase-client";
 import { syncCollections, type LocalSnapshot } from "./collections";
 import { indexLibraryKeys } from "./document-key";
-import { runSync } from "./sync-runner";
+import {
+  activityFromSummary,
+  activityLimit,
+  countBooks,
+  recordActivity,
+  type SyncActivity,
+  type SyncBooks,
+} from "./sync-activity";
+import { isSyncHeld, onSyncReleased } from "./sync-hold";
+import { MassDeletionError, runSync, type SyncSummary } from "./sync-runner";
 import { indexedDbSyncState } from "./sync-state-idb";
 import { supabaseRemote } from "./supabase-remote";
 
@@ -68,13 +77,37 @@ export function useSyncChoices(userId: string | null) {
 
 /* ---- Estado visible ------------------------------------------------------------------- */
 
+export type { SyncBooks } from "./sync-activity";
+
 export interface SyncStatus {
+  /** Las últimas vueltas, la más reciente primero. */
+  activity: SyncActivity[];
+  /** Borrados que la red de seguridad retuvo a la espera de que la persona los confirme. */
+  blockedDeletions: number | null;
+  books: SyncBooks | null;
+  /** Una comprobación en segundo plano en marcha: no cambia el texto, solo el icono. */
+  checking: boolean;
   error: string | null;
+  /** Última vuelta terminada sin errores, hubiera cambios o no. */
   lastSyncedAt: string | null;
   state: "error" | "idle" | "offline" | "syncing";
+  /** Cómo quedó la cuenta en la última vuelta buena. */
+  summary: SyncSummary | null;
+  /** Cambios de este equipo que la última vuelta no pudo subir. */
+  unsynced: number;
 }
 
-let status: SyncStatus = { error: null, lastSyncedAt: null, state: "idle" };
+let status: SyncStatus = {
+  activity: [],
+  blockedDeletions: null,
+  books: null,
+  checking: false,
+  error: null,
+  lastSyncedAt: null,
+  state: "idle",
+  summary: null,
+  unsynced: 0,
+};
 const statusListeners = new Set<() => void>();
 
 function setStatus(next: Partial<SyncStatus>) {
@@ -109,6 +142,11 @@ export function registerLocalSource(reader: (() => LocalSource | null) | null) {
   readLocal = reader;
 }
 
+/** Lo de este equipo tal como lo ve la sincronización; también lo usa la copia de seguridad. */
+export function readLocalSource() {
+  return readLocal?.() ?? null;
+}
+
 function deviceId() {
   const key = "pliegue-device-id";
   try {
@@ -122,46 +160,133 @@ function deviceId() {
   }
 }
 
+/* ---- Registro de las últimas vueltas, por cuenta ----------------------------------------- */
+
+const activityKey = "pliegue-sync-activity-v1";
+let activityUser: string | null = null;
+
+function readActivity(userId: string): SyncActivity[] {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(activityKey) ?? "{}") as Record<string, SyncActivity[]>;
+    return Array.isArray(stored[userId]) ? stored[userId].slice(0, activityLimit) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveActivity(userId: string, activity: SyncActivity[]) {
+  try {
+    // Solo la cuenta con la que se está: el registro de otra no tiene por qué quedarse aquí.
+    window.localStorage.setItem(activityKey, JSON.stringify({ [userId]: activity }));
+  } catch {
+    // Sin almacenamiento, el registro dura lo que la pestaña.
+  }
+}
+
+function addActivity(userId: string, entry: SyncActivity) {
+  const activity = recordActivity(status.activity, entry);
+  saveActivity(userId, activity);
+  return activity;
+}
+
+
 /* ---- Ejecutar ------------------------------------------------------------------------- */
+
+/**
+ * Por qué se pide una vuelta. Una comprobación periódica no cambia el texto del estado: en una
+ * vuelta cada 45 s, «Sincronizando…» parpadeaba sin decir nada.
+ */
+export type SyncReason = "change" | "manual" | "poll";
+
+const reasonWeight: Record<SyncReason, number> = { change: 1, manual: 2, poll: 0 };
 
 let running: Promise<void> | null = null;
 let again = false;
+/** El motivo más visible de lo pedido mientras otra vuelta estaba en marcha. */
+let queuedReason: SyncReason | null = null;
+/** La persona confirmó los borrados retenidos: la próxima vuelta puede subirlos. */
+let confirmDeletions = false;
 
-async function syncOnce() {
+function describeError(error: unknown) {
+  if (error instanceof Error && /relation .*sync_items|does not exist|schema cache/i.test(error.message)) {
+    return "La base de datos aún no tiene la tabla de sincronización: falta aplicar la migración.";
+  }
+  return error instanceof Error ? error.message : "No fue posible sincronizar.";
+}
+
+async function syncOnce(allowMassDeletion: boolean, reason: SyncReason) {
+  // Alguien está dejando el estado a medias (un escaneo de carpeta): se sincroniza al soltar.
+  if (isSyncHeld()) return;
   const account = currentAccount();
   const client = cloudClient();
   const local = readLocal?.();
   if (account.status !== "signed-in" || !account.userId || !client || !local?.ready) return;
-  const choices = syncChoicesFor(account.userId);
+  const userId = account.userId;
+  const choices = syncChoicesFor(userId);
   if (!choices.enabled) return;
+  if (activityUser !== userId) {
+    activityUser = userId;
+    setStatus({ activity: readActivity(userId) });
+  }
   if (typeof navigator !== "undefined" && !navigator.onLine) {
-    setStatus({ state: "offline" });
+    setStatus({ checking: false, state: "offline" });
     return;
   }
 
-  setStatus({ error: null, state: "syncing" });
+  // Una comprobación periódica solo mueve el icono; lo pedido por la persona o por un cambio
+  // de este equipo se anuncia.
+  setStatus(reason === "poll" ? { checking: true } : { checking: true, error: null, state: "syncing" });
+  let planned: SyncSummary | null = null;
+  const keys = await indexLibraryKeys(local.documents);
+  const books = countBooks(local.documents, keys.documentByKey.size);
   try {
-    await runSync({
+    const summary = await runSync({
+      allowMassDeletion,
       collections: syncCollections,
-      context: {
-        keys: await indexLibraryKeys(local.documents),
-        local: local.snapshot,
-        now: new Date().toISOString(),
-      },
+      context: { keys, local: local.snapshot, now: new Date().toISOString() },
       enabled: (collection) => collection.consent !== "catalogAi" || choices.catalogAi,
-      remote: supabaseRemote(client, account.userId, deviceId()),
-      stateStore: indexedDbSyncState(account.userId),
+      onPlanned: (plan) => {
+        planned = plan;
+      },
+      remote: supabaseRemote(client, userId, deviceId()),
+      stateStore: indexedDbSyncState(userId),
     });
-    setStatus({ error: null, lastSyncedAt: new Date().toISOString(), state: "idle" });
-  } catch (error) {
+    const at = new Date().toISOString();
     setStatus({
-      error:
-        error instanceof Error && /relation .*sync_items|does not exist|schema cache/i.test(error.message)
-          ? "La base de datos aún no tiene la tabla de sincronización: falta aplicar la migración."
-          : error instanceof Error
-            ? error.message
-            : "No fue posible sincronizar.",
+      activity: addActivity(userId, activityFromSummary(summary, at)),
+      blockedDeletions: null,
+      books,
+      checking: false,
+      error: null,
+      lastSyncedAt: at,
+      state: "idle",
+      summary,
+      unsynced: 0,
+    });
+  } catch (error) {
+    const at = new Date().toISOString();
+    const pending = (planned as SyncSummary | null)?.pushed ?? 0;
+    if (error instanceof MassDeletionError) {
+      setStatus({
+        activity: addActivity(userId, { applied: {}, at, kind: "error", message: `Detenida: iba a borrar ${error.deletions} elementos`, pushed: {} }),
+        blockedDeletions: error.deletions,
+        books,
+        checking: false,
+        error: error.message,
+        state: "error",
+        unsynced: pending,
+      });
+      return;
+    }
+    const message = describeError(error);
+    setStatus({
+      activity: addActivity(userId, { applied: {}, at, kind: "error", message, pushed: {} }),
+      blockedDeletions: null,
+      books,
+      checking: false,
+      error: message,
       state: "error",
+      unsynced: pending,
     });
   }
 }
@@ -170,7 +295,12 @@ async function syncOnce() {
  * Pide una sincronización. Si ya hay una en marcha, se hace otra al terminar —con lo que haya
  * cambiado mientras— en vez de lanzar dos a la vez sobre la misma base.
  */
-export function requestSync() {
+export function requestSync({
+  allowMassDeletion = false,
+  reason = "change",
+}: { allowMassDeletion?: boolean; reason?: SyncReason } = {}) {
+  if (allowMassDeletion) confirmDeletions = true;
+  if (!queuedReason || reasonWeight[reason] > reasonWeight[queuedReason]) queuedReason = reason;
   if (running) {
     again = true;
     return running;
@@ -178,10 +308,18 @@ export function requestSync() {
   running = (async () => {
     do {
       again = false;
-      await syncOnce();
+      // El permiso para borrar vale para la vuelta que lo pidió, no para las siguientes.
+      const allow = confirmDeletions;
+      confirmDeletions = false;
+      const next = queuedReason ?? "change";
+      queuedReason = null;
+      await syncOnce(allow, next);
     } while (again);
   })().finally(() => {
     running = null;
   });
   return running;
 }
+
+// Al soltar la última retención (fin de un escaneo), se sincroniza con el estado ya completo.
+onSyncReleased(() => void requestSync());

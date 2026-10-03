@@ -212,6 +212,9 @@
    ========================================================================== */
 
 .pliegue-field {
+  /* Rótulo y control pegados arriba: en una rejilla, un campo vecino más alto (con ayuda)
+     estiraba este y su grid repartía el hueco, bajando y engordando el control (02.2d). */
+  align-content: start;
   display: grid;
   gap: 6px;
 }
