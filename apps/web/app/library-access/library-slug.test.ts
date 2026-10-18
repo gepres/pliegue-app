@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { isSharedLibrarySlug, reservedLibrarySlugs } from "./library-slug";
+import { isSharedLibrarySlug, reservedLibrarySlugs, sharedSlugFromParam } from "./library-slug";
 
 describe("dirección de una biblioteca compartida", () => {
   it("acepta minúsculas, números y guiones sueltos; empieza por letra", () => {
@@ -15,6 +15,13 @@ describe("dirección de una biblioteca compartida", () => {
   it("no puede tomar una dirección reservada, empezando por la general", () => {
     expect(reservedLibrarySlugs).toContain("general");
     for (const slug of reservedLibrarySlugs) expect(isSharedLibrarySlug(slug)).toBe(false);
+  });
+
+  it("lleva la dirección de la URL a su forma canónica, o a ninguna", () => {
+    expect(sharedSlugFromParam("luis-lara")).toBe("luis-lara");
+    expect(sharedSlugFromParam("Luis-Lara")).toBe("luis-lara");
+    expect(sharedSlugFromParam("GENERAL")).toBeNull();
+    expect(sharedSlugFromParam("luis%20lara")).toBeNull();
   });
 
   it("reserva lo mismo que la base", () => {

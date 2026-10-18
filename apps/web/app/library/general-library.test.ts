@@ -4,7 +4,15 @@ import { downloadDriveFile, listDriveChildren } from "../drive/drive-api";
 import type { DriveListedFile } from "../drive/drive-files";
 import { catalogImportJsonSchema } from "./catalog-template";
 import { filterDocuments, organizationFacets } from "./documents";
-import { buildGeneralLibrary, findCatalogFile, generalDocumentId, generalReaderHref } from "./general-library";
+import {
+  buildGeneralLibrary,
+  findCatalogFile,
+  generalDocumentId,
+  generalLibraryPlace,
+  generalReaderHref,
+  libraryReaderHref,
+  sharedLibraryPlace,
+} from "./general-library";
 
 function file(id: string, relativePath: string, size = 1000, modifiedTime = "2026-09-01T10:00:00.000Z"): DriveListedFile {
   const name = relativePath.split("/").at(-1) ?? relativePath;
@@ -68,6 +76,17 @@ describe("biblioteca general", () => {
     expect(generalDocumentId("a")).toBe("general:a");
     expect(generalReaderHref("a b")).toBe("/biblioteca/general/leer?libro=a%20b");
     expect(generalReaderHref("a", true)).toBe("/biblioteca/general/leer?libro=a&resume=1");
+    expect(libraryReaderHref(sharedLibraryPlace("ana-lopez", "Los libros de Ana"), "a", true)).toBe("/biblioteca/ana-lopez/leer?libro=a&resume=1");
+  });
+
+  it("sabe dónde está cada biblioteca y cómo nombrarla", () => {
+    expect(generalLibraryPlace).toEqual({ library: "general", path: "/biblioteca/general", reference: "la biblioteca general", title: "Biblioteca general" });
+    expect(sharedLibraryPlace("ana-lopez", "Los libros de Ana")).toEqual({
+      library: "ana-lopez",
+      path: "/biblioteca/ana-lopez",
+      reference: "«Los libros de Ana»",
+      title: "Los libros de Ana",
+    });
   });
 
   it("con el índice JSON trae ficha, portada y categoría, y marca las copias repetidas", () => {

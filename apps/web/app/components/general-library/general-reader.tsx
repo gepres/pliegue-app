@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { downloadDriveFile, getDriveFile } from "../../drive/drive-api";
 import { createDriveDocument, type DriveDocument } from "../../library/drive-document";
-import { generalDocumentId, generalLibraryPath } from "../../library/general-library";
+import { generalDocumentId, generalLibraryPlace, type LibraryPlace } from "../../library/general-library";
 import { describeGeneralLibraryError, readCachedGeneralLibrary } from "../../library/general-library-store";
 import { ConfirmDialogHost } from "../app-ui/confirm-dialog";
 import { LocalReaderShell, ReaderMessage, ReaderPlacementProvider } from "../local-document-reader";
@@ -12,19 +12,22 @@ import { LocalReaderShell, ReaderMessage, ReaderPlacementProvider } from "../loc
 type ReaderState = { document: DriveDocument; status: "ready" } | { message: string; status: "error" } | { status: "loading" };
 
 /**
- * Lee un libro de la biblioteca general con el mismo lector que la biblioteca personal. El
- * archivo se baja de la carpeta pública con la clave de API; el avance, las marcas, las notas y
- * las traducciones se guardan en este navegador con el identificador `general:…`.
+ * Lee un libro de una biblioteca por código —la general o una compartida— con el mismo lector que
+ * la biblioteca personal. El archivo se baja de la carpeta pública con la clave de API; el avance,
+ * las marcas, las notas y las traducciones se guardan en este navegador con el identificador
+ * `general:…`.
  */
 export function GeneralReader({
   apiKey,
   fileId,
   folderId,
+  place = generalLibraryPlace,
   resumeRequested,
 }: {
   apiKey: string;
   fileId: string;
   folderId: string;
+  place?: LibraryPlace;
   resumeRequested: boolean;
 }) {
   const [state, setState] = useState<ReaderState>({ status: "loading" });
@@ -68,13 +71,13 @@ export function GeneralReader({
   );
 
   return (
-    <ReaderPlacementProvider value={{ backHref: generalLibraryPath, backLabel: "la biblioteca general", backShortLabel: "Biblioteca general", loadFile }}>
+    <ReaderPlacementProvider value={{ backHref: place.path, backLabel: place.reference, backShortLabel: place.title, loadFile }}>
       {state.status === "ready" ? (
         <LocalReaderShell document={state.document} key={state.document.id} resumeRequested={resumeRequested} source={state.document} />
       ) : state.status === "error" ? (
-        <ReaderMessage description={state.message} eyebrow="Biblioteca general" title="No pudimos abrir este libro" />
+        <ReaderMessage description={state.message} eyebrow={place.title} title="No pudimos abrir este libro" />
       ) : (
-        <ReaderMessage description="Buscando el libro en la biblioteca general." eyebrow="Biblioteca general" title="Preparando lector" />
+        <ReaderMessage description={`Buscando el libro en ${place.reference}.`} eyebrow={place.title} title="Preparando lector" />
       )}
       <ConfirmDialogHost />
     </ReaderPlacementProvider>

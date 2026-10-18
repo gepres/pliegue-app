@@ -159,6 +159,7 @@ export function suggestAccessCode(date: Date, place = "", random: (max: number) 
   return `${prefix}-${tail}`;
 }
 
-export function accessLink(origin: string, code: string) {
-  return `${origin.replace(/\/+$/, "")}/biblioteca/general/${encodeURIComponent(code)}`;
+/** El enlace que se comparte: la dirección de la biblioteca con el código puesto. */
+export function accessLink(origin: string, code: string, libraryPath = "/biblioteca/general") {
+  return `${origin.replace(/\/+$/, "")}${libraryPath}/${encodeURIComponent(code)}`;
 }

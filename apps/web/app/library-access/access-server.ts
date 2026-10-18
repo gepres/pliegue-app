@@ -70,7 +70,7 @@ export const redeemMessages: Record<RedeemFailure, string> = {
   exhausted: "Este código ya se usó todas las veces permitidas.",
   invalid: "Ese código no existe o ya no está activo. Revísalo y vuelve a intentarlo.",
   "too-many": "Demasiados intentos fallidos. Espera unos minutos antes de volver a probar.",
-  unavailable: "La biblioteca general no está disponible ahora mismo. Inténtalo más tarde.",
+  unavailable: "La biblioteca no está disponible ahora mismo. Inténtalo más tarde.",
 };
 
 /** Una huella de la conexión para frenar intentos a ciegas, sin guardar la IP. */

@@ -26,3 +26,9 @@ const slugPattern = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 export function isSharedLibrarySlug(value: string) {
   return value.length >= 2 && value.length <= 40 && slugPattern.test(value) && !reservedLibrarySlugs.includes(value);
 }
+
+/** La dirección como llega en la URL, en su forma canónica: «Luis-Lara» → «luis-lara». `null` si no puede ser ninguna. */
+export function sharedSlugFromParam(raw: string) {
+  const slug = raw.toLowerCase();
+  return isSharedLibrarySlug(slug) ? slug : null;
+}

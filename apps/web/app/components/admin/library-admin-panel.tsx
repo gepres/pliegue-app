@@ -49,7 +49,7 @@ function describeError(error: { code?: string; message?: string } | null) {
   return error.message ?? "No fue posible guardar el cambio.";
 }
 
-function NewCodeForm({ onCreated, userId }: { onCreated: () => void; userId: string }) {
+function NewCodeForm({ library, onCreated, userId }: { library: string; onCreated: () => void; userId: string }) {
   const [code, setCode] = useState("");
   const [label, setLabel] = useState("");
   const [expires, setExpires] = useState("");
@@ -78,7 +78,7 @@ function NewCodeForm({ onCreated, userId }: { onCreated: () => void; userId: str
       created_by: userId,
       expires_at: expires ? endOfDay(expires) : null,
       label: label.trim().slice(0, 120),
-      library: "general",
+      library,
       max_uses: uses,
     });
     setBusy(false);
@@ -211,10 +211,12 @@ function EditCodeForm({ code, onDone }: { code: AccessCodeRow; onDone: (message:
 function CodesList({
   codes,
   events,
+  libraryPath,
   onChanged,
 }: {
   codes: readonly AccessCodeRow[];
   events: readonly AccessEventRow[];
+  libraryPath: string;
   onChanged: () => void;
 }) {
   const [message, setMessage] = useState<string | null>(null);
@@ -248,7 +250,7 @@ function CodesList({
   }
 
   async function copy(code: AccessCodeRow) {
-    const link = accessLink(origin, code.code);
+    const link = accessLink(origin, code.code, libraryPath);
     try {
       await navigator.clipboard.writeText(link);
       setMessage(`Enlace copiado: ${link}`);
@@ -443,13 +445,22 @@ interface AdminData {
   events: AccessEventRow[];
 }
 
-/** Los códigos y las últimas 300 entradas; la base solo se los da a un administrador. */
-async function fetchAdminData(): Promise<AdminData> {
+/** Los códigos y las últimas 300 entradas de una biblioteca; la base solo se los da a quien la administra. */
+async function fetchAdminData(library: string): Promise<AdminData> {
   const client = cloudClient();
   if (!client) return { codes: [], error: "La nube no está configurada en esta instalación.", events: [] };
   const [codesResult, eventsResult] = await Promise.all([
-    client.from("library_access_codes").select("id,code,label,active,expires_at,max_uses,uses,created_at").order("created_at", { ascending: false }),
-    client.from("library_access_events").select("id,code_id,visitor_name,device_id,user_agent,created_at").order("created_at", { ascending: false }).limit(300),
+    client
+      .from("library_access_codes")
+      .select("id,code,label,active,expires_at,max_uses,uses,created_at")
+      .eq("library", library)
+      .order("created_at", { ascending: false }),
+    client
+      .from("library_access_events")
+      .select("id,code_id,visitor_name,device_id,user_agent,created_at")
+      .eq("library", library)
+      .order("created_at", { ascending: false })
+      .limit(300),
   ]);
   return {
     codes: (codesResult.data ?? []) as AccessCodeRow[],
@@ -458,10 +469,12 @@ async function fetchAdminData(): Promise<AdminData> {
   };
 }
 
-/** Ajustes → Biblioteca general: los códigos de acceso y quién entró con ellos. Solo para administradores. */
-export function LibraryAdminPanel() {
-  const account = useAccount();
-  const admin = useIsPliegueAdmin();
+/**
+ * Los códigos de una biblioteca y quién entró con ellos: crear, editar, copiar el enlace,
+ * desactivar, borrar y quitar a alguien. Lo usan el administrador en la general y el dueño en la
+ * suya; la base solo deja tocar los de la biblioteca que administra cada cual.
+ */
+export function LibraryCodesManager({ library, libraryPath, userId }: { library: string; libraryPath: string; userId: string }) {
   const [codes, setCodes] = useState<AccessCodeRow[]>([]);
   const [events, setEvents] = useState<AccessEventRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -474,19 +487,53 @@ export function LibraryAdminPanel() {
     setLoaded(true);
   }, []);
   const load = useCallback(() => {
-    void fetchAdminData().then(apply);
-  }, [apply]);
+    void fetchAdminData(library).then(apply);
+  }, [apply, library]);
 
   useEffect(() => {
-    if (!admin) return;
     let active = true;
-    void fetchAdminData().then((data) => {
+    void fetchAdminData(library).then((data) => {
       if (active) apply(data);
     });
     return () => {
       active = false;
     };
-  }, [admin, apply]);
+  }, [apply, library]);
+
+  return (
+    <>
+      {error ? (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+      ) : null}
+      <section aria-labelledby="admin-new-title" className={styles.block}>
+        <h3 id="admin-new-title">Nuevo código</h3>
+        <NewCodeForm library={library} onCreated={() => void load()} userId={userId} />
+      </section>
+      <section aria-labelledby="admin-codes-title" className={styles.block}>
+        <div className={styles.blockHead}>
+          <h3 id="admin-codes-title">Códigos</h3>
+          <Button onClick={() => void load()} size="sm" variant="quiet">
+            <Icon name="refresh" size={16} />
+            Actualizar
+          </Button>
+        </div>
+        {loaded ? (
+          <CodesList codes={codes} events={events} libraryPath={libraryPath} onChanged={() => void load()} />
+        ) : (
+          <p className={styles.note}>Cargando…</p>
+        )}
+      </section>
+      {loaded ? <EventsList codes={codes} events={events} onChanged={load} /> : null}
+    </>
+  );
+}
+
+/** Ajustes → Biblioteca general: los códigos de acceso y quién entró con ellos. Solo para administradores. */
+export function LibraryAdminPanel() {
+  const account = useAccount();
+  const admin = useIsPliegueAdmin();
 
   const header = (
     <header className={styles.head}>
@@ -534,26 +581,7 @@ export function LibraryAdminPanel() {
   return (
     <Card aria-labelledby="library-admin-title" as="section" className={styles.panel}>
       {header}
-      {error ? (
-        <p className={styles.error} role="alert">
-          {error}
-        </p>
-      ) : null}
-      <section aria-labelledby="admin-new-title" className={styles.block}>
-        <h3 id="admin-new-title">Nuevo código</h3>
-        <NewCodeForm onCreated={() => void load()} userId={account.userId ?? ""} />
-      </section>
-      <section aria-labelledby="admin-codes-title" className={styles.block}>
-        <div className={styles.blockHead}>
-          <h3 id="admin-codes-title">Códigos</h3>
-          <Button onClick={() => void load()} size="sm" variant="quiet">
-            <Icon name="refresh" size={16} />
-            Actualizar
-          </Button>
-        </div>
-        {loaded ? <CodesList codes={codes} events={events} onChanged={() => void load()} /> : <p className={styles.note}>Cargando…</p>}
-      </section>
-      {loaded ? <EventsList codes={codes} events={events} onChanged={load} /> : null}
+      <LibraryCodesManager library="general" libraryPath="/biblioteca/general" userId={account.userId ?? ""} />
     </Card>
   );
 }

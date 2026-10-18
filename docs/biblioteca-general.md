@@ -90,6 +90,17 @@ su carpeta pública de Drive, sus códigos y su registro (tarjeta 03.14). Por ah
 - El canje y la sesión ya aceptan una biblioteca compartida, cada una con su cookie
   (`pliegue-biblioteca-<dirección>`); la general conserva `pliegue-biblioteca-general`, así que
   las sesiones abiertas siguen valiendo. Una biblioteca pausada responde «cerrada».
+- **Páginas:** `/biblioteca/<dirección>`, `/biblioteca/<dirección>/<CÓDIGO>` y
+  `/biblioteca/<dirección>/leer` funcionan igual que las de la general (que tiene su propia
+  carpeta de rutas y no cambia), con el nombre de la biblioteca. Una dirección con mayúsculas
+  lleva a la canónica; una que no existe o está pausada dice «No está disponible», sin
+  distinguir. Se puede estar dentro de varias a la vez y salir de una no saca de las otras.
+- **En el navegador del visitante**, cada biblioteca guarda aparte sus entradas y su
+  identificador de equipo: un mismo equipo no lleva el mismo identificador a dos bibliotecas.
+- **El dueño** ve sus códigos y quién entró en Ajustes → Mi biblioteca compartida
+  (`/app/ajustes/mi-biblioteca`), con las mismas herramientas que el administrador en la general.
+  El enlace aparece en Ajustes → Cuenta solo si la cuenta ya tiene biblioteca: hasta que llegue el
+  alta, una biblioteca solo se crea a mano, con la clave secreta.
 
 La migración no cambia nada visible en la general: se puede aplicar antes o después de
 desplegar.

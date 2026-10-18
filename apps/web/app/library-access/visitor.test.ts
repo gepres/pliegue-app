@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { maxSavedEntries, parseSavedEntries, rememberEntry, type SavedEntry } from "./visitor";
+import { maxSavedEntries, parseSavedEntries, rememberEntry, visitorStorageKeys, type SavedEntry } from "./visitor";
 
 const entry = (code: string, name: string, at = "2026-10-03T10:00:00.000Z"): SavedEntry => ({ at, code, name });
 
@@ -18,6 +18,15 @@ describe("entradas guardadas del visitante", () => {
     for (const name of ["A", "B", "C", "D"]) entries = rememberEntry(entries, entry("OCT2026AREQUIPA", name));
     expect(entries).toHaveLength(maxSavedEntries);
     expect(entries.map((item) => item.name)).toEqual(["D", "C", "B"]);
+  });
+
+  it("cada biblioteca con su equipo y sus entradas; la general, con las claves de siempre", () => {
+    expect(visitorStorageKeys()).toEqual({ device: "pliegue-general-equipo", entries: "pliegue-general-entradas" });
+    expect(visitorStorageKeys("general")).toEqual(visitorStorageKeys());
+    const ana = visitorStorageKeys("ana-lopez");
+    const beto = visitorStorageKeys("beto");
+    expect(ana).toEqual({ device: "pliegue-biblioteca-ana-lopez-equipo", entries: "pliegue-biblioteca-ana-lopez-entradas" });
+    expect(new Set([ana.device, beto.device, visitorStorageKeys().device]).size).toBe(3);
   });
 
   it("lee lo guardado con cuidado: lo roto o ajeno no rompe la entrada", () => {

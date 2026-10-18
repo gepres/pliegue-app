@@ -19,6 +19,7 @@ import {
   useSyncStatus,
 } from "../../cloud/sync/sync-controller";
 import { useIsPliegueAdmin } from "../../cloud/admin-store";
+import { useOwnSharedLibrary } from "../../cloud/shared-library-store";
 import { describeChanges } from "../../cloud/sync/sync-activity";
 import { confirmAction } from "../app-ui/confirm-dialog";
 import { Icon } from "../app-ui/icons";
@@ -338,6 +339,18 @@ function AdminLink() {
   );
 }
 
+/** Solo para quien ya tiene una biblioteca compartida: un acceso a sus códigos. */
+function OwnLibraryLink() {
+  const own = useOwnSharedLibrary();
+  if (own.status !== "ready") return null;
+  return (
+    <p className={styles.note}>
+      Tienes la biblioteca compartida <Link href="/app/ajustes/mi-biblioteca">{own.library.name}</Link>: códigos de acceso y quién
+      entró.
+    </p>
+  );
+}
+
 export function AccountPanel() {
   const account = useAccount();
 
@@ -365,6 +378,7 @@ export function AccountPanel() {
         <SignInForm linkError={account.linkError} />
       )}
       <AdminLink />
+      <OwnLibraryLink />
     </Card>
   );
 }
