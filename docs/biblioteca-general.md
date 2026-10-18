@@ -53,9 +53,11 @@ servicio; el código y la sesión seguirían igual.
    «Restricciones de API», añade **Google Drive API** junto a la Picker API. Sin esto, Drive
    responde «Requests to this API drive method … are blocked».
 2. **Supabase → SQL Editor**: aplica, en orden,
-   `supabase/migrations/20261003120000_biblioteca_general.sql` y
+   `supabase/migrations/20261003120000_biblioteca_general.sql`,
    `supabase/migrations/20261003150000_biblioteca_general_vueltas.sql` (sin esta, una vuelta
-   cuenta como un uso nuevo), y regístrate como administradora o administrador con tu correo:
+   cuenta como un uso nuevo) y `supabase/migrations/20261018120000_bibliotecas_compartidas.sql`
+   (las bibliotecas de cada cuenta; ver abajo), y regístrate como administradora o administrador
+   con tu correo:
 
    ```sql
    insert into public.pliegue_admins (user_id)
@@ -73,10 +75,31 @@ servicio; el código y la sesión seguirían igual.
 5. En Pliegue, con tu cuenta: Ajustes → Cuenta → «biblioteca general» → crea un código y
    comparte su enlace.
 
+## Bibliotecas compartidas (en preparación)
+
+Cada cuenta podrá publicar su propia biblioteca, como la general, en `/biblioteca/<dirección>`:
+su carpeta pública de Drive, sus códigos y su registro (tarjeta 03.14). Por ahora está la base:
+
+- `shared_libraries`: una biblioteca por cuenta, con su dirección (no cambia), su carpeta, su
+  nombre y si está activa. La crea el servidor; el dueño solo cambia el nombre, la pausa o la
+  borra, y al borrarla se van sus códigos y su registro.
+- Un código es único **dentro de su biblioteca**: dos bibliotecas pueden tener cada una su
+  `OCT26`. La general conserva los suyos.
+- Permisos: el administrador gestiona solo los códigos y el registro de la general; cada dueño,
+  solo los de la suya.
+- El canje y la sesión ya aceptan una biblioteca compartida, cada una con su cookie
+  (`pliegue-biblioteca-<dirección>`); la general conserva `pliegue-biblioteca-general`, así que
+  las sesiones abiertas siguen valiendo. Una biblioteca pausada responde «cerrada».
+
+La migración no cambia nada visible en la general: se puede aplicar antes o después de
+desplegar.
+
 ## Archivos
 
 - `supabase/migrations/20261003120000_biblioteca_general.sql`: tablas, RLS y canje.
 - `supabase/migrations/20261003150000_biblioteca_general_vueltas.sql`: las vueltas no gastan uso.
+- `supabase/migrations/20261018120000_bibliotecas_compartidas.sql`: bibliotecas de cada cuenta,
+  códigos únicos por biblioteca y permisos por dueño.
 - `apps/web/app/library-access/`: sesión firmada, canje en el servidor, resumen del panel.
 - `apps/web/app/api/biblioteca/acceso/route.ts`: entrar (POST) y salir (DELETE).
 - `apps/web/app/biblioteca/general/`: entrada, biblioteca y lector.

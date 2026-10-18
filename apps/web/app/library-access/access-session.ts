@@ -6,7 +6,13 @@
  * Es un formato propio y mínimo —`datos.firma`, ambos en base64url—, no un JWT: solo lo firma y
  * lo lee este servidor. Web Crypto, para que funcione igual en Node y en el borde.
  */
-export const sessionCookieName = "pliegue-biblioteca-general";
+const cookiePrefix = "pliegue-biblioteca-";
+/** Una cookie por biblioteca: se puede estar dentro de varias a la vez. */
+export function librarySessionCookieName(library: string) {
+  return `${cookiePrefix}${library}`;
+}
+/** La de la biblioteca general, con el nombre de siempre: las sesiones abiertas siguen valiendo. */
+export const sessionCookieName = librarySessionCookieName("general");
 export const sessionVersion = 1;
 /** Treinta días, salvo que el código caduque antes. */
 export const maxSessionMs = 30 * 24 * 60 * 60 * 1000;

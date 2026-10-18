@@ -3,15 +3,20 @@ import { describe, expect, it } from "vitest";
 import {
   accessCodeId,
   accessCodeStillValid,
+  findSharedLibrary,
   readGeneralLibraryAccess,
+  readLibraryBaseConfig,
   readLibraryServerConfig,
+  readSharedLibraryAccess,
   redeemAccessCode,
   type LibraryServerConfig,
 } from "./access-server";
 import {
+  librarySessionCookieName,
   maxSessionMs,
   normalizeAccessCode,
   normalizeVisitorName,
+  sessionCookieName,
   sessionExpiry,
   signSession,
   verifySession,
@@ -54,13 +59,19 @@ describe("sesión firmada", () => {
   });
 });
 
-/** Un Supabase de mentira que responde al canje y a la consulta del código. */
-function supabase(rows: { redeem?: unknown; code?: unknown; events?: unknown; status?: number }) {
+/** Un Supabase de mentira que responde al canje y a las consultas del código, del registro y de la biblioteca. */
+function supabase(rows: { redeem?: unknown; code?: unknown; events?: unknown; library?: unknown; status?: number }) {
   const calls: Array<{ body: unknown; headers: Record<string, string>; url: string }> = [];
   const fetcher = (async (url: string, init?: RequestInit) => {
     calls.push({ body: init?.body ? JSON.parse(String(init.body)) : null, headers: init?.headers as Record<string, string>, url });
     if (rows.status) return new Response("{}", { status: rows.status });
-    const payload = url.includes("/rpc/") ? rows.redeem : url.includes("/library_access_events") ? (rows.events ?? [{ visitor_name: "Ana" }]) : rows.code;
+    const payload = url.includes("/rpc/")
+      ? rows.redeem
+      : url.includes("/library_access_events")
+        ? (rows.events ?? [{ visitor_name: "Ana" }])
+        : url.includes("/shared_libraries")
+          ? rows.library
+          : rows.code;
     return new Response(JSON.stringify(payload), { headers: { "Content-Type": "application/json" }, status: 200 });
   }) as typeof fetch;
   return { calls, fetcher };
@@ -147,5 +158,87 @@ describe("leer el acceso en cada visita", () => {
       readLibraryServerConfig({ PLIEGUE_GENERAL_FOLDER_ID: "f", PLIEGUE_LIBRARY_SECRET: "s", SUPABASE_SERVICE_ROLE_KEY: "old", SUPABASE_URL: "https://otra" })
         ?.sessionSecret,
     ).toBe("s");
+  });
+
+  it("las compartidas no necesitan la carpeta de la general", () => {
+    const environment = { NEXT_PUBLIC_SUPABASE_URL: "https://db.example/", SUPABASE_SECRET_KEY: "k" };
+    expect(readLibraryServerConfig(environment)).toBeNull();
+    expect(readLibraryBaseConfig(environment)).toEqual({ secretKey: "k", sessionSecret: "k", supabaseUrl: "https://db.example" });
+    expect(readLibraryBaseConfig({ SUPABASE_SECRET_KEY: "k" })).toBeNull();
+  });
+});
+
+describe("bibliotecas compartidas", () => {
+  const input = { code: "oct26", deviceId: "equipo-1", ip: "203.0.113.9", library: "ana-lopez", name: "Ana", userAgent: "Mozilla/5.0" };
+  const shared: LibrarySession = { ...session, library: "ana-lopez" };
+  const anaLibrary = [{ active: true, folder_id: "carpeta-de-ana", name: "Los libros de Ana" }];
+
+  it("cada biblioteca con su cookie; la general conserva la de siempre", () => {
+    expect(sessionCookieName).toBe("pliegue-biblioteca-general");
+    expect(librarySessionCookieName("general")).toBe(sessionCookieName);
+    expect(librarySessionCookieName("ana-lopez")).toBe("pliegue-biblioteca-ana-lopez");
+  });
+
+  it("canjea en la biblioteca que se pide y la sesión queda atada a ella", async () => {
+    const db = supabase({ redeem: [{ code_id: "c9", expires_at: null, ok: true, reason: "ok" }] });
+    const outcome = await redeemAccessCode(input, { config, fetcher: db.fetcher, now: () => now });
+    expect(outcome.ok && outcome.session.library).toBe("ana-lopez");
+    expect(db.calls[0]?.body).toMatchObject({ p_code: "OCT26", p_library: "ana-lopez" });
+  });
+
+  it("una biblioteca pausada dice que está cerrada; una dirección imposible ni pregunta", async () => {
+    const closed = supabase({ redeem: [{ code_id: null, expires_at: null, ok: false, reason: "closed" }] });
+    expect(await redeemAccessCode(input, { config, fetcher: closed.fetcher })).toEqual({ ok: false, reason: "closed" });
+    for (const library of ["leer", "Ana Lopez", ""]) {
+      const db = supabase({});
+      expect(await redeemAccessCode({ ...input, library }, { config, fetcher: db.fetcher })).toEqual({ ok: false, reason: "invalid" });
+      expect(db.calls).toHaveLength(0);
+    }
+  });
+
+  it("vale con la sesión de esa biblioteca, abierta, con el código activo y la persona en el registro", async () => {
+    const cookie = await signSession(shared, "secreto");
+    const open = supabase({ code: [{ active: true, expires_at: null }], library: anaLibrary });
+    expect(await readSharedLibraryAccess("ana-lopez", cookie, { config, fetcher: open.fetcher, now: () => now })).toEqual({
+      library: { folderId: "carpeta-de-ana", name: "Los libros de Ana", slug: "ana-lopez" },
+      session: shared,
+    });
+    expect(open.calls.map((call) => call.url)).toContain("https://db.example/rest/v1/shared_libraries?select=folder_id%2Cname%2Cactive&slug=eq.ana-lopez");
+
+    const paused = supabase({ code: [{ active: true, expires_at: null }], library: [{ ...anaLibrary[0], active: false }] });
+    expect(await readSharedLibraryAccess("ana-lopez", cookie, { config, fetcher: paused.fetcher, now: () => now })).toBeNull();
+    const gone = supabase({ code: [{ active: true, expires_at: null }], library: [] });
+    expect(await readSharedLibraryAccess("ana-lopez", cookie, { config, fetcher: gone.fetcher, now: () => now })).toBeNull();
+    const codeOff = supabase({ code: [{ active: false, expires_at: null }], library: anaLibrary });
+    expect(await readSharedLibraryAccess("ana-lopez", cookie, { config, fetcher: codeOff.fetcher, now: () => now })).toBeNull();
+  });
+
+  it("la sesión de una biblioteca no abre otra, ni la general", async () => {
+    const db = supabase({ code: [{ active: true, expires_at: null }], library: anaLibrary });
+    const deps = { config, fetcher: db.fetcher, now: () => now };
+    const anaCookie = await signSession(shared, "secreto");
+    const generalCookie = await signSession(session, "secreto");
+    expect(await readSharedLibraryAccess("beto", anaCookie, deps)).toBeNull();
+    expect(await readGeneralLibraryAccess(anaCookie, deps)).toBeNull();
+    expect(await readSharedLibraryAccess("ana-lopez", generalCookie, deps)).toBeNull();
+    expect(await readSharedLibraryAccess("general", generalCookie, deps)).toBeNull();
+    expect(db.calls).toHaveLength(0);
+  });
+
+  it("busca el código de un enlace dentro de su biblioteca", async () => {
+    const db = supabase({ code: [{ id: "c9" }] });
+    expect(await accessCodeId("oct26", { config, fetcher: db.fetcher }, "ana-lopez")).toBe("c9");
+    expect(db.calls[0]?.url).toBe("https://db.example/rest/v1/library_access_codes?code=eq.OCT26&library=eq.ana-lopez&select=id");
+  });
+
+  it("encuentra la biblioteca abierta y nada más", async () => {
+    expect(await findSharedLibrary("ana-lopez", { config, fetcher: supabase({ library: anaLibrary }).fetcher })).toEqual({
+      folderId: "carpeta-de-ana",
+      name: "Los libros de Ana",
+      slug: "ana-lopez",
+    });
+    expect(await findSharedLibrary("ana-lopez", { config, fetcher: supabase({ status: 500 }).fetcher })).toBeNull();
+    expect(await findSharedLibrary("general", { config, fetcher: supabase({ library: anaLibrary }).fetcher })).toBeNull();
+    expect(await findSharedLibrary("ana-lopez", { config: null })).toBeNull();
   });
 });
