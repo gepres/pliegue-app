@@ -275,3 +275,27 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.badge[data-status="suspended"] {
+  color: var(--pliegue-color-status-danger);
+}
+
+/* Moderación: el texto de un aviso o del motivo de una suspensión. */
+.longText {
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  color: var(--pliegue-color-text-primary);
+  font: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  min-height: 5rem;
+  padding: var(--pliegue-spacing-xs) var(--pliegue-spacing-sm);
+  resize: vertical;
+  width: 100%;
+}
+
+.longText:focus-visible {
+  outline: 2px solid var(--pliegue-color-action-primary);
+  outline-offset: 1px;
+}

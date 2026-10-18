@@ -12,6 +12,9 @@ export interface OwnSharedLibrary {
   folder_id: string;
   name: string;
   slug: string;
+  /** La suspendió la moderación de Pliegue: nadie entra y su dueño no la reactiva ni la borra. */
+  suspended_at: string | null;
+  suspended_reason: string | null;
 }
 
 export type OwnSharedLibraryState =
@@ -38,7 +41,7 @@ export function useOwnSharedLibrary(): OwnSharedLibraryState & { reload: () => v
     let active = true;
     void client
       .from("shared_libraries")
-      .select("slug,name,active,folder_id,created_at")
+      .select("slug,name,active,folder_id,created_at,suspended_at,suspended_reason")
       .maybeSingle()
       .then(({ data, error }) => {
         if (active) setAnswer({ library: error ? null : ((data as OwnSharedLibrary | null) ?? null), userId });

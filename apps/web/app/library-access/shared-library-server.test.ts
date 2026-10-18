@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { LibraryBaseConfig } from "./access-server";
-import { insertSharedLibrary, inspectDriveFolder, readDriveApiUrl, sessionUser } from "./shared-library-server";
+import { insertSharedLibrary, inspectDriveFolder, readDriveApiUrl, sessionUser, submitLibraryReport } from "./shared-library-server";
 
 const config: LibraryBaseConfig = { secretKey: "sb_secret_x", sessionSecret: "s", supabaseUrl: "https://db.example" };
 const folder = (overrides: Record<string, unknown> = {}) => ({
@@ -90,5 +90,30 @@ describe("crear la biblioteca", () => {
     expect(await insertSharedLibrary(library, { config, fetcher: conflict("Key (slug)=(ana-lopez) already exists.") })).toEqual({ ok: false, problem: "slug-taken" });
     expect(await insertSharedLibrary(library, { config, fetcher: conflict("Key (owner_id)=(u1) already exists.") })).toEqual({ ok: false, problem: "already-has" });
     expect(await insertSharedLibrary(library, { config, fetcher: respond({}, 500) })).toEqual({ ok: false, problem: "unavailable" });
+  });
+});
+
+describe("mandar una denuncia", () => {
+  const report = {
+    clientHash: "huella",
+    codeId: "c9",
+    details: "Libros con derechos",
+    deviceId: "equipo-1",
+    fileId: null,
+    library: "ana-lopez",
+    reason: "derechos",
+    visitorName: "Marta",
+  };
+
+  it("llama a la base con la clave secreta y dice cómo fue", async () => {
+    const fetcher = respond([{ ok: true, reason: "ok" }]);
+    expect(await submitLibraryReport(report, { config, fetcher })).toBe("ok");
+    const [url, init] = (fetcher as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://db.example/rest/v1/rpc/submit_library_report");
+    expect(JSON.parse(String(init.body))).toMatchObject({ p_code_id: "c9", p_library: "ana-lopez", p_visitor_name: "Marta" });
+    expect(await submitLibraryReport(report, { config, fetcher: respond([{ ok: false, reason: "too-many" }]) })).toBe("too-many");
+    expect(await submitLibraryReport(report, { config, fetcher: respond([{ ok: false, reason: "invalid" }]) })).toBe("invalid");
+    expect(await submitLibraryReport(report, { config, fetcher: respond({}, 500) })).toBe("unavailable");
+    expect(await submitLibraryReport(report, { config: null })).toBe("unavailable");
   });
 });

@@ -10,6 +10,7 @@ import { generalLibraryPlace, type LibraryPlace } from "../../library/general-li
 import { ConfirmDialogHost } from "../app-ui/confirm-dialog";
 import { ThemeToggle } from "../theme-toggle";
 import styles from "./general-library.module.css";
+import { ReportLibraryButton } from "./report-library";
 
 /** Salir de la biblioteca: borra la sesión de este navegador (solo la de esta biblioteca). */
 function LeaveButton({ place }: { place: LibraryPlace }) {
@@ -54,6 +55,8 @@ export function GeneralShell({
         </Link>
         <div className={styles.topbarActions}>
           {visitor ? <span className={styles.visitor}>Hola, {visitor}</span> : null}
+          {/* En una compartida, quien está dentro puede denunciarla; la general es de Pliegue. */}
+          {visitor && place.library !== generalLibraryPlace.library ? <ReportLibraryButton library={place.library} /> : null}
           <ThemeToggle compact />
           {visitor ? <LeaveButton place={place} /> : null}
         </div>

@@ -8,6 +8,7 @@ import { Button, Card, Field, Input } from "@pliegue/ui";
 import { useAccount } from "../../cloud/account-store";
 import { useOwnSharedLibrary, type OwnSharedLibrary } from "../../cloud/shared-library-store";
 import { cloudClient } from "../../cloud/supabase-client";
+import { markNoticeRead, noticeKindLabels, useUserNotices } from "../../cloud/user-notices-store";
 import { connectDrive, getDriveToken, preloadDriveConnection, useDriveConnection } from "../../drive/drive-connection";
 import { openDrivePicker, preloadDrivePicker } from "../../drive/drive-picker";
 import { isSharedLibrarySlug, suggestLibrarySlug } from "../../library-access/library-slug";
@@ -166,8 +167,44 @@ function CreateLibraryForm({ email, onCreated }: { email: string | null; onCreat
   );
 }
 
-/** Nombre, pausa y borrado de la biblioteca: lo que su dueño puede cambiar. */
+function noticeDate(iso: string) {
+  return new Date(iso).toLocaleString("es", { day: "numeric", hour: "2-digit", minute: "2-digit", month: "short" });
+}
+
+/** Lo que Pliegue le dijo al dueño sobre su biblioteca: avisos, incumplimientos y suspensiones. */
+function OwnerNotices({ library }: { library: string }) {
+  const { notices } = useUserNotices({ library });
+  if (!notices.length) return null;
+  return (
+    <section aria-labelledby="owner-notices-title" className={styles.block}>
+      <h3 id="owner-notices-title">Avisos de Pliegue</h3>
+      <ol className={styles.events}>
+        {notices.map((notice) => (
+          <li key={notice.id}>
+            <strong>
+              {notice.title}
+              {notice.read_at ? null : <span className={styles.returned}>nuevo</span>}
+            </strong>
+            <span>{noticeKindLabels[notice.kind]}</span>
+            {notice.read_at ? null : (
+              <Button className={styles.removeEntry} onClick={() => void markNoticeRead(notice.id)} size="sm" variant="quiet">
+                Entendido
+              </Button>
+            )}
+            <small>
+              {noticeDate(notice.created_at)}
+              {notice.body ? ` · ${notice.body}` : ""}
+            </small>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/** Nombre, pausa y borrado de la biblioteca: lo que su dueño puede cambiar. Suspendida, solo el nombre. */
 function LibrarySettings({ library, onChanged }: { library: OwnSharedLibrary; onChanged: () => void }) {
+  const suspended = Boolean(library.suspended_at);
   const [name, setName] = useState(library.name);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -226,24 +263,26 @@ function LibrarySettings({ library, onChanged }: { library: OwnSharedLibrary; on
           Guardar nombre
         </Button>
       </form>
-      <div className={styles.codeActions}>
-        <Button
-          disabled={busy}
-          onClick={() =>
-            void update(
-              { active: !library.active },
-              library.active ? "Pausada: nadie puede entrar hasta que la reanudes." : "Reanudada: se vuelve a entrar con los códigos activos.",
-            )
-          }
-          size="sm"
-          variant="quiet"
-        >
-          {library.active ? "Pausar" : "Reanudar"}
-        </Button>
-        <Button disabled={busy} onClick={() => void remove()} size="sm" variant="danger">
-          Borrar biblioteca
-        </Button>
-      </div>
+      {suspended ? null : (
+        <div className={styles.codeActions}>
+          <Button
+            disabled={busy}
+            onClick={() =>
+              void update(
+                { active: !library.active },
+                library.active ? "Pausada: nadie puede entrar hasta que la reanudes." : "Reanudada: se vuelve a entrar con los códigos activos.",
+              )
+            }
+            size="sm"
+            variant="quiet"
+          >
+            {library.active ? "Pausar" : "Reanudar"}
+          </Button>
+          <Button disabled={busy} onClick={() => void remove()} size="sm" variant="danger">
+            Borrar biblioteca
+          </Button>
+        </div>
+      )}
       {message ? (
         <p className={styles.note} role="status">
           {message}
@@ -310,11 +349,17 @@ export function SharedLibraryOwnerPanel() {
   return (
     <Card aria-labelledby="library-admin-title" as="section" className={styles.panel}>
       {header}
-      {own.library.active ? null : (
+      {own.library.suspended_at ? (
+        <p className={styles.error} role="status">
+          Suspendida por la moderación de Pliegue{own.library.suspended_reason ? `: ${own.library.suspended_reason}` : ""}. Mientras lo
+          esté nadie puede entrar, y no puedes reanudarla ni borrarla.
+        </p>
+      ) : own.library.active ? null : (
         <p className={styles.warning} role="status">
           Está pausada: nadie puede entrar, ni con un código activo, hasta que la reanudes.
         </p>
       )}
+      <OwnerNotices library={own.library.slug} />
       <LibrarySettings key={`${own.library.slug}:${own.library.name}`} library={own.library} onChanged={own.reload} />
       <LibraryCodesManager library={own.library.slug} libraryPath={`/biblioteca/${own.library.slug}`} userId={account.userId ?? ""} />
     </Card>

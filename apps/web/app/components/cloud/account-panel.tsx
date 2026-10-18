@@ -328,25 +328,34 @@ function SignedIn({ email, provider, userId }: { email: string | null; provider:
 }
 
 /** Ajustes → Cuenta. Opcional: sin ella, Pliegue sigue siendo local, como siempre. */
-/** Solo para quien administra la biblioteca general: un acceso a sus códigos. */
+/** Solo para quien administra Pliegue: la biblioteca general y la moderación de las compartidas. */
 function AdminLink() {
   const admin = useIsPliegueAdmin();
   if (!admin) return null;
   return (
     <p className={styles.note}>
-      Administras la <Link href="/app/ajustes/biblioteca-general">biblioteca general</Link>: códigos de acceso y quién entró.
+      Administras la <Link href="/app/ajustes/biblioteca-general">biblioteca general</Link> (códigos de acceso y quién entró) y la{" "}
+      <Link href="/app/ajustes/moderacion">moderación</Link> de las bibliotecas compartidas.
     </p>
   );
 }
 
-/** Solo para quien ya tiene una biblioteca compartida: un acceso a sus códigos. */
+/** La biblioteca compartida de la cuenta: un acceso a sus códigos o, si no tiene, a crearla. */
 function OwnLibraryLink() {
   const own = useOwnSharedLibrary();
-  if (own.status !== "ready") return null;
+  if (own.status === "ready") {
+    return (
+      <p className={styles.note}>
+        Tienes la biblioteca compartida <Link href="/app/ajustes/mi-biblioteca">{own.library.name}</Link>: códigos de acceso y quién
+        entró.
+      </p>
+    );
+  }
+  if (own.status !== "none") return null;
   return (
     <p className={styles.note}>
-      Tienes la biblioteca compartida <Link href="/app/ajustes/mi-biblioteca">{own.library.name}</Link>: códigos de acceso y quién
-      entró.
+      Comparte los libros de una carpeta pública de tu Drive con quien tú quieras:{" "}
+      <Link href="/app/ajustes/mi-biblioteca">crea tu biblioteca compartida</Link>.
     </p>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { Button, Card, Tag, buttonClassName } from "@pliegue/ui";
 
@@ -120,6 +120,8 @@ export interface ReaderPlacement {
   backLabel: string;
   /** Lo que se lee junto a la flecha de la barra: «Biblioteca», «Biblioteca general». */
   backShortLabel: string;
+  /** Una acción más en la barra, antes de las del lector: «Denunciar este libro» en una compartida. */
+  headerAction?: ReactNode;
   loadFile?: ((onProgress: (loaded: number, total: number | null) => void) => Promise<Blob>) | undefined;
 }
 
@@ -1350,6 +1352,7 @@ export function LocalReaderShell({
         </div>
 
         <div className={styles.appBarActions}>
+          {placement.headerAction ?? null}
           {translatable ? (
             <Popover
               onOpenChange={setTranslationOpen}

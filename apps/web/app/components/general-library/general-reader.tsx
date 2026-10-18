@@ -8,6 +8,7 @@ import { generalDocumentId, generalLibraryPlace, type LibraryPlace } from "../..
 import { describeGeneralLibraryError, readCachedGeneralLibrary } from "../../library/general-library-store";
 import { ConfirmDialogHost } from "../app-ui/confirm-dialog";
 import { LocalReaderShell, ReaderMessage, ReaderPlacementProvider } from "../local-document-reader";
+import { ReportLibraryButton } from "./report-library";
 
 type ReaderState = { document: DriveDocument; status: "ready" } | { message: string; status: "error" } | { status: "loading" };
 
@@ -71,7 +72,16 @@ export function GeneralReader({
   );
 
   return (
-    <ReaderPlacementProvider value={{ backHref: place.path, backLabel: place.reference, backShortLabel: place.title, loadFile }}>
+    <ReaderPlacementProvider
+      value={{
+        backHref: place.path,
+        backLabel: place.reference,
+        backShortLabel: place.title,
+        // En una compartida se puede denunciar el libro; la general es de Pliegue.
+        headerAction: place.library === generalLibraryPlace.library ? undefined : <ReportLibraryButton fileId={fileId} library={place.library} />,
+        loadFile,
+      }}
+    >
       {state.status === "ready" ? (
         <LocalReaderShell document={state.document} key={state.document.id} resumeRequested={resumeRequested} source={state.document} />
       ) : state.status === "error" ? (

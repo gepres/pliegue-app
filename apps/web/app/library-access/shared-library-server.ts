@@ -90,6 +90,56 @@ export async function inspectDriveFolder(
   return { name: folder.name ?? "", ok: true };
 }
 
+export type ReportOutcome = "invalid" | "ok" | "too-many" | "unavailable";
+
+/**
+ * Registra la denuncia de un visitante, con lo que dice su sesión (código, nombre y equipo) y la
+ * huella de su conexión. La base frena las repetidas y avisa a cada administrador.
+ */
+export async function submitLibraryReport(
+  report: {
+    clientHash: string;
+    codeId: string;
+    details: string;
+    deviceId: string;
+    fileId: string | null;
+    library: string;
+    reason: string;
+    visitorName: string;
+  },
+  deps: SharedLibraryServerDeps,
+): Promise<ReportOutcome> {
+  const { config } = deps;
+  if (!config) return "unavailable";
+  try {
+    const response = await (deps.fetcher ?? fetch)(`${config.supabaseUrl}/rest/v1/rpc/submit_library_report`, {
+      body: JSON.stringify({
+        p_client_hash: report.clientHash,
+        p_code_id: report.codeId,
+        p_details: report.details,
+        p_device_id: report.deviceId,
+        p_file_id: report.fileId,
+        p_library: report.library,
+        p_reason: report.reason,
+        p_visitor_name: report.visitorName,
+      }),
+      cache: "no-store",
+      headers: {
+        apikey: config.secretKey,
+        ...(config.secretKey.startsWith("eyJ") ? { Authorization: `Bearer ${config.secretKey}` } : {}),
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+    if (!response.ok) return "unavailable";
+    const [row] = (await response.json()) as Array<{ ok: boolean; reason: string }>;
+    if (row?.ok) return "ok";
+    return row?.reason === "too-many" ? "too-many" : "invalid";
+  } catch {
+    return "unavailable";
+  }
+}
+
 export type CreateProblem = "already-has" | "slug-taken" | "unavailable";
 
 export const createProblemMessages: Record<CreateProblem, string> = {

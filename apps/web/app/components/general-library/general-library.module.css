@@ -405,3 +405,24 @@
     grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
   }
 }
+
+/* ---- Denunciar ---- */
+
+.reportText {
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  color: var(--pliegue-color-text-primary);
+  font: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  min-height: 6rem;
+  padding: var(--pliegue-spacing-xs) var(--pliegue-spacing-sm);
+  resize: vertical;
+  width: 100%;
+}
+
+.reportText:focus-visible {
+  outline: 2px solid var(--pliegue-color-action-primary);
+  outline-offset: 1px;
+}
