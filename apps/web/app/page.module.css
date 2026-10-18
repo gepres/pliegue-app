@@ -905,6 +905,23 @@
 }
 
 @media (max-width: 480px) {
+  /* En el teléfono, «Instalar» se queda en su icono para que «Abrir la app» quepa entero. El
+     texto sigue ahí para los lectores de pantalla. */
+  .headerActions .install {
+    --pliegue-button-padding: 0px;
+
+    min-width: var(--pliegue-button-height);
+  }
+
+  .installLabel {
+    clip: rect(0 0 0 0);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
   .facts {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -919,6 +936,19 @@
 
   .footer {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* En los teléfonos más estrechos (320 px), la cabecera deja solo la marca: el enlace se sigue
+   llamando «Pliegue, inicio». */
+@media (max-width: 374px) {
+  .header .wordmark span {
+    clip: rect(0 0 0 0);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
   }
 }
 

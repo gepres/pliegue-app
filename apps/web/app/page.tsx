@@ -186,7 +186,7 @@ export default function HomePage() {
         </nav>
         <div className={styles.headerActions}>
           <ThemeToggle compact />
-          <InstallAppButton label="Instalar" size="sm" variant="quiet" />
+          <InstallAppButton className={styles.install} label="Instalar" labelClassName={styles.installLabel} size="sm" variant="quiet" />
           <Link className={buttonClassName({ size: "sm" })} href="/app">
             Abrir la app
           </Link>
