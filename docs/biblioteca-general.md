@@ -106,7 +106,9 @@ su carpeta pública de Drive, sus códigos y su registro (tarjeta 03.14). Por ah
   de Drive a `POST /api/biblioteca/compartidas`; el servidor comprueba la cuenta en Supabase Auth,
   pregunta a Drive con ese token que la carpeta es suya (o puede compartirla) y que la ve
   «cualquier persona con el enlace», y la crea con la clave secreta. El token de Drive no se
-  guarda. El índice JSON, si lo hay, lo sube el dueño a mano a la raíz de la carpeta.
+  guarda. El índice JSON, si lo hay, lo sube el dueño a mano a la raíz de la carpeta; en su panel,
+  «Comprobar la carpeta» la lee como un visitante y dice cuántos libros se ven, qué índice encontró
+  y con cuántas fichas. La plantilla se descarga de su biblioteca personal (Fuentes → índice JSON).
 - `PLIEGUE_DRIVE_API_URL` (opcional, de servidor): otra API de Drive para las comprobaciones. Solo
   para pruebas.
 

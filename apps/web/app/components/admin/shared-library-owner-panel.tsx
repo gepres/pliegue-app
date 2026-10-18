@@ -8,10 +8,12 @@ import { Button, Card, Field, Input } from "@pliegue/ui";
 import { useAccount } from "../../cloud/account-store";
 import { useOwnSharedLibrary, type OwnSharedLibrary } from "../../cloud/shared-library-store";
 import { cloudClient } from "../../cloud/supabase-client";
+import { publicConfig } from "../../config/public-config";
 import { connectDrive, getDriveToken, preloadDriveConnection, useDriveConnection } from "../../drive/drive-connection";
 import { openDrivePicker, preloadDrivePicker } from "../../drive/drive-picker";
 import { isSharedLibrarySlug, suggestLibrarySlug } from "../../library-access/library-slug";
 import { sharedLibraryTerms, sharedLibraryTermsVersion } from "../../library-access/shared-library-terms";
+import { describeGeneralLibraryError, loadGeneralLibrary } from "../../library/general-library-store";
 import { confirmAction } from "../app-ui/confirm-dialog";
 import { LibraryCodesManager } from "./library-admin-panel";
 import styles from "./library-admin-panel.module.css";
@@ -166,6 +168,60 @@ function CreateLibraryForm({ email, onCreated }: { email: string | null; onCreat
   );
 }
 
+const plural = (count: number, one: string, many: string) => `${count.toLocaleString("es")} ${count === 1 ? one : many}`;
+
+/**
+ * Lo que verá un visitante: se lee la carpeta como él, con la clave de API, y se dice cuántos
+ * libros hay y qué índice JSON se encontró en la raíz. Solo al pulsar: recorrer la carpeta gasta
+ * cuota de Google.
+ */
+function FolderIndexCheck({ folderId }: { folderId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ error: string } | { books: number; catalogued: number; index: { modifiedTime: string | null; name: string; readable: boolean } | null } | null>(null);
+  const apiKey = publicConfig.drive?.apiKey ?? "";
+
+  async function check() {
+    setBusy(true);
+    try {
+      const { index, library } = await loadGeneralLibrary(folderId, apiKey);
+      setResult({ books: library.documents.length, catalogued: library.catalogued, index });
+    } catch (error) {
+      setResult({ error: describeGeneralLibraryError(error) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section aria-labelledby="owner-index-title" className={styles.block}>
+      <h3 id="owner-index-title">La carpeta y su índice JSON</h3>
+      <p className={styles.note}>
+        Si dejas en la raíz de la carpeta el índice de Pliegue (<code>pliegue-catalogo….json</code>), los visitantes verán títulos,
+        autores y portadas. Lo descargas de tu biblioteca personal en{" "}
+        <Link href="/app/biblioteca/fuentes#importar-indice">Fuentes → índice JSON</Link> y lo subes tú a Drive.
+      </p>
+      <div className={styles.actions}>
+        <Button disabled={busy || !apiKey} onClick={() => void check()} size="sm" variant="secondary">
+          {busy ? "Leyendo la carpeta…" : "Comprobar la carpeta"}
+        </Button>
+        {result ? (
+          <p className={"error" in result ? styles.error : styles.note} role="status">
+            {"error" in result
+              ? result.error
+              : `${plural(result.books, "libro", "libros")} a la vista. ${
+                  result.index
+                    ? result.index.readable
+                      ? `Índice: ${result.index.name}${result.index.modifiedTime ? ` (${new Date(result.index.modifiedTime).toLocaleDateString("es")})` : ""}, con ficha para ${plural(result.catalogued, "libro", "libros")}.`
+                      : `Hay un índice (${result.index.name}), pero no se pudo leer: revisa que sea el JSON de Pliegue.`
+                    : "Sin índice JSON en la raíz: se verán los nombres de archivo."
+                }`}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 /** Nombre, pausa y borrado de la biblioteca: lo que su dueño puede cambiar. */
 function LibrarySettings({ library, onChanged }: { library: OwnSharedLibrary; onChanged: () => void }) {
   const [name, setName] = useState(library.name);
@@ -316,6 +372,7 @@ export function SharedLibraryOwnerPanel() {
         </p>
       )}
       <LibrarySettings key={`${own.library.slug}:${own.library.name}`} library={own.library} onChanged={own.reload} />
+      <FolderIndexCheck folderId={own.library.folder_id} />
       <LibraryCodesManager library={own.library.slug} libraryPath={`/biblioteca/${own.library.slug}`} userId={account.userId ?? ""} />
     </Card>
   );
