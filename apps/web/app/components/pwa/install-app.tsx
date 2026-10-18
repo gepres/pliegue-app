@@ -8,15 +8,20 @@ import { promptInstall, useInstallKind } from "../../pwa/install-store";
 import { Icon } from "../app-ui/icons";
 import styles from "./install-app.module.css";
 
-/** El botón aparece solo donde el navegador deja instalar con un clic: Chrome y Edge. */
+/**
+ * El botón aparece solo donde el navegador deja instalar con un clic: Chrome y Edge.
+ * `labelClassName` envuelve el texto para que quien lo usa pueda esconderlo y dejar el icono.
+ */
 export function InstallAppButton({
   className,
   label = "Instalar Pliegue",
+  labelClassName,
   size = "md",
   variant = "secondary",
 }: {
-  className?: string;
+  className?: string | undefined;
   label?: string;
+  labelClassName?: string | undefined;
   size?: "lg" | "md" | "sm";
   variant?: "primary" | "quiet" | "secondary";
 }) {
@@ -25,7 +30,7 @@ export function InstallAppButton({
   return (
     <Button className={className} onClick={() => void promptInstall()} size={size} variant={variant}>
       <Icon name="download" size={16} />
-      {label}
+      {labelClassName ? <span className={labelClassName}>{label}</span> : label}
     </Button>
   );
 }
