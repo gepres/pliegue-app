@@ -55,9 +55,10 @@ servicio; el código y la sesión seguirían igual.
 2. **Supabase → SQL Editor**: aplica, en orden,
    `supabase/migrations/20261003120000_biblioteca_general.sql`,
    `supabase/migrations/20261003150000_biblioteca_general_vueltas.sql` (sin esta, una vuelta
-   cuenta como un uso nuevo) y `supabase/migrations/20261018120000_bibliotecas_compartidas.sql`
-   (las bibliotecas de cada cuenta; ver abajo), y regístrate como administradora o administrador
-   con tu correo:
+   cuenta como un uso nuevo), `supabase/migrations/20261018120000_bibliotecas_compartidas.sql`
+   (las bibliotecas de cada cuenta; ver abajo) y
+   `supabase/migrations/20261018150000_moderacion_bibliotecas.sql` (su moderación), y regístrate
+   como administradora o administrador con tu correo:
 
    ```sql
    insert into public.pliegue_admins (user_id)
@@ -75,10 +76,10 @@ servicio; el código y la sesión seguirían igual.
 5. En Pliegue, con tu cuenta: Ajustes → Cuenta → «biblioteca general» → crea un código y
    comparte su enlace.
 
-## Bibliotecas compartidas (en preparación)
+## Bibliotecas compartidas
 
-Cada cuenta podrá publicar su propia biblioteca, como la general, en `/biblioteca/<dirección>`:
-su carpeta pública de Drive, sus códigos y su registro (tarjeta 03.14). Por ahora está la base:
+Cada cuenta puede publicar su propia biblioteca, como la general, en `/biblioteca/<dirección>`:
+su carpeta pública de Drive, sus códigos y su registro (tarjetas 03.14 y 03.14b).
 
 - `shared_libraries`: una biblioteca por cuenta, con su dirección (no cambia), su carpeta, su
   nombre y si está activa. La crea el servidor; el dueño solo cambia el nombre, la pausa o la
@@ -90,6 +91,53 @@ su carpeta pública de Drive, sus códigos y su registro (tarjeta 03.14). Por ah
 - El canje y la sesión ya aceptan una biblioteca compartida, cada una con su cookie
   (`pliegue-biblioteca-<dirección>`); la general conserva `pliegue-biblioteca-general`, así que
   las sesiones abiertas siguen valiendo. Una biblioteca pausada responde «cerrada».
+- **Páginas:** `/biblioteca/<dirección>`, `/biblioteca/<dirección>/<CÓDIGO>` y
+  `/biblioteca/<dirección>/leer` funcionan igual que las de la general (que tiene su propia
+  carpeta de rutas y no cambia), con el nombre de la biblioteca. Una dirección con mayúsculas
+  lleva a la canónica; una que no existe o está pausada dice «No está disponible», sin
+  distinguir. Se puede estar dentro de varias a la vez y salir de una no saca de las otras.
+- **En el navegador del visitante**, cada biblioteca guarda aparte sus entradas y su
+  identificador de equipo: un mismo equipo no lleva el mismo identificador a dos bibliotecas.
+- **El dueño** ve sus códigos y quién entró en Ajustes → Mi biblioteca compartida
+  (`/app/ajustes/mi-biblioteca`), con las mismas herramientas que el administrador en la general.
+  Ahí mismo le cambia el nombre, la pausa o la borra.
+- **Crearla** (en la misma página, con la sesión iniciada): conectar Drive y elegir la carpeta con
+  el selector de Google, ponerle nombre y dirección, y aceptar las normas
+  (`library-access/shared-library-terms.ts`). El navegador manda la sesión de la cuenta y el token
+  de Drive a `POST /api/biblioteca/compartidas`; el servidor comprueba la cuenta en Supabase Auth,
+  pregunta a Drive con ese token que la carpeta es suya (o puede compartirla) y que la ve
+  «cualquier persona con el enlace», y la crea con la clave secreta. El token de Drive no se
+  guarda. El índice JSON, si lo hay, lo sube el dueño a mano a la raíz de la carpeta; en su panel,
+  «Comprobar la carpeta» la lee como un visitante y dice cuántos libros se ven, qué índice encontró
+  y con cuántas fichas. La plantilla se descarga de su biblioteca personal (Fuentes → índice JSON).
+- `PLIEGUE_DRIVE_API_URL` (opcional, de servidor): otra API de Drive para las comprobaciones. Solo
+  para pruebas.
+- El enlace para crearla aparece en Ajustes → Cuenta a cualquier cuenta con sesión iniciada que no
+  tenga biblioteca.
+
+## Moderación
+
+Quien administra Pliegue (`pliegue_admins`) modera las bibliotecas compartidas en Ajustes →
+Moderación (`/app/ajustes/moderacion`). **Se suspende la biblioteca, nunca la cuenta**, y no se
+manda correo: todo llega como alertas dentro de Pliegue.
+
+- **Qué ve:** cada biblioteca con su dueño (nombre y correo), su estado y sus totales (códigos,
+  entradas, personas, denuncias y avisos). Los nombres de quienes entran siguen siendo solo de su
+  dueño.
+- **Denuncias:** quien está dentro de una compartida, con su sesión, puede denunciarla («Denunciar»
+  en la cabecera) o denunciar un libro (la bandera en la barra del lector), con un motivo y un
+  texto. Hasta 3 por equipo y biblioteca al día. Le llegan al administrador como alerta y en la
+  bandeja, donde las marca como revisadas o las descarta. **El dueño no ve las denuncias ni quién
+  las mandó.**
+- **Avisar:** un aviso o un incumplimiento, con título y mensaje, que el dueño ve arriba de cada
+  página hasta que pulsa «Entendido» y en «Avisos de Pliegue» de su biblioteca.
+- **Suspender**, con motivo: los visitantes quedan fuera en su próxima visita y el canje responde
+  «cerrada». El dueño ve el motivo y no puede reanudarla ni borrarla (así no abre otra). Su cuenta
+  sigue funcionando. **Reactivar** lo deshace, con alerta.
+- Base: `supabase/migrations/20261018150000_moderacion_bibliotecas.sql` (`user_notices`,
+  `library_reports`, `admin_*`, `submit_library_report`). **Aplícala antes de desplegar esta
+  versión:** sin ella, el servidor no encuentra las bibliotecas compartidas (pide su columna de
+  suspensión) y quedan como «No está disponible»; la general no se ve afectada.
 
 La migración no cambia nada visible en la general: se puede aplicar antes o después de
 desplegar.
@@ -100,6 +148,8 @@ desplegar.
 - `supabase/migrations/20261003150000_biblioteca_general_vueltas.sql`: las vueltas no gastan uso.
 - `supabase/migrations/20261018120000_bibliotecas_compartidas.sql`: bibliotecas de cada cuenta,
   códigos únicos por biblioteca y permisos por dueño.
+- `supabase/migrations/20261018150000_moderacion_bibliotecas.sql`: suspensión, alertas, denuncias
+  y funciones del administrador.
 - `apps/web/app/library-access/`: sesión firmada, canje en el servidor, resumen del panel.
 - `apps/web/app/api/biblioteca/acceso/route.ts`: entrar (POST) y salir (DELETE).
 - `apps/web/app/biblioteca/general/`: entrada, biblioteca y lector.

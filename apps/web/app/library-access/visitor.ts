@@ -1,14 +1,20 @@
 /**
- * Quién es el visitante de la biblioteca general, en su propio navegador: un identificador
+ * Quién es el visitante de una biblioteca por código, en su propio navegador: un identificador
  * aleatorio del equipo —para distinguir equipos en el registro sin saber quién es nadie— y con
  * qué nombre y código entró las últimas veces, para ofrecerle volver a entrar igual. Volver así
  * no gasta un uso del código: el servidor lo reconoce por el código, el equipo y el nombre.
+ *
+ * Cada biblioteca tiene los suyos: un equipo no lleva el mismo identificador a dos bibliotecas,
+ * así que dos dueños no pueden cruzar sus registros. La general conserva las claves de siempre.
  */
-const deviceKey = "pliegue-general-equipo";
-const entriesKey = "pliegue-general-entradas";
 /** Versión anterior: solo el nombre. Se lee para no perderlo. */
 const legacyNameKey = "pliegue-general-nombre";
 export const maxSavedEntries = 3;
+
+export function visitorStorageKeys(library = "general") {
+  if (library === "general") return { device: "pliegue-general-equipo", entries: "pliegue-general-entradas" };
+  return { device: `pliegue-biblioteca-${library}-equipo`, entries: `pliegue-biblioteca-${library}-entradas` };
+}
 
 export interface SavedEntry {
   /** Cuándo entró, en ISO. */
@@ -17,7 +23,8 @@ export interface SavedEntry {
   name: string;
 }
 
-export function visitorDeviceId() {
+export function visitorDeviceId(library = "general") {
+  const deviceKey = visitorStorageKeys(library).device;
   try {
     const existing = window.localStorage.getItem(deviceKey);
     if (existing && /^[\w-]{8,64}$/.test(existing)) return existing;
@@ -60,25 +67,26 @@ export function parseSavedEntries(serialized: string | null): SavedEntry[] {
 }
 
 /** Para `useSyncExternalStore`: el texto guardado, que es estable mientras no cambie. */
-export function savedEntriesSnapshot() {
+export function savedEntriesSnapshot(library = "general") {
   try {
-    return window.localStorage.getItem(entriesKey) ?? "";
+    return window.localStorage.getItem(visitorStorageKeys(library).entries) ?? "";
   } catch {
     return "";
   }
 }
 
-export function saveEntry(entry: SavedEntry) {
+export function saveEntry(entry: SavedEntry, library = "general") {
+  const entriesKey = visitorStorageKeys(library).entries;
   try {
     const next = rememberEntry(parseSavedEntries(window.localStorage.getItem(entriesKey)), entry);
     window.localStorage.setItem(entriesKey, JSON.stringify(next));
-    window.localStorage.removeItem(legacyNameKey);
+    if (library === "general") window.localStorage.removeItem(legacyNameKey);
   } catch {
     // Se pedirá otra vez.
   }
 }
 
-/** El nombre de la versión anterior, si quedó: rellena el campo aunque no haya entradas. */
+/** El nombre de la versión anterior de la general, si quedó: rellena el campo aunque no haya entradas. */
 export function legacyVisitorName() {
   try {
     return window.localStorage.getItem(legacyNameKey) ?? "";

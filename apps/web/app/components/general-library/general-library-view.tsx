@@ -15,7 +15,7 @@ import {
   type DocumentSortOrder,
 } from "../../library/documents";
 import { toggleFavorite, useFavorites } from "../../library/favorite-store";
-import { generalFileId, generalReaderHref } from "../../library/general-library";
+import { generalFileId, generalLibraryPlace, libraryReaderHref, type LibraryPlace } from "../../library/general-library";
 import { useGeneralLibrary } from "../../library/general-library-store";
 import { languageLabel } from "../../library/language";
 import { IconButton, Segmented } from "../app-ui/controls";
@@ -50,11 +50,19 @@ function updatedAgo(iso: string | null) {
 }
 
 /**
- * La biblioteca general con los mismos filtros, orden, vistas y tarjetas que la personal. Lo que
- * no tiene sentido aquí —origen, disponibilidad, analizar con IA, importar— no aparece. Los
- * favoritos y el avance se guardan en el navegador del visitante.
+ * Una biblioteca por código —la general o una compartida— con los mismos filtros, orden, vistas y
+ * tarjetas que la personal. Lo que no tiene sentido aquí —origen, disponibilidad, analizar con IA,
+ * importar— no aparece. Los favoritos y el avance se guardan en el navegador del visitante.
  */
-export function GeneralLibraryView({ apiKey, folderId }: { apiKey: string; folderId: string }) {
+export function GeneralLibraryView({
+  apiKey,
+  folderId,
+  place = generalLibraryPlace,
+}: {
+  apiKey: string;
+  folderId: string;
+  place?: LibraryPlace;
+}) {
   const state = useGeneralLibrary(folderId, apiKey);
   const favorites = useFavorites();
   const phoneWidth = usePhoneWidth();
@@ -194,7 +202,7 @@ export function GeneralLibraryView({ apiKey, folderId }: { apiKey: string; folde
     <>
       <header className={libraryStyles.header}>
         <div>
-          <h1>Biblioteca general</h1>
+          <h1>{place.title}</h1>
           <p>
             {plural(visibleTotal, "libro", "libros")}
             {organization.categories.length ? ` · ${plural(organization.categories.length, "categoría", "categorías")}` : ""}
@@ -212,7 +220,7 @@ export function GeneralLibraryView({ apiKey, folderId }: { apiKey: string; folde
       <form className={libraryStyles.commandBar} onSubmit={(event) => event.preventDefault()} role="search">
         <label className={libraryStyles.search}>
           <Icon name="search" size={18} />
-          <span className={libraryStyles.visuallyHidden}>Buscar en la biblioteca general</span>
+          <span className={libraryStyles.visuallyHidden}>Buscar en {place.reference}</span>
           <input
             id="general-search"
             name="q"
@@ -460,7 +468,7 @@ export function GeneralLibraryView({ apiKey, folderId }: { apiKey: string; folde
 
       {filteredDocuments.length ? (
         <section
-          aria-label="Libros de la biblioteca general"
+          aria-label={`Libros de ${place.reference}`}
           className={view === "grid" ? cx(libraryStyles.grid, gridDetails && libraryStyles.gridDetailed) : libraryStyles.list}
         >
           {filteredDocuments.map((document) => (
@@ -473,8 +481,8 @@ export function GeneralLibraryView({ apiKey, folderId }: { apiKey: string; folde
               isFavorite={favoriteIds.has(document.id)}
               key={document.id}
               onToggleFavorite={() => toggleFavorite(document.id)}
-              originLabel="Biblioteca general"
-              readerHref={(resume) => generalReaderHref(generalFileId(document.id), resume)}
+              originLabel={place.title}
+              readerHref={(resume) => libraryReaderHref(place, generalFileId(document.id), resume)}
               showDetails={gridDetails}
               view={view}
             />

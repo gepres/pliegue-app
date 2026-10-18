@@ -1,0 +1,75 @@
+/* Alertas de Pliegue: una tarjeta por alerta, con su tipo en el borde izquierdo. */
+.banner {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  margin-bottom: var(--pliegue-spacing-lg);
+}
+
+.notice {
+  align-items: start;
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-inline-start: 4px solid var(--pliegue-color-accent-warm);
+  border-radius: var(--pliegue-radius-md);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
+  justify-content: space-between;
+  padding: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
+}
+
+.notice[data-kind="suspension"],
+.notice[data-kind="incumplimiento"] {
+  border-inline-start-color: var(--pliegue-color-status-danger);
+}
+
+.notice[data-kind="reactivacion"] {
+  border-inline-start-color: var(--pliegue-color-action-primary);
+}
+
+.text {
+  display: grid;
+  flex: 1 1 18rem;
+  gap: 2px;
+  min-width: 0;
+}
+
+.text h2 {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1.0625rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.text p {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.text .kind {
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.actions a {
+  color: var(--pliegue-color-action-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.more {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  margin: 0;
+}

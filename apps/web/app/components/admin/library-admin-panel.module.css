@@ -163,6 +163,33 @@
   margin: 0;
 }
 
+/* Las normas de una biblioteca compartida y la casilla para aceptarlas. */
+.terms {
+  color: var(--pliegue-color-text-secondary);
+  display: grid;
+  font-size: 0.875rem;
+  gap: var(--pliegue-spacing-xs);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 44rem;
+  padding-left: 1.25rem;
+}
+
+.consent {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-size: 0.9375rem;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.consent input {
+  accent-color: var(--pliegue-color-action-primary);
+  block-size: 1.125rem;
+  inline-size: 1.125rem;
+  margin: 0;
+}
+
 .returned {
   background: var(--pliegue-color-bg-subtle);
   border-radius: 999px;
@@ -247,4 +274,28 @@
   .limits {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.badge[data-status="suspended"] {
+  color: var(--pliegue-color-status-danger);
+}
+
+/* Moderación: el texto de un aviso o del motivo de una suspensión. */
+.longText {
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  color: var(--pliegue-color-text-primary);
+  font: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  min-height: 5rem;
+  padding: var(--pliegue-spacing-xs) var(--pliegue-spacing-sm);
+  resize: vertical;
+  width: 100%;
+}
+
+.longText:focus-visible {
+  outline: 2px solid var(--pliegue-color-action-primary);
+  outline-offset: 1px;
 }

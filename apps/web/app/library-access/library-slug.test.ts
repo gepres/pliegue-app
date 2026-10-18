@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { isSharedLibrarySlug, reservedLibrarySlugs } from "./library-slug";
+import { isSharedLibrarySlug, reservedLibrarySlugs, sharedSlugFromParam, suggestLibrarySlug } from "./library-slug";
 
 describe("dirección de una biblioteca compartida", () => {
   it("acepta minúsculas, números y guiones sueltos; empieza por letra", () => {
@@ -15,6 +15,24 @@ describe("dirección de una biblioteca compartida", () => {
   it("no puede tomar una dirección reservada, empezando por la general", () => {
     expect(reservedLibrarySlugs).toContain("general");
     for (const slug of reservedLibrarySlugs) expect(isSharedLibrarySlug(slug)).toBe(false);
+  });
+
+  it("sugiere una dirección válida a partir de un nombre o de un correo", () => {
+    expect(suggestLibrarySlug("Luis Lara")).toBe("luis-lara");
+    expect(suggestLibrarySlug("luis.lara.dev@gmail.com")).toBe("luis-lara-dev");
+    expect(suggestLibrarySlug("Ñandú Pérez")).toBe("nandu-perez");
+    expect(suggestLibrarySlug("2026 club")).toBe("club");
+    expect(suggestLibrarySlug("general")).toBe("general-lecturas");
+    expect(suggestLibrarySlug("x")).toBe("x-biblioteca");
+    expect(suggestLibrarySlug("¿?")).toBe("");
+    for (const value of ["Luis Lara", "luis.lara.dev@gmail.com", "general", "x", "a".repeat(60)]) expect(isSharedLibrarySlug(suggestLibrarySlug(value))).toBe(true);
+  });
+
+  it("lleva la dirección de la URL a su forma canónica, o a ninguna", () => {
+    expect(sharedSlugFromParam("luis-lara")).toBe("luis-lara");
+    expect(sharedSlugFromParam("Luis-Lara")).toBe("luis-lara");
+    expect(sharedSlugFromParam("GENERAL")).toBeNull();
+    expect(sharedSlugFromParam("luis%20lara")).toBeNull();
   });
 
   it("reserva lo mismo que la base", () => {

@@ -19,6 +19,7 @@ import { ConfirmDialogHost } from "./app-ui/confirm-dialog";
 import { NextStepHost } from "./app-ui/next-step-dialog";
 import { BookCopiesSync } from "./book-copies-sync";
 import { CloudSync } from "./cloud/cloud-sync";
+import { NoticesBanner } from "./cloud/notices-banner";
 import { InstallAppNavItem } from "./pwa/install-app";
 import { IconButton } from "./app-ui/controls";
 import { Icon } from "./app-ui/icons";
@@ -189,6 +190,7 @@ export function WorkspaceShell({ children }: Readonly<{ children: ReactNode }>) 
           className={cx(styles.content, isWideSection(pathname) && styles.contentWide)}
           id="workspace-content"
         >
+          <NoticesBanner />
           {children}
         </main>
       </div>

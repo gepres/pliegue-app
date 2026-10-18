@@ -6,20 +6,22 @@ import { useState, type ReactNode } from "react";
 
 import { Button } from "@pliegue/ui";
 
-import { generalLibraryPath } from "../../library/general-library";
+import { generalLibraryPlace, type LibraryPlace } from "../../library/general-library";
 import { ConfirmDialogHost } from "../app-ui/confirm-dialog";
 import { ThemeToggle } from "../theme-toggle";
 import styles from "./general-library.module.css";
+import { ReportLibraryButton } from "./report-library";
 
-/** Salir de la biblioteca general: borra la sesión de este navegador. */
-function LeaveButton() {
+/** Salir de la biblioteca: borra la sesión de este navegador (solo la de esta biblioteca). */
+function LeaveButton({ place }: { place: LibraryPlace }) {
   const [busy, setBusy] = useState(false);
   async function leave() {
     setBusy(true);
     try {
-      await fetch("/api/biblioteca/acceso", { method: "DELETE" });
+      const query = place.library === generalLibraryPlace.library ? "" : `?library=${encodeURIComponent(place.library)}`;
+      await fetch(`/api/biblioteca/acceso${query}`, { method: "DELETE" });
     } finally {
-      window.location.assign(generalLibraryPath);
+      window.location.assign(place.path);
     }
   }
   return (
@@ -29,21 +31,34 @@ function LeaveButton() {
   );
 }
 
-/** El marco de la biblioteca general: aparte del espacio personal, sin su navegación ni su nube. */
-export function GeneralShell({ children, visitor }: { children: ReactNode; visitor: string | null }) {
+/**
+ * El marco de una biblioteca por código, la general o una compartida: aparte del espacio
+ * personal, sin su navegación ni su nube.
+ */
+export function GeneralShell({
+  children,
+  place = generalLibraryPlace,
+  visitor,
+}: {
+  children: ReactNode;
+  place?: LibraryPlace;
+  visitor: string | null;
+}) {
   return (
     <div className={styles.shell}>
       <header className={styles.topbar}>
-        <Link className={styles.brand} href={generalLibraryPath}>
+        <Link className={styles.brand} href={place.path}>
           <Image alt="" height={26} priority src="/brand/pliegue-mark.svg" width={26} />
           <span>
-            Pliegue <small>· Biblioteca general</small>
+            Pliegue <small>· {place.title}</small>
           </span>
         </Link>
         <div className={styles.topbarActions}>
           {visitor ? <span className={styles.visitor}>Hola, {visitor}</span> : null}
+          {/* En una compartida, quien está dentro puede denunciarla; la general es de Pliegue. */}
+          {visitor && place.library !== generalLibraryPlace.library ? <ReportLibraryButton library={place.library} /> : null}
           <ThemeToggle compact />
-          {visitor ? <LeaveButton /> : null}
+          {visitor ? <LeaveButton place={place} /> : null}
         </div>
       </header>
       <main className={styles.content}>{children}</main>

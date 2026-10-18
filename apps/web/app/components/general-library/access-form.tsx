@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
 
 import { Button, Card, Field, Input, Tag } from "@pliegue/ui";
 
@@ -13,10 +13,11 @@ import {
   savedEntriesSnapshot,
   visitorDeviceId,
 } from "../../library-access/visitor";
-import { generalLibraryPath } from "../../library/general-library";
+import { generalLibraryPlace, type LibraryPlace } from "../../library/general-library";
 import styles from "./general-library.module.css";
 
 const subscribeToNothing = () => () => undefined;
+const noLegacyName = () => "";
 
 function entryDate(iso: string) {
   const date = new Date(iso);
@@ -24,14 +25,24 @@ function entryDate(iso: string) {
 }
 
 /**
- * Entrar en la biblioteca general. Quien ya entró desde este navegador vuelve con un clic, con
- * el mismo nombre y código: el servidor reconoce la vuelta y no gasta otro uso del código. Si
- * no, el código (de la dirección o escrito) y un nombre.
+ * Entrar en una biblioteca por código: la general o una compartida. Quien ya entró desde este
+ * navegador vuelve con un clic, con el mismo nombre y código: el servidor reconoce la vuelta y no
+ * gasta otro uso del código. Si no, el código (de la dirección o escrito) y un nombre.
  */
-export function AccessForm({ activeName = null, initialCode = "" }: { activeName?: string | null; initialCode?: string }) {
+export function AccessForm({
+  activeName = null,
+  initialCode = "",
+  place = generalLibraryPlace,
+}: {
+  activeName?: string | null;
+  initialCode?: string;
+  place?: LibraryPlace;
+}) {
+  const general = place.library === generalLibraryPlace.library;
+  const entriesSnapshot = useCallback(() => savedEntriesSnapshot(place.library), [place.library]);
   // Lo guardado solo existe en el navegador: en el servidor, nada.
-  const savedSerialized = useSyncExternalStore(subscribeToNothing, savedEntriesSnapshot, () => "");
-  const legacyName = useSyncExternalStore(subscribeToNothing, legacyVisitorName, () => "");
+  const savedSerialized = useSyncExternalStore(subscribeToNothing, entriesSnapshot, () => "");
+  const legacyName = useSyncExternalStore(subscribeToNothing, general ? legacyVisitorName : noLegacyName, () => "");
   const saved = useMemo(() => parseSavedEntries(savedSerialized), [savedSerialized]);
   const urlCode = normalizeAccessCode(initialCode);
   // Con un código en la dirección, se ofrecen las entradas con ese código.
@@ -60,7 +71,13 @@ export function AccessForm({ activeName = null, initialCode = "" }: { activeName
     setBusy(key);
     try {
       const response = await fetch("/api/biblioteca/acceso", {
-        body: JSON.stringify({ code: normalizedCode, deviceId: visitorDeviceId(), name: normalizedName }),
+        body: JSON.stringify({
+          code: normalizedCode,
+          deviceId: visitorDeviceId(place.library),
+          // La general no lo necesita: sin biblioteca, el servidor entiende la general.
+          ...(general ? {} : { library: place.library }),
+          name: normalizedName,
+        }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
       });
@@ -69,9 +86,9 @@ export function AccessForm({ activeName = null, initialCode = "" }: { activeName
         setError(body.error ?? "No fue posible entrar. Inténtalo de nuevo.");
         return;
       }
-      saveEntry({ at: new Date().toISOString(), code: normalizedCode, name: normalizedName });
+      saveEntry({ at: new Date().toISOString(), code: normalizedCode, name: normalizedName }, place.library);
       // Carga completa: la página lee la sesión nueva en el servidor.
-      window.location.assign(generalLibraryPath);
+      window.location.assign(place.path);
     } catch {
       setError("No hay conexión con Pliegue. Revisa tu internet y vuelve a intentarlo.");
     } finally {
@@ -86,7 +103,7 @@ export function AccessForm({ activeName = null, initialCode = "" }: { activeName
 
   return (
     <Card as="section" aria-labelledby="general-access-title" className={styles.accessCard}>
-      <Tag>Biblioteca general</Tag>
+      <Tag>{place.title}</Tag>
       <h1 id="general-access-title">{offers.length && !otherEntry ? "Hola de nuevo" : "Entra con tu código"}</h1>
       <p className={styles.lead}>
         {offers.length && !otherEntry
@@ -97,7 +114,7 @@ export function AccessForm({ activeName = null, initialCode = "" }: { activeName
       {activeName ? (
         <p className={styles.notice} role="status">
           Ya estás dentro como {activeName} con otro código. Entra con este para que quede registrado, o{" "}
-          <Link href={generalLibraryPath}>vuelve a la biblioteca</Link> sin cambiar de código.
+          <Link href={place.path}>vuelve a la biblioteca</Link> sin cambiar de código.
         </p>
       ) : null}
 

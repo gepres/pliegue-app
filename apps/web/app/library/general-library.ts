@@ -11,6 +11,35 @@ import { createDriveDocument, type DriveDocument } from "./drive-document";
  */
 export const generalLibraryPath = "/biblioteca/general";
 
+/**
+ * Dónde está una biblioteca de las que se abren con código: la general o una compartida. Las
+ * pantallas de la general sirven para las dos; esto les dice a cuál apuntan y cómo nombrarla.
+ */
+export interface LibraryPlace {
+  /** `general` o la dirección de la compartida: lo que se manda al entrar y al salir. */
+  library: string;
+  path: string;
+  /** Para frases: «Volver a la biblioteca general», «Buscar en «Los libros de Ana»». */
+  reference: string;
+  /** Para títulos y rótulos. */
+  title: string;
+}
+
+export const generalLibraryPlace: LibraryPlace = {
+  library: "general",
+  path: generalLibraryPath,
+  reference: "la biblioteca general",
+  title: "Biblioteca general",
+};
+
+export function sharedLibraryPlace(slug: string, name: string): LibraryPlace {
+  return { library: slug, path: `/biblioteca/${slug}`, reference: `«${name}»`, title: name };
+}
+
+/**
+ * Los documentos de las bibliotecas por código llevan el prefijo `general:` aunque vengan de una
+ * compartida: todos viven solo en el navegador del visitante y la sincronización no los toca.
+ */
 export function generalDocumentId(fileId: string) {
   return `general:${fileId}`;
 }
@@ -20,8 +49,12 @@ export function generalFileId(documentId: string) {
   return documentId.startsWith("general:") ? documentId.slice("general:".length) : documentId;
 }
 
+export function libraryReaderHref(place: Pick<LibraryPlace, "path">, fileId: string, resume = false) {
+  return `${place.path}/leer?libro=${encodeURIComponent(fileId)}${resume ? "&resume=1" : ""}`;
+}
+
 export function generalReaderHref(fileId: string, resume = false) {
-  return `${generalLibraryPath}/leer?libro=${encodeURIComponent(fileId)}${resume ? "&resume=1" : ""}`;
+  return libraryReaderHref(generalLibraryPlace, fileId, resume);
 }
 
 /** El índice JSON de Pliegue que acompaña a la carpeta, si lo hay (el más reciente). */

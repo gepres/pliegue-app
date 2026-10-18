@@ -63,6 +63,7 @@ describe("panel de la biblioteca general", () => {
     expect(random).toBe("OCT2026-AAAA");
     for (let attempt = 0; attempt < 20; attempt += 1) expect(normalizeAccessCode(suggestAccessCode(october))).not.toBeNull();
     expect(accessLink("https://pliegue.genaropretill.com/", "OCT2026AREQUIPA")).toBe("https://pliegue.genaropretill.com/biblioteca/general/OCT2026AREQUIPA");
+    expect(accessLink("https://pliegue.genaropretill.com", "OCT26", "/biblioteca/ana-lopez")).toBe("https://pliegue.genaropretill.com/biblioteca/ana-lopez/OCT26");
   });
   it("marca como vuelta a quien ya entró con el mismo código, equipo y nombre", () => {
     const returning = returningEntries([

@@ -203,7 +203,7 @@ describe("bibliotecas compartidas", () => {
       library: { folderId: "carpeta-de-ana", name: "Los libros de Ana", slug: "ana-lopez" },
       session: shared,
     });
-    expect(open.calls.map((call) => call.url)).toContain("https://db.example/rest/v1/shared_libraries?select=folder_id%2Cname%2Cactive&slug=eq.ana-lopez");
+    expect(open.calls.map((call) => call.url)).toContain("https://db.example/rest/v1/shared_libraries?select=folder_id%2Cname%2Cactive%2Csuspended_at&slug=eq.ana-lopez");
 
     const paused = supabase({ code: [{ active: true, expires_at: null }], library: [{ ...anaLibrary[0], active: false }] });
     expect(await readSharedLibraryAccess("ana-lopez", cookie, { config, fetcher: paused.fetcher, now: () => now })).toBeNull();
@@ -240,5 +240,13 @@ describe("bibliotecas compartidas", () => {
     expect(await findSharedLibrary("ana-lopez", { config, fetcher: supabase({ status: 500 }).fetcher })).toBeNull();
     expect(await findSharedLibrary("general", { config, fetcher: supabase({ library: anaLibrary }).fetcher })).toBeNull();
     expect(await findSharedLibrary("ana-lopez", { config: null })).toBeNull();
+  });
+
+  it("una suspendida por la moderación no está, aunque su dueño la tenga activa", async () => {
+    const suspended = [{ ...anaLibrary[0], suspended_at: "2026-10-18T10:00:00.000Z" }];
+    expect(await findSharedLibrary("ana-lopez", { config, fetcher: supabase({ library: suspended }).fetcher })).toBeNull();
+    const cookie = await signSession(shared, "secreto");
+    const db = supabase({ code: [{ active: true, expires_at: null }], library: suspended });
+    expect(await readSharedLibraryAccess("ana-lopez", cookie, { config, fetcher: db.fetcher, now: () => now })).toBeNull();
   });
 });

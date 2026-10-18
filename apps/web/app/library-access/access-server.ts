@@ -70,7 +70,7 @@ export const redeemMessages: Record<RedeemFailure, string> = {
   exhausted: "Este código ya se usó todas las veces permitidas.",
   invalid: "Ese código no existe o ya no está activo. Revísalo y vuelve a intentarlo.",
   "too-many": "Demasiados intentos fallidos. Espera unos minutos antes de volver a probar.",
-  unavailable: "La biblioteca general no está disponible ahora mismo. Inténtalo más tarde.",
+  unavailable: "La biblioteca no está disponible ahora mismo. Inténtalo más tarde.",
 };
 
 /** Una huella de la conexión para frenar intentos a ciegas, sin guardar la IP. */
@@ -219,19 +219,22 @@ export interface SharedLibrary {
   slug: string;
 }
 
-/** Una biblioteca compartida abierta: su carpeta y su nombre. `null` si no existe o su dueño la pausó. */
+/**
+ * Una biblioteca compartida abierta: su carpeta y su nombre. `null` si no existe, si su dueño la
+ * pausó o si la suspendió la moderación.
+ */
 export async function findSharedLibrary(slug: string, deps: LibraryServerDeps): Promise<SharedLibrary | null> {
   const { config } = deps;
   if (!config || !isSharedLibrarySlug(slug)) return null;
   try {
-    const query = new URLSearchParams({ select: "folder_id,name,active", slug: `eq.${slug}` });
+    const query = new URLSearchParams({ select: "folder_id,name,active,suspended_at", slug: `eq.${slug}` });
     const response = await (deps.fetcher ?? fetch)(`${config.supabaseUrl}/rest/v1/shared_libraries?${query}`, {
       cache: "no-store",
       headers: supabaseHeaders(config.secretKey),
     });
     if (!response.ok) return null;
-    const [row] = (await response.json()) as Array<{ active: boolean; folder_id: string; name: string }>;
-    return row?.active ? { folderId: row.folder_id, name: row.name, slug } : null;
+    const [row] = (await response.json()) as Array<{ active: boolean; folder_id: string; name: string; suspended_at?: string | null }>;
+    return row?.active && !row.suspended_at ? { folderId: row.folder_id, name: row.name, slug } : null;
   } catch {
     return null;
   }

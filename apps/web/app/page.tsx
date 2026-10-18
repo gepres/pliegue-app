@@ -12,8 +12,9 @@ import styles from "./page.module.css";
 /**
  * La portada de Pliegue: qué es y qué hace, contado como se cuenta un libro. Arriba, un pliego
  * abierto con el original y su traducción enfrentados —lo que el lector hace de verdad—; debajo,
- * las funciones como un índice de capítulos, y en el pie, los enlaces a todo: las funciones, la
- * app, el sistema visual y el diseño en Figma.
+ * las funciones como un índice de capítulos; después, las bibliotecas compartidas (02.9b), que
+ * se anuncian también en la portada, y en el pie, los enlaces a todo: las funciones, la app, el
+ * sistema visual y el diseño en Figma.
  */
 
 export const metadata: Metadata = {
@@ -28,6 +29,8 @@ const figmaUrl =
 interface Chapter {
   details: string[];
   id: string;
+  /** Se marca «Nuevo» en el índice. */
+  isNew?: boolean;
   lead: string;
   margin: string[];
   number: string;
@@ -126,6 +129,34 @@ const chapters: Chapter[] = [
     number: "07",
     title: "En todos tus equipos",
   },
+  {
+    details: [
+      "Elige una carpeta pública de tu Google Drive: Pliegue la abre como biblioteca, con tu nombre en la dirección.",
+      "Reparte códigos de acceso con caducidad y usos máximos; cada uno es un enlace listo para enviar.",
+      "Quien recibe el código entra sin cuenta y lee en el mismo lector, con sus marcas en su navegador.",
+      "Ves quién entró y cuándo, y sacas a quien quieras. Con tu índice JSON, cada libro luce su ficha y su portada.",
+    ],
+    id: "compartir",
+    isNew: true,
+    lead: "Tu carpeta de Drive, abierta como biblioteca para quien tú invites.",
+    margin: ["/biblioteca/tu-nombre/CÓDIGO", "Códigos con caducidad y usos", "Lectores sin cuenta", "Tus archivos, en tu Drive"],
+    number: "08",
+    title: "Comparte tu biblioteca",
+  },
+];
+
+/** Publicar una biblioteca compartida: lo que pide Ajustes → Mi biblioteca compartida, en orden. */
+const sharingSteps = [
+  { text: "Una carpeta de tu Google Drive que vea cualquiera con el enlace. Tus archivos no se mueven de ahí.", title: "Elige tu carpeta" },
+  { text: "Con caducidad y usos máximos. Cada código es un enlace listo para enviar.", title: "Reparte códigos" },
+  { text: "Quién entró, cuándo y desde qué navegador. Saca a quien quieras, cuando quieras.", title: "Mira quién lee" },
+];
+
+/** El registro de la tarjeta de ejemplo: nombres inventados. */
+const sharingLog = [
+  { name: "Marta", when: "hace 2 h · volvió" },
+  { name: "Julián", when: "ayer" },
+  { name: "Clara", when: "el lunes" },
 ];
 
 /** La cinta que corre entre la portada y el índice: lo que Pliegue hace, de un vistazo. */
@@ -140,6 +171,8 @@ const ticker = [
   "App de escritorio",
   "Cuenta opcional",
   "Sincroniza entre equipos",
+  "Bibliotecas compartidas",
+  "Códigos de acceso",
 ];
 
 /** El camino de primeros pasos: el mismo que la app propone al terminar cada uno. */
@@ -181,6 +214,7 @@ export default function HomePage() {
         </Link>
         <nav aria-label="Secciones" className={styles.nav}>
           <a href="#funciones">Funciones</a>
+          <a href="#biblioteca-compartida">Compartir</a>
           <a href="#como-funciona">Cómo funciona</a>
           <a href="#privacidad">Privacidad</a>
         </nav>
@@ -197,18 +231,21 @@ export default function HomePage() {
         {/* ---- Portada ---------------------------------------------------------------- */}
         <section aria-labelledby="hero-title" className={styles.hero}>
           <div className={styles.heroText}>
-            <p className={styles.eyebrow} style={{ "--i": 0 } as React.CSSProperties}>
+            <a className={styles.announce} href="#biblioteca-compartida" style={{ "--i": 0 } as React.CSSProperties}>
+              <span>Nuevo</span> Comparte tu biblioteca con códigos de acceso <span aria-hidden="true">→</span>
+            </a>
+            <p className={styles.eyebrow} style={{ "--i": 1 } as React.CSSProperties}>
               Biblioteca personal · local primero
             </p>
-            <h1 id="hero-title" style={{ "--i": 1 } as React.CSSProperties}>
+            <h1 id="hero-title" style={{ "--i": 2 } as React.CSSProperties}>
               Todo lo que guardaste, <em>por fin legible.</em>
             </h1>
-            <p className={styles.heroLead} style={{ "--i": 2 } as React.CSSProperties}>
+            <p className={styles.heroLead} style={{ "--i": 3 } as React.CSSProperties}>
               Pliegue reúne tus libros y documentos en tu dispositivo, los abre en un lector
               cuidado, los traduce junto al original y guarda lo que subrayas. Sin cuenta si no la
               quieres, y sin subir nunca tus archivos.
             </p>
-            <div className={styles.heroActions} style={{ "--i": 3 } as React.CSSProperties}>
+            <div className={styles.heroActions} style={{ "--i": 4 } as React.CSSProperties}>
               <Link className={buttonClassName({ size: "lg" })} href="/app/biblioteca">
                 Abrir mi biblioteca
               </Link>
@@ -216,7 +253,7 @@ export default function HomePage() {
                 Ver las funciones
               </a>
             </div>
-            <dl className={styles.facts} style={{ "--i": 4 } as React.CSSProperties}>
+            <dl className={styles.facts} style={{ "--i": 5 } as React.CSSProperties}>
               <div>
                 <dt>Formatos</dt>
                 <dd>PDF, EPUB, DOCX y más</dd>
@@ -284,7 +321,7 @@ export default function HomePage() {
         <section aria-labelledby="funciones-title" className={styles.contents} id="funciones">
           <header className={styles.sectionHead}>
             <p className={styles.eyebrow}>Índice</p>
-            <h2 id="funciones-title">Siete capítulos para tu biblioteca</h2>
+            <h2 id="funciones-title">Ocho capítulos para tu biblioteca</h2>
           </header>
           <ol className={styles.toc}>
             {chapters.map((chapter) => (
@@ -292,6 +329,7 @@ export default function HomePage() {
                 <a href={`#${chapter.id}`}>
                   <span>{chapter.number}</span>
                   {chapter.title}
+                  {chapter.isNew ? <small className={styles.tocNew}>Nuevo</small> : null}
                 </a>
               </li>
             ))}
@@ -326,6 +364,64 @@ export default function HomePage() {
               </aside>
             </article>
           ))}
+        </section>
+
+        {/* ---- Bibliotecas compartidas ---------------------------------------------------- */}
+        <section aria-labelledby="compartida-title" className={styles.shared} id="biblioteca-compartida">
+          <div className={styles.sharedText}>
+            <p className={styles.eyebrow}>Nuevo · Bibliotecas compartidas</p>
+            <h2 id="compartida-title">Abre tu biblioteca a quien tú elijas.</h2>
+            <p className={styles.sharedLead}>
+              Tu club de lectura, tu clase o tu familia leen tus libros en Pliegue con un código, sin
+              crearse una cuenta. Los archivos se quedan en tu Drive y tú decides quién entra y hasta
+              cuándo.
+            </p>
+            <ol className={styles.sharedSteps}>
+              {sharingSteps.map((step) => (
+                <li key={step.title}>
+                  <strong>{step.title}.</strong> {step.text}
+                </li>
+              ))}
+            </ol>
+            <div className={styles.heroActions}>
+              <Link className={buttonClassName({ size: "lg" })} href="/app/ajustes/mi-biblioteca">
+                Crear mi biblioteca
+              </Link>
+            </div>
+            <p className={styles.sharedNote}>Para publicarla necesitas una cuenta de Pliegue; para leerla, solo el código.</p>
+          </div>
+
+          {/* La tarjeta de un código y el registro de quién entró, como los ve el dueño.
+              Decorativa: lo que muestra lo dicen los pasos de al lado. */}
+          <figure aria-hidden="true" className={styles.pass}>
+            <div className={styles.passCard}>
+              <div className={styles.passMain}>
+                <span className={styles.passLabel}>Los libros de Ana · código de acceso</span>
+                <strong className={styles.passCode}>OCT26</strong>
+                <span className={styles.passLink}>/biblioteca/ana/OCT26</span>
+                <span className={styles.passFacts}>
+                  <span>
+                    <small>Caduca</small> 31 oct
+                  </span>
+                  <span>
+                    <small>Usos</small> 12 de 30
+                  </span>
+                </span>
+              </div>
+              <span className={styles.passStub}>Pase de lectura</span>
+            </div>
+            <div className={styles.passRegistry}>
+              <span className={styles.passLabel}>Quién entró</span>
+              <ul>
+                {sharingLog.map((entry) => (
+                  <li key={entry.name}>
+                    <strong>{entry.name}</strong>
+                    <span>{entry.when}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </figure>
         </section>
 
         {/* ---- Cómo funciona -------------------------------------------------------------- */}
@@ -402,6 +498,9 @@ export default function HomePage() {
             </li>
             <li>
               <Link href="/app/ajustes#cuenta">Cuenta y sincronización</Link>
+            </li>
+            <li>
+              <Link href="/app/ajustes/mi-biblioteca">Mi biblioteca compartida</Link>
             </li>
             <li>
               <Link href="/app/ajustes#espacio">Instalar la app</Link>

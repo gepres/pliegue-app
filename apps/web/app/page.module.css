@@ -109,6 +109,7 @@
   text-decoration: none;
   text-transform: uppercase;
   transition: color var(--pliegue-motion-fast) ease;
+  white-space: nowrap;
 }
 
 .nav a:hover {
@@ -123,6 +124,7 @@
 
 .wordmark:focus-visible,
 .nav a:focus-visible,
+.announce:focus-visible,
 .toc a:focus-visible,
 .footer a:focus-visible {
   border-radius: var(--pliegue-radius-sm);
@@ -170,6 +172,48 @@
 .heroText > * {
   animation: rise 800ms var(--pliegue-ease-standard, ease) both;
   animation-delay: calc(var(--i, 0) * 110ms + 60ms);
+}
+
+/* El aviso de lo nuevo, encima del título: lleva a su sección. */
+.announce {
+  align-items: center;
+  background: color-mix(in srgb, var(--pliegue-color-bg-surface) 70%, transparent);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: 1.25rem;
+  color: var(--pliegue-color-text-primary);
+  display: inline-flex;
+  font-size: 0.875rem;
+  gap: 0.6rem;
+  justify-self: start;
+  line-height: 1.35;
+  padding: 0.3rem 0.9rem 0.3rem 0.3rem;
+  text-decoration: none;
+  transition: border-color var(--pliegue-motion-fast) ease;
+}
+
+.announce:hover {
+  border-color: var(--pliegue-color-accent-warm);
+}
+
+.announce > span:first-child {
+  background: color-mix(in srgb, var(--pliegue-color-accent-warm) 24%, transparent);
+  border-radius: 1rem;
+  flex: none;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  padding: 0.3rem 0.6rem;
+  text-transform: uppercase;
+}
+
+.announce > span:last-child {
+  color: var(--pliegue-color-accent-warm);
+  transition: translate var(--pliegue-motion-fast) ease;
+}
+
+.announce:hover > span:last-child {
+  translate: 3px 0;
 }
 
 .heroText h1 {
@@ -400,6 +444,7 @@
 }
 
 .sectionHead h2,
+.sharedText h2,
 .closing h2 {
   font-family: var(--pliegue-font-brand);
   font-size: clamp(2.3rem, 4.6vw, 3.6rem);
@@ -452,6 +497,18 @@
 
 .toc a:hover {
   color: var(--pliegue-color-action-primary);
+}
+
+.tocNew {
+  align-self: center;
+  border: 1px solid var(--pliegue-color-accent-warm);
+  border-radius: 1rem;
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.5625rem;
+  letter-spacing: 0.12em;
+  padding: 0.15rem 0.45rem;
+  text-transform: uppercase;
 }
 
 .chapter {
@@ -569,11 +626,225 @@
 @supports (animation-timeline: view()) {
   .chapterBody,
   .marginalia,
+  .pass,
   .steps li {
     animation: settle linear both;
     animation-range: entry 0% cover 28%;
     animation-timeline: view();
   }
+}
+
+/* ---- Bibliotecas compartidas ---------------------------------------------------------- */
+
+/* Una banda a todo lo ancho, para que se vea como lo nuevo; el contenido, a la medida de la página. */
+.shared {
+  align-items: center;
+  background: color-mix(in srgb, var(--pliegue-color-bg-subtle) 75%, transparent);
+  border-block: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: clamp(2.5rem, 6vw, 5rem);
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  margin-top: clamp(4rem, 9vw, 7rem);
+  padding: clamp(3.5rem, 8vw, 6rem) max(var(--home-gutter), calc((100% - var(--home-width)) / 2));
+  scroll-margin-top: 64px;
+}
+
+.sharedText {
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+}
+
+.sharedLead {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-reading);
+  font-size: clamp(1.05rem, 1.5vw, 1.2rem);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 34rem;
+}
+
+.sharedSteps {
+  counter-reset: share;
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  list-style: none;
+  margin: 0;
+  max-width: 34rem;
+  padding: 0;
+}
+
+.sharedSteps li {
+  color: var(--pliegue-color-text-secondary);
+  counter-increment: share;
+  font-family: var(--pliegue-font-reading);
+  line-height: 1.55;
+  min-height: 2rem;
+  padding-left: 2.85rem;
+  position: relative;
+}
+
+.sharedSteps li::before {
+  align-items: center;
+  border: 1px solid var(--pliegue-color-border-strong);
+  border-radius: 50%;
+  color: var(--pliegue-color-text-primary);
+  content: counter(share);
+  display: inline-flex;
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.05rem;
+  font-variant-numeric: lining-nums;
+  font-weight: 600;
+  height: 2rem;
+  justify-content: center;
+  left: 0;
+  position: absolute;
+  top: -0.15rem;
+  width: 2rem;
+}
+
+.sharedSteps strong {
+  color: var(--pliegue-color-text-primary);
+  font-weight: 600;
+}
+
+.sharedNote {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  margin: calc(var(--pliegue-spacing-sm) * -1) 0 0;
+}
+
+/* La tarjeta de un código, con su talón, y debajo el registro, como en una ficha de préstamo. */
+.pass {
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+  justify-items: center;
+  margin: 0;
+}
+
+/* El borde la separa de la banda en el tema oscuro, donde la sombra apenas se ve. */
+.passCard {
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: 10px;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--pliegue-color-text-primary) 8%, transparent),
+    0 30px 60px -24px rgb(40 28 12 / 30%),
+    0 12px 24px -12px rgb(40 28 12 / 20%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  max-width: 460px;
+  rotate: -1.5deg;
+  width: 100%;
+}
+
+.passMain {
+  display: grid;
+  gap: 0.7rem;
+  padding: clamp(1.25rem, 3vw, 1.75rem);
+}
+
+.passLabel {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* El código, con el mismo trazo de rotulador que el título de la portada. */
+.passCode {
+  background: linear-gradient(
+    transparent 60%,
+    color-mix(in srgb, var(--pliegue-color-accent-warm) 42%, transparent) 60%,
+    color-mix(in srgb, var(--pliegue-color-accent-warm) 42%, transparent) 92%,
+    transparent 92%
+  );
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(2.75rem, 6vw, 3.75rem);
+  /* Un código se teclea: cifras de caja alta, no las de texto, que bajan de la línea. */
+  font-variant-numeric: lining-nums;
+  font-weight: 600;
+  justify-self: start;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.passLink {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.passFacts {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: flex;
+  flex-wrap: wrap;
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.95rem;
+  gap: 0.4rem 1.75rem;
+  margin-top: 0.3rem;
+  padding-top: 0.8rem;
+}
+
+.passFacts small {
+  color: var(--pliegue-color-text-secondary);
+  display: block;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.5625rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* El talón, separado por la línea de puntos por donde se cortaría. */
+.passStub {
+  border-left: 2px dashed var(--pliegue-color-border-strong);
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.625rem;
+  letter-spacing: 0.18em;
+  padding: 1.25rem 0.95rem;
+  text-align: center;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+}
+
+.passRegistry {
+  border-left: 1px dashed var(--pliegue-color-border-strong);
+  display: grid;
+  gap: 0.6rem;
+  max-width: 420px;
+  padding: 0.2rem 0 0.2rem 1rem;
+  width: 100%;
+}
+
+.passRegistry ul {
+  display: grid;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.passRegistry li {
+  color: var(--pliegue-color-text-secondary);
+  display: flex;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.72rem;
+  gap: 1rem;
+  justify-content: space-between;
+  letter-spacing: 0.04em;
+}
+
+.passRegistry strong {
+  color: var(--pliegue-color-text-primary);
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 /* ---- Cómo funciona -------------------------------------------------------------------- */
@@ -791,6 +1062,7 @@
   .pulse,
   .chapterBody,
   .marginalia,
+  .pass,
   .steps li {
     animation: none;
   }
@@ -841,6 +1113,11 @@
 }
 
 @media (max-width: 900px) {
+  /* Con cuatro secciones, por debajo de 900 px no caben en una línea junto a los botones. */
+  .nav {
+    display: none;
+  }
+
   .hero {
     grid-template-columns: minmax(0, 1fr);
     min-height: 0;
@@ -849,13 +1126,13 @@
   .spread {
     order: 2;
   }
+
+  .shared {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 760px) {
-  .nav {
-    display: none;
-  }
-
   .toc {
     columns: 1;
   }

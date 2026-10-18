@@ -90,7 +90,9 @@ export async function loadGeneralLibrary(folderId: string, apiKey: string, onFol
   const loadedAt = new Date().toISOString();
   const library = buildGeneralLibrary(walk.files, catalog, loadedAt);
   await saveCachedGeneralLibrary({ catalog, catalogStamp: catalog ? catalogStamp : null, folderId, library, loadedAt, version: cacheVersion });
-  return { library, loadedAt };
+  // Para quien comparte la carpeta: qué índice se encontró y si se pudo leer.
+  const index = catalogFile ? { modifiedTime: catalogFile.modifiedTime ?? null, name: catalogFile.name, readable: catalog !== null } : null;
+  return { index, library, loadedAt };
 }
 
 export function describeGeneralLibraryError(error: unknown) {
