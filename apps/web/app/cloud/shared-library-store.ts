@@ -9,6 +9,7 @@ import { cloudClient } from "./supabase-client";
 export interface OwnSharedLibrary {
   active: boolean;
   created_at: string;
+  folder_id: string;
   name: string;
   slug: string;
 }
@@ -37,7 +38,7 @@ export function useOwnSharedLibrary(): OwnSharedLibraryState & { reload: () => v
     let active = true;
     void client
       .from("shared_libraries")
-      .select("slug,name,active,created_at")
+      .select("slug,name,active,folder_id,created_at")
       .maybeSingle()
       .then(({ data, error }) => {
         if (active) setAnswer({ library: error ? null : ((data as OwnSharedLibrary | null) ?? null), userId });

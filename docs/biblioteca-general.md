@@ -99,8 +99,16 @@ su carpeta pública de Drive, sus códigos y su registro (tarjeta 03.14). Por ah
   identificador de equipo: un mismo equipo no lleva el mismo identificador a dos bibliotecas.
 - **El dueño** ve sus códigos y quién entró en Ajustes → Mi biblioteca compartida
   (`/app/ajustes/mi-biblioteca`), con las mismas herramientas que el administrador en la general.
-  El enlace aparece en Ajustes → Cuenta solo si la cuenta ya tiene biblioteca: hasta que llegue el
-  alta, una biblioteca solo se crea a mano, con la clave secreta.
+  Ahí mismo le cambia el nombre, la pausa o la borra.
+- **Crearla** (en la misma página, con la sesión iniciada): conectar Drive y elegir la carpeta con
+  el selector de Google, ponerle nombre y dirección, y aceptar las normas
+  (`library-access/shared-library-terms.ts`). El navegador manda la sesión de la cuenta y el token
+  de Drive a `POST /api/biblioteca/compartidas`; el servidor comprueba la cuenta en Supabase Auth,
+  pregunta a Drive con ese token que la carpeta es suya (o puede compartirla) y que la ve
+  «cualquier persona con el enlace», y la crea con la clave secreta. El token de Drive no se
+  guarda. El índice JSON, si lo hay, lo sube el dueño a mano a la raíz de la carpeta.
+- `PLIEGUE_DRIVE_API_URL` (opcional, de servidor): otra API de Drive para las comprobaciones. Solo
+  para pruebas.
 
 La migración no cambia nada visible en la general: se puede aplicar antes o después de
 desplegar.

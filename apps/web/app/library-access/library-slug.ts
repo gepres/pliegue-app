@@ -27,6 +27,23 @@ export function isSharedLibrarySlug(value: string) {
   return value.length >= 2 && value.length <= 40 && slugPattern.test(value) && !reservedLibrarySlugs.includes(value);
 }
 
+/**
+ * Una dirección a partir de un nombre o de un correo: «Luis Lara» → «luis-lara»,
+ * «luis.lara@…» → «luis-lara». Sin acentos ni signos; vacía si no queda nada que sirva.
+ */
+export function suggestLibrarySlug(value: string) {
+  const slug = (value.split("@")[0] ?? "")
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^[^a-z]+/, "")
+    .slice(0, 40)
+    .replace(/-+$/, "");
+  if (!slug) return "";
+  return reservedLibrarySlugs.includes(slug) ? `${slug}-lecturas` : slug.length < 2 ? `${slug}-biblioteca` : slug;
+}
+
 /** La dirección como llega en la URL, en su forma canónica: «Luis-Lara» → «luis-lara». `null` si no puede ser ninguna. */
 export function sharedSlugFromParam(raw: string) {
   const slug = raw.toLowerCase();

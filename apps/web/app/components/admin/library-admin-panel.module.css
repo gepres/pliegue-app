@@ -163,6 +163,33 @@
   margin: 0;
 }
 
+/* Las normas de una biblioteca compartida y la casilla para aceptarlas. */
+.terms {
+  color: var(--pliegue-color-text-secondary);
+  display: grid;
+  font-size: 0.875rem;
+  gap: var(--pliegue-spacing-xs);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 44rem;
+  padding-left: 1.25rem;
+}
+
+.consent {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-size: 0.9375rem;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.consent input {
+  accent-color: var(--pliegue-color-action-primary);
+  block-size: 1.125rem;
+  inline-size: 1.125rem;
+  margin: 0;
+}
+
 .returned {
   background: var(--pliegue-color-bg-subtle);
   border-radius: 999px;
