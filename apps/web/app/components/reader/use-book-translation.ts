@@ -14,6 +14,7 @@ import {
   listTranslatedUnits,
   readTranslatedUnit,
   translatedUnitKey,
+  trimTranslations,
   writeTranslatedUnit,
 } from "../../library/translation-store";
 
@@ -195,15 +196,19 @@ export function useBookTranslation<Block extends { text: string }>({
             pagesAhead,
             storage: {
               read: async (id) => (await readTranslatedUnit(documentId, pairId, id))?.blocks ?? null,
-              write: (id, blocks) =>
-                writeTranslatedUnit({
+              write: async (id, blocks) => {
+                await writeTranslatedUnit({
                   blocks,
                   documentId,
                   key: translatedUnitKey(documentId, pairId, id),
                   pairId,
                   translatedAt: new Date().toISOString(),
                   unitId: id,
-                }),
+                });
+                // Con el tope lleno se van las traducciones más antiguas de otros libros (05.6).
+                // No frena la lectura: si falla, se queda como estaba.
+                void trimTranslations(documentId).catch(() => undefined);
+              },
             },
             storedIds,
             translator,

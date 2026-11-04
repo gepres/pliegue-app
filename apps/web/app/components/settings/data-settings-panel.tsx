@@ -25,7 +25,7 @@ import { browserDataEnv, inventorySize, wipeBrowserData, type WipeResult } from 
 import { buildCopiesArchive, copiesArchiveName, zipSizeLimit } from "../../library/copies-export";
 import { readAllImportedFiles, useImportedDocuments } from "../../library/local-library-store";
 import { notesFileName, notesToMarkdown } from "../../library/notes-export";
-import { clearAllTranslations, countTranslatedUnits } from "../../library/translation-store";
+import { clearAllTranslations, countTranslatedUnits, translationUnitLimit } from "../../library/translation-store";
 import { confirmAction } from "../app-ui/confirm-dialog";
 import { Icon } from "../app-ui/icons";
 import { downloadBlob } from "../postcard/postcard-share";
@@ -433,7 +433,7 @@ function EraseSection() {
               {translations === null
                 ? "Contando…"
                 : translations
-                  ? `${plural(translations, "fragmento traducido", "fragmentos traducidos")}. Se guardan para no volver a pagar por ellas.`
+                  ? `${plural(translations, "fragmento traducido", "fragmentos traducidos")}. Se guardan para no volver a pagar por ellas, hasta ${translationUnitLimit.toLocaleString("es")}: si se llena, se borran solas las más antiguas, nunca las del libro que estás leyendo.`
                   : "No hay traducciones guardadas."}
             </small>
           </div>
