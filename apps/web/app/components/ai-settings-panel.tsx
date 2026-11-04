@@ -14,6 +14,12 @@ import {
 import { catalogProviderNames } from "../ai/ai-readiness";
 import { checkApiKey, normalizeApiKey, type KeyProvider } from "../ai/api-key";
 import { countCatalogPending } from "../ai/catalog-analysis";
+import {
+  connectionSignature,
+  testConnection,
+  type ConnectionTarget,
+  type ConnectionTestResult,
+} from "../ai/connection-test";
 import type { AiProvider } from "../ai/document-catalog";
 import { translationProviderChoices, type TranslationProviderChoice } from "../ai/translation-options";
 import { afterAiReady } from "../guide/next-steps";
@@ -69,11 +75,67 @@ function useTextMask() {
   );
 }
 
+const connectionHints: Record<ConnectionTarget["provider"], string> = {
+  anthropic: "Comprueba la clave y el modelo sin enviar texto ni gastar tokens.",
+  azure: "Traduce «Hola» para comprobar la clave y la región: 4 caracteres de tu cupo.",
+  gemini: "Comprueba la clave y el modelo sin enviar texto ni gastar tokens.",
+  ollama: "Comprueba que Ollama responde y que tiene el modelo descargado.",
+  openai: "Comprueba la clave y el modelo sin enviar texto ni gastar tokens.",
+};
+
+type ConnectionState = { signature: string } & ({ result: ConnectionTestResult } | { testing: true });
+
+/**
+ * «Probar conexión» (04.1): antes, una clave mal pegada o un modelo que ya no existe solo se
+ * descubrían al fallar el primer análisis. Prueba lo que hay en el formulario, guardado o no, y
+ * el resultado caduca en cuanto cambian la clave, el modelo o la región.
+ */
+function ConnectionTest({ target }: { target: ConnectionTarget }) {
+  const signature = connectionSignature(target);
+  const [state, setState] = useState<ConnectionState | null>(null);
+  const current = state?.signature === signature ? state : null;
+  const testing = Boolean(current && "testing" in current);
+  const result = current && "result" in current ? current.result : null;
+
+  async function run() {
+    setState({ signature, testing: true });
+    const outcome = await testConnection(target);
+    // Si mientras tanto cambió la clave o el modelo, esa respuesta ya no dice nada de lo que se ve.
+    setState((previous) => (previous?.signature === signature ? { result: outcome, signature } : previous));
+  }
+
+  return (
+    <div className={styles.aiConnectionTest}>
+      <Button disabled={testing} onClick={() => void run()} size="sm" type="button" variant="secondary">
+        {testing ? "Probando…" : "Probar conexión"}
+      </Button>
+      <p
+        aria-live="polite"
+        className={result ? (result.ok ? styles.aiConnectionOk : styles.aiConnectionFail) : undefined}
+        role="status"
+      >
+        {result ? result.message : connectionHints[target.provider]}
+      </p>
+    </div>
+  );
+}
+
 /**
  * La clave de un proveedor para esta sesión. Aparece una vez por proveedor: en «Catalogar» y,
  * si la traducción usa otro, también en «Traducir con tu IA». Cada proveedor guarda la suya.
+ * `model` (o `region`, con Azure) es lo que prueba «Probar conexión» junto con la clave.
  */
-function ApiKeyField({ id, provider }: { id: string; provider: KeyProvider }) {
+function ApiKeyField({
+  id,
+  model = "",
+  provider,
+  region = "",
+}: {
+  id: string;
+  model?: string;
+  provider: KeyProvider;
+  region?: string;
+}) {
   const secrets = useAiSessionSecrets();
   const textMask = useTextMask();
   const [revealKey, setRevealKey] = useState(false);
@@ -152,16 +214,28 @@ function ApiKeyField({ id, provider }: { id: string; provider: KeyProvider }) {
           plan gratuito (F0) da 2 millones de caracteres al mes.
         </p>
       ) : null}
+      <ConnectionTest
+        target={provider === "azure" ? { apiKey, provider, region } : { apiKey, model, provider }}
+      />
     </Field>
   );
 }
 
-/** Dónde está Ollama. Se comparte: si cataloga y traduce con él, es el mismo servicio. */
+function ollamaTarget(draft: AiSettings, model: string): ConnectionTarget {
+  return { model, ollamaMode: draft.ollamaMode, ollamaUrl: draft.ollamaUrl, provider: "ollama" };
+}
+
+/**
+ * Dónde está Ollama. Se comparte: si cataloga y traduce con él, es el mismo servicio. `model` es
+ * el que se prueba con «Probar conexión»: el de catalogar o el de traducir, según dónde aparezca.
+ */
 function OllamaFields({
   draft,
+  model,
   onChange,
 }: {
   draft: AiSettings;
+  model: string;
   onChange: (update: (current: AiSettings) => AiSettings) => void;
 }) {
   return (
@@ -196,6 +270,9 @@ function OllamaFields({
           value={draft.ollamaUrl}
         />
       </Field>
+      <div className={styles.aiConnectionRow}>
+        <ConnectionTest target={ollamaTarget(draft, model)} />
+      </div>
     </>
   );
 }
@@ -333,9 +410,9 @@ export function AiSettingsPanel() {
         </Field>
 
         {draft.provider === "ollama" ? (
-          <OllamaFields draft={draft} onChange={editDraft} />
+          <OllamaFields draft={draft} model={draft.models.ollama} onChange={editDraft} />
         ) : (
-          <ApiKeyField id="ai-api-key" provider={draft.provider} />
+          <ApiKeyField id="ai-api-key" model={draft.models[draft.provider]} provider={draft.provider} />
         )}
 
         <Field label="Extracto máximo por archivo" labelFor="ai-excerpt">
@@ -451,18 +528,36 @@ export function AiSettingsPanel() {
         )}
 
         {/* La clave del traductor: la misma de arriba si es el mismo proveedor, o la suya. */}
+        {/* Con el mismo proveedor que catalogar, el modelo de traducir puede ser otro: también se prueba. */}
         {translationProvider === "browser" ? null : translationProvider === "ollama" ? (
           draft.provider === "ollama" ? (
-            <p className={styles.aiGroupNote}>Traduce con el mismo Ollama de arriba: el texto no sale de tu equipo.</p>
+            <div className={styles.aiConnectionRow}>
+              <p className={styles.aiGroupNote}>Traduce con el mismo Ollama de arriba: el texto no sale de tu equipo.</p>
+              <ConnectionTest target={ollamaTarget(draft, draft.translationModels.ollama)} />
+            </div>
           ) : (
-            <OllamaFields draft={draft} onChange={editDraft} />
+            <OllamaFields draft={draft} model={draft.translationModels.ollama} onChange={editDraft} />
           )
         ) : sameProvider ? (
-          <p className={styles.aiGroupNote}>
-            Usa la misma clave de {keyLabels[translationProvider]} que has puesto arriba.
-          </p>
+          <div className={styles.aiConnectionRow}>
+            <p className={styles.aiGroupNote}>
+              Usa la misma clave de {keyLabels[translationProvider]} que has puesto arriba.
+            </p>
+            <ConnectionTest
+              target={{
+                apiKey: secrets[translationProvider],
+                model: draft.translationModels[translationProvider],
+                provider: translationProvider,
+              }}
+            />
+          </div>
         ) : (
-          <ApiKeyField id="ai-translation-api-key" provider={translationProvider} />
+          <ApiKeyField
+            id="ai-translation-api-key"
+            model={translationProvider === "azure" ? "" : draft.translationModels[translationProvider]}
+            provider={translationProvider}
+            region={draft.azureRegion}
+          />
         )}
 
         <TranslationComparison onChoose={chooseTranslation} selected={translationProvider} />
