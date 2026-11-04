@@ -1,0 +1,82 @@
+/* Lo que trajo Open Library, debajo del panel: las portadas con su título y los libros que se
+   quedaron sin ella. Ocupa todo el ancho de la tarjeta, que en escritorio va a dos columnas. */
+.results {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+  grid-column: 1 / -1;
+  justify-items: start;
+  padding-top: var(--pliegue-spacing-md);
+}
+
+.results section {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  width: 100%;
+}
+
+.results h3 {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Miniaturas a 2:3, como en la Biblioteca, en tantas columnas como quepan. */
+.coverGrid {
+  display: grid;
+  gap: var(--pliegue-spacing-md) var(--pliegue-spacing-sm);
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.coverGrid li {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.coverImage {
+  aspect-ratio: 2 / 3;
+  background: var(--pliegue-color-bg-subtle);
+  border-radius: var(--pliegue-radius-sm);
+  box-shadow: var(--pliegue-elevation-raised);
+  display: block;
+  object-fit: cover;
+  width: 100%;
+}
+
+.coverTitle {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--pliegue-color-text-primary);
+  display: -webkit-box;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.coverNote,
+.more {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.missList {
+  color: var(--pliegue-color-text-primary);
+  display: grid;
+  font-size: 0.875rem;
+  gap: 2px;
+  line-height: 1.45;
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.missList li {
+  overflow-wrap: anywhere;
+}
