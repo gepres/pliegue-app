@@ -22,11 +22,14 @@ import {
   type RestorePlan,
 } from "../../library/backup";
 import { browserDataEnv, inventorySize, wipeBrowserData, type WipeResult } from "../../library/browser-data";
+import { buildCopiesArchive, copiesArchiveName, zipSizeLimit } from "../../library/copies-export";
+import { readAllImportedFiles, useImportedDocuments } from "../../library/local-library-store";
 import { notesFileName, notesToMarkdown } from "../../library/notes-export";
 import { clearAllTranslations, countTranslatedUnits } from "../../library/translation-store";
 import { confirmAction } from "../app-ui/confirm-dialog";
 import { Icon } from "../app-ui/icons";
 import { downloadBlob } from "../postcard/postcard-share";
+import { formatBytes } from "./sources-summary";
 import styles from "./data-settings-panel.module.css";
 
 const plural = (count: number, one: string, many: string) => `${count.toLocaleString("es")} ${count === 1 ? one : many}`;
@@ -228,15 +231,42 @@ function BackupSection() {
 
 function ExportSection() {
   const annotations = useAnnotationStore();
+  const imported = useImportedDocuments();
   const [message, setMessage] = useState<string | null>(null);
+  const [zipping, setZipping] = useState<string | null>(null);
   const count = annotations.annotations.length;
   const books = new Set(annotations.annotations.map((annotation) => annotation.documentId)).size;
+  const copies = imported.documents.length;
+  const copiesBytes = imported.documents.reduce((sum, document) => sum + document.sizeBytes, 0);
 
   function download() {
     const now = new Date().toISOString();
     const markdown = notesToMarkdown(annotations.annotations, now);
     downloadBlob(new Blob([markdown], { type: "text/markdown;charset=utf-8" }), notesFileName(now));
     setMessage(`Descargado «${notesFileName(now)}».`);
+  }
+
+  async function downloadCopies() {
+    if (copiesBytes > zipSizeLimit) {
+      setMessage("Las copias pasan de 4 GB, el límite de un archivo ZIP: descárgalas una a una desde la Biblioteca.");
+      return;
+    }
+    setMessage(null);
+    setZipping("Preparando…");
+    try {
+      const files = await readAllImportedFiles();
+      const archive = await buildCopiesArchive(
+        files.map(({ blob, document }) => ({ blob, lastModified: document.lastModified, name: document.originalName })),
+        (done, total) => setZipping(`Preparando ${done} de ${total}…`),
+      );
+      const name = copiesArchiveName(new Date().toISOString());
+      downloadBlob(archive, name);
+      setMessage(`Descargado «${name}», con ${plural(files.length, "copia", "copias")}.`);
+    } catch {
+      setMessage("No se pudieron reunir las copias. Vuelve a intentarlo o descárgalas una a una desde la Biblioteca.");
+    } finally {
+      setZipping(null);
+    }
   }
 
   return (
@@ -257,6 +287,22 @@ function ExportSection() {
           </div>
           <Button disabled={!count} onClick={download} size="sm" variant="secondary">
             Descargar .md
+          </Button>
+        </li>
+        <li>
+          <Icon name="download" size={18} />
+          <div className={styles.rowText}>
+            <strong>Copias importadas, en un ZIP</strong>
+            <small>
+              {imported.status !== "ready"
+                ? "Cargando…"
+                : copies
+                  ? `${plural(copies, "copia", "copias")}, ${formatBytes(copiesBytes)}: los archivos que importaste a este navegador, tal cual. Lo vinculado ya está en tu disco y lo de Drive, en Drive.`
+                  : "No hay copias importadas: lo vinculado sigue en tu disco y lo de Drive, en Drive."}
+            </small>
+          </div>
+          <Button disabled={!copies || Boolean(zipping)} onClick={() => void downloadCopies()} size="sm" variant="secondary">
+            {zipping ?? "Descargar .zip"}
           </Button>
         </li>
         <li>
@@ -327,7 +373,7 @@ function EraseSection() {
         "Tus ajustes, y la sesión de tu cuenta",
       ],
       icon: "trash",
-      note: "No toca tus archivos, tu carpeta, Google Drive ni lo guardado en tu cuenta. Si sincronizas, al volver a iniciar sesión recuperas favoritos, avance y notas. Si no, descarga antes una copia de seguridad.",
+      note: "No toca tus archivos, tu carpeta, Google Drive ni lo guardado en tu cuenta. Si sincronizas, al volver a iniciar sesión recuperas favoritos, avance y notas. Si no, descarga antes una copia de seguridad. Las copias importadas solo están aquí: si las quieres, descárgalas antes en Exportar.",
       title: "¿Borrar todo lo de Pliegue en este navegador?",
       tone: "danger",
     });

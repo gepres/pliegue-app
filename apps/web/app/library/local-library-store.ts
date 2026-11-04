@@ -306,6 +306,27 @@ export async function reindexImportedDocuments(): Promise<ReindexResult> {
   return result;
 }
 
+/**
+ * Todas las copias con su archivo, para exportarlas juntas (06.4). Los `Blob` que devuelve
+ * IndexedDB apuntan a su almacén: no se cargan en memoria hasta que se leen.
+ */
+export async function readAllImportedFiles() {
+  const database = await openDatabase();
+
+  try {
+    const transaction = database.transaction(documentStoreName, "readonly");
+    const records = await requestResult(
+      transaction.objectStore(documentStoreName).getAll() as IDBRequest<StoredImportedDocument[]>,
+    );
+    await transactionComplete(transaction);
+    return records
+      .sort((left, right) => left.originalName.localeCompare(right.originalName, "es"))
+      .map((record) => ({ blob: record.blob, document: toDocument(record) }));
+  } finally {
+    database.close();
+  }
+}
+
 export async function downloadImportedCopy(documentId: string) {
   const database = await openDatabase();
 

@@ -14,7 +14,8 @@ import styles from "./page.module.css";
  * abierto con el original y su traducción enfrentados —lo que el lector hace de verdad—; debajo,
  * las funciones como un índice de capítulos; después, las bibliotecas compartidas (02.9b), que
  * se anuncian también en la portada, y en el pie, los enlaces a todo: las funciones, la app, el
- * sistema visual y el diseño en Figma.
+ * sistema visual y el diseño en Figma. El capítulo 09 cuenta la salida de los datos (06.4): las
+ * copias importadas en un ZIP, la copia de seguridad y las notas.
  */
 
 export const metadata: Metadata = {
@@ -143,6 +144,20 @@ const chapters: Chapter[] = [
     number: "08",
     title: "Comparte tu biblioteca",
   },
+  {
+    details: [
+      "¿En el móvil, en Safari o en Firefox, donde no se puede vincular? Importa tus libros como copias: se guardan en ese navegador y se leen en el mismo lector.",
+      "Llévate todas tus copias importadas de una vez, en un ZIP y con su nombre original.",
+      "Una copia de seguridad con tus favoritos, avance, notas, fichas y ajustes, que restauras en otro equipo con vista previa.",
+      "Tus notas, en Markdown. Y si un día te vas, «Borrar todo» deja el navegador limpio.",
+    ],
+    id: "tus-datos",
+    isNew: true,
+    lead: "Lo que guardas en Pliegue sale de Pliegue cuando tú quieras.",
+    margin: ["Copias en un ZIP", "Copia de seguridad JSON", "Notas en Markdown", "Sin permanencia"],
+    number: "09",
+    title: "Tus datos, contigo",
+  },
 ];
 
 /** Publicar una biblioteca compartida: lo que pide Ajustes → Mi biblioteca compartida, en orden. */
@@ -173,6 +188,7 @@ const ticker = [
   "Sincroniza entre equipos",
   "Bibliotecas compartidas",
   "Códigos de acceso",
+  "Tus copias en un ZIP",
 ];
 
 /** El camino de primeros pasos: el mismo que la app propone al terminar cada uno. */
@@ -321,7 +337,7 @@ export default function HomePage() {
         <section aria-labelledby="funciones-title" className={styles.contents} id="funciones">
           <header className={styles.sectionHead}>
             <p className={styles.eyebrow}>Índice</p>
-            <h2 id="funciones-title">Ocho capítulos para tu biblioteca</h2>
+            <h2 id="funciones-title">Nueve capítulos para tu biblioteca</h2>
           </header>
           <ol className={styles.toc}>
             {chapters.map((chapter) => (
