@@ -280,6 +280,14 @@ export function Sheet({
   const panelRef = useRef<HTMLElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useStableId("sheet-title");
+  // Quien usa la hoja suele pasar `onClose` como una función nueva en cada render. Si el efecto
+  // dependiera de ella, cada render cerraría y volvería a abrir el foco: devolvía el foco a quien
+  // abrió la hoja y lo volvía a poner en «Cerrar», y ese paso por la barra del lector la volvía a
+  // mostrar (05.9). Se guarda en una ref y el efecto depende solo de `open`.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -295,7 +303,7 @@ export function Sheet({
         !comesFromOpenPicker(event.target)
       ) {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
       }
     }
 
@@ -308,7 +316,7 @@ export function Sheet({
       const target = returnFocusRef.current;
       if (target && document.contains(target)) target.focus();
     };
-  }, [onClose, open]);
+  }, [open]);
 
   function trapFocus(event: React.KeyboardEvent<HTMLElement>) {
     if (!modal || event.key !== "Tab") return;
