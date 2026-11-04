@@ -2,6 +2,7 @@
 
 .comparison {
   background: var(--pliegue-color-bg-subtle);
+  container-type: inline-size;
   border: 1px solid var(--pliegue-color-border-default);
   border-radius: var(--pliegue-radius-md);
   display: grid;
@@ -176,8 +177,10 @@
   width: 1px;
 }
 
-/* En pantallas estrechas cada traductor es una tarjeta: nombre arriba y sus datos con etiqueta. */
-@media (max-width: 860px) {
+/* Si la comparativa no tiene sitio, cada traductor es una tarjeta: nombre arriba y sus datos con
+   etiqueta. Se mide su propio ancho, no el de la ventana: en Ajustes, con la barra de la app y
+   la lista de categorías al lado, la tabla se cortaba aunque la ventana fuera ancha (02.3c). */
+@container (max-width: 44rem) {
   .advice {
     grid-template-columns: minmax(0, 1fr);
   }
