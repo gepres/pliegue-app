@@ -92,7 +92,13 @@ export function createDriveDocument(
 }
 
 /** El contenido no cambió: misma huella y, si Drive la da, misma suma MD5. */
+/**
+ * ¿Es el mismo contenido? Con el MD5 de Drive basta: mover o renombrar un libro no lo cambia, y
+ * así no se vuelve a descargar para indexarlo (03.1). Los Documentos de Google no traen MD5: ahí
+ * decide la huella (nombre, ruta, tamaño y fecha).
+ */
 export function sameDriveContent(previous: DriveDocument, next: DriveDocument) {
+  if (previous.md5Checksum && next.md5Checksum) return previous.md5Checksum === next.md5Checksum;
   return previous.fingerprint === next.fingerprint && previous.md5Checksum === next.md5Checksum;
 }
 
@@ -101,5 +107,6 @@ export function listSkippedDriveFiles(files: readonly (DriveFileMeta & { relativ
   return files
     .filter((file) => !file.trashed && !isReadableDriveFile(file))
     .slice(0, maxSkippedFiles)
-    .map((file) => ({ relativePath: file.relativePath, size: driveFileSize(file) }));
+    // Con su id, para que «Buscar cambios» (changes.list) sepa quitarlo si se borra o se mueve.
+    .map((file) => ({ fileId: file.id, relativePath: file.relativePath, size: driveFileSize(file) }));
 }

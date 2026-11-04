@@ -186,7 +186,64 @@ export async function listDriveChildren(folderId: string, token: DriveCredential
 
 export interface DriveFolderWalk {
   files: DriveListedFile[];
+  /** Cada carpeta del árbol (la raíz incluida, con ruta vacía) y su ruta relativa: lo que usa `changes.list`. */
+  folderPaths: Record<string, string>;
   folders: number;
+}
+
+/** Un cambio de `changes.list`: el archivo tal como queda, o `removed` si ya no se ve. */
+export interface DriveChange {
+  changeType?: string;
+  file?: DriveFileMeta;
+  fileId?: string;
+  removed?: boolean;
+}
+
+export interface DriveChangesPage {
+  changes: DriveChange[];
+  /** Solo en la última página: desde dónde seguir la próxima vez. */
+  newStartPageToken: string | null;
+  nextPageToken: string | null;
+}
+
+/**
+ * El punto desde el que contar cambios (03.1). Se pide antes de recorrer una carpeta, para que
+ * lo que cambie mientras tanto no se pierda: a lo sumo se aplica dos veces, y eso no hace daño.
+ */
+export async function getDriveStartPageToken(token: DriveCredential, driveId: string | null, options?: DriveRequestOptions) {
+  const query = new URLSearchParams({ supportsAllDrives: "true" });
+  if (driveId) query.set("driveId", driveId);
+  const result = await driveJson<{ startPageToken?: string }>(`${driveApiBase}/changes/startPageToken?${query}`, token, options);
+  return result.startPageToken ?? null;
+}
+
+/** Una página de cambios desde `pageToken`: lo que se añadió, cambió, movió o borró en el Drive. */
+export async function listDriveChanges(
+  pageToken: string,
+  token: DriveCredential,
+  driveId: string | null,
+  options?: DriveRequestOptions,
+): Promise<DriveChangesPage> {
+  const query = new URLSearchParams({
+    fields: `nextPageToken,newStartPageToken,changes(changeType,fileId,removed,file(${driveFileFields}))`,
+    includeItemsFromAllDrives: "true",
+    includeRemoved: "true",
+    pageSize: "1000",
+    pageToken,
+    spaces: "drive",
+    supportsAllDrives: "true",
+  });
+  if (driveId) query.set("driveId", driveId);
+  const page = await driveJson<{ changes?: DriveChange[]; newStartPageToken?: string; nextPageToken?: string }>(
+    `${driveApiBase}/changes?${query}`,
+    token,
+    options,
+  );
+  return {
+    changes: page.changes ?? [],
+    newStartPageToken: page.newStartPageToken ?? null,
+    nextPageToken: page.nextPageToken ?? null,
+  };
 }
 
 /**
@@ -201,6 +258,7 @@ export async function walkDriveFolder(
 ): Promise<DriveFolderWalk> {
   const limit = options.limit ?? maxLinkedFolderFiles;
   const files: DriveListedFile[] = [];
+  const folderPaths: Record<string, string> = { [folderId]: "" };
   const seen = new Set<string>([folderId]);
   const queue: Array<{ id: string; prefix: string }> = [{ id: folderId, prefix: "" }];
   let folders = 0;
@@ -226,6 +284,7 @@ export async function walkDriveFolder(
               if (isDriveFolder(child)) {
                 if (seen.has(child.id)) continue;
                 seen.add(child.id);
+                folderPaths[child.id] = relativePath;
                 queue.push({ id: child.id, prefix: relativePath });
               } else {
                 files.push({ ...child, relativePath });
@@ -248,7 +307,7 @@ export async function walkDriveFolder(
   });
 
   files.sort((left, right) => left.relativePath.localeCompare(right.relativePath, "es"));
-  return { files, folders };
+  return { files, folderPaths, folders };
 }
 
 /** Descarga el contenido, con avance si Drive dice cuánto ocupa. */

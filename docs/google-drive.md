@@ -64,9 +64,20 @@ NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER=<número del proyecto>
   documentos aparecen al momento y se indexan por detrás, de dos en dos. Por encima de 50 MB no
   se descargan para indexar (quedan como «solo metadatos»). La indexación se pausa si el token
   caduca y sigue al reconectar.
+- **Buscar cambios** (`app/library/drive-changes.ts`), con `changes.list`:
+  - **Al vincular o recorrer:** se guarda un `startPageToken`, pedido antes de recorrer, y el
+    mapa de subcarpetas con su ruta.
+  - **«Buscar cambios»:** pide solo lo que cambió desde entonces, en una petición y no una por
+    carpeta. Aplica altas, bajas, papelera, renombres y movimientos dentro del árbol, e ignora lo
+    que pasa fuera de la carpeta.
+  - **Cuándo se recorre entera:** cuando no hay token (carpetas vinculadas antes de esto), el
+    token caducó, una subcarpeta se renombra, se mueve o se borra, entra una carpeta nueva o hay
+    más de 5.000 cambios. Es más lento, pero exacto.
 - **Huella:** la misma forma que en las carpetas locales (`ruta::nombre::tamaño::fecha`). Si la
   carpeta de Drive es la misma biblioteca sincronizada desde el disco, un índice JSON encaja por
   ruta y, si Drive conserva la fecha, también por huella.
+  - Para reutilizar el índice manda el **MD5 de Drive**: mover o renombrar un libro no lo vuelve a
+    descargar. Los Documentos de Google, que no traen MD5, siguen yendo por la huella.
 - **Lector:** descarga el original a la pestaña con su avance; sin token muestra «Conectar
   Google Drive» en lugar de fallar.
 - **Formatos:** los mismos que las carpetas locales, más los Documentos de Google (se exportan a
@@ -74,6 +85,7 @@ NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER=<número del proyecto>
 
 ## Pendiente
 
-- Cambios incrementales con `changes.list` en vez de recorrer la carpeta al buscar cambios.
+- Resolver con `changes.list` también una subcarpeta renombrada o nueva, recorriendo solo esa rama
+  en lugar de la carpeta entera.
 - Renovar el acceso sin clic (token de actualización guardado en servidor), si se decide.
 - Abrir libros de más de 50 MB sin descargarlos enteros (peticiones por rangos).

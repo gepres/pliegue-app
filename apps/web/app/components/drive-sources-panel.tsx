@@ -60,7 +60,9 @@ function describeFolderResult(result: DriveFolderResult) {
   ].filter(Boolean);
   return `«${result.sourceName}»: ${plural(result.total, "documento")}${parts.length ? ` (${parts.join(", ")})` : ", sin cambios"}${
     result.skipped ? ` · ${plural(result.skipped, "archivo")} que Pliegue no lee` : ""
-  }. El texto y las portadas llegan poco a poco.`;
+  }.${result.mode === "changes" ? " Se pidió a Drive solo lo que cambió, sin recorrer la carpeta." : ""}${
+    parts.length ? " El texto y las portadas llegan poco a poco." : ""
+  }`;
 }
 
 /** Olvida documentos de Drive: la referencia, su índice, su ficha IA y dónde se quedó la lectura. */
