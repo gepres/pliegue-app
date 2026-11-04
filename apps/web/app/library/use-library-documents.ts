@@ -8,6 +8,7 @@ import { useCopyGroups } from "./book-copies-store";
 import { applyImportedCatalogs } from "./catalog-import";
 import { applyDocumentCatalogs } from "./documents";
 import { useDriveLibrary } from "./drive-library-store";
+import { applyFetchedCovers, useFetchedCovers } from "./fetched-cover-store";
 import { useImportedCatalogs } from "./imported-catalog-store";
 import { useLinkedFiles } from "./local-file-reference-store";
 import { useLinkedFolders } from "./local-folder-store";
@@ -29,6 +30,7 @@ export function useLibraryDocuments() {
   const driveLibrary = useDriveLibrary();
   const catalogs = useDocumentCatalogs();
   const importedCatalogs = useImportedCatalogs();
+  const fetchedCovers = useFetchedCovers();
   const copyGroups = useCopyGroups();
 
   const rawDocuments = useMemo(
@@ -43,14 +45,15 @@ export function useLibraryDocuments() {
   const baseDocuments = useMemo(() => applyCopyGroups(rawDocuments, copyGroups), [copyGroups, rawDocuments]);
 
   // El orden importa: la ficha importada se aplica después para que prevalezca sobre la que
-  // dedujo el modelo, que es lo que espera quien acaba de corregirla a mano.
+  // dedujo el modelo, que es lo que espera quien acaba de corregirla a mano. Las portadas de
+  // Open Library van en medio: llenan lo que falta, pero no pisan la del índice JSON.
   const allDocuments = useMemo(
     () =>
       applyImportedCatalogs(
-        applyDocumentCatalogs(baseDocuments, catalogs.records),
+        applyFetchedCovers(applyDocumentCatalogs(baseDocuments, catalogs.records), fetchedCovers.records),
         importedCatalogs.records,
       ),
-    [baseDocuments, catalogs.records, importedCatalogs.records],
+    [baseDocuments, catalogs.records, fetchedCovers.records, importedCatalogs.records],
   );
 
   return {
@@ -58,6 +61,7 @@ export function useLibraryDocuments() {
     baseDocuments,
     catalogs,
     driveLibrary,
+    fetchedCovers,
     importedCatalogs,
     importedLibrary,
     linkedFiles,

@@ -241,3 +241,16 @@ export async function createDocumentCover(format: DocumentFormat, file: Blob): P
     return null;
   }
 }
+
+/**
+ * Una imagen que llega de fuera —la portada de Open Library (03.11)— como portada incrustada de
+ * 300 × 450 en WebP, igual que las demás: una vez guardada, mostrarla no sale del dispositivo.
+ */
+export async function coverFromImage(image: Blob, source: CatalogCoverSource): Promise<CatalogCover | null> {
+  if (!canDraw() || image.size > maxCoverImageBytes) return null;
+  try {
+    return await drawImageCover(image, source);
+  } catch {
+    return null;
+  }
+}
