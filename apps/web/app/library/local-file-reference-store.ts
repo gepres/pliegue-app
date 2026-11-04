@@ -42,6 +42,8 @@ interface LinkedFilesSnapshot {
 }
 
 export interface LinkLocalFilesResult {
+  /** Los documentos vinculados o actualizados, en el orden en que llegaron. */
+  documentIds: string[];
   linked: number;
   rejected: Array<{ name: string; reason: string }>;
   updated: number;
@@ -239,11 +241,21 @@ export async function linkLocalFiles(): Promise<LinkLocalFilesResult> {
     id: "pliegue-library-files",
     multiple: true,
   });
+  return linkFileHandles(handles);
+}
+
+/**
+ * Vincula archivos de los que ya se tiene el handle: los del selector o los que el sistema le
+ * pasa a la app instalada con «Abrir con → Pliegue» (`launchQueue`, 06.6). Un archivo que ya
+ * estaba vinculado se actualiza en lugar de duplicarse.
+ */
+export async function linkFileHandles(handles: readonly FileSystemFileHandle[]): Promise<LinkLocalFilesResult> {
+  if (!("indexedDB" in window)) throw new Error("Este navegador no permite vincular archivos.");
   const database = await openDatabase();
 
   try {
     const previous = await readStoredDocuments(database);
-    const result: LinkLocalFilesResult = { linked: 0, rejected: [], updated: 0 };
+    const result: LinkLocalFilesResult = { documentIds: [], linked: 0, rejected: [], updated: 0 };
     const records = await Promise.all(
       handles.map(async (handle): Promise<StoredLinkedFileDocument | null> => {
         const file = await handle.getFile();
@@ -291,6 +303,7 @@ export async function linkLocalFiles(): Promise<LinkLocalFilesResult> {
       if (record) store.put(record);
     }
     await completed;
+    result.documentIds = records.flatMap((record) => (record ? [record.id] : []));
 
     await loadLinkedFiles();
     return result;
