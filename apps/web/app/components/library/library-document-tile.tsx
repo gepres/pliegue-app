@@ -203,6 +203,15 @@ export function LibraryDocumentTile({
         </h3>
         <p className={styles.tileAuthor}>{author}</p>
         <p className={styles.tileMeta}>
+          {/* En la lista la portada mide 52 px y no caben en ella el origen y el tomo: el origen
+              va aquí, delante del texto. Es decorativo; el texto ya lo dice. */}
+          {view === "list" ? (
+            <span aria-hidden="true" className={styles.tileOrigin} data-unavailable={unavailable ? "true" : undefined} title={placeText}>
+              {places.map((place) => (
+                <Icon key={place.icon} name={place.icon} size={13} />
+              ))}
+            </span>
+          ) : null}
           {percent > 0 ? (
             <>
               <span className={styles.tileProgressText}>{percent} % leído</span>

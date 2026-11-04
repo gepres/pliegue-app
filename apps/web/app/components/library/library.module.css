@@ -900,11 +900,29 @@
   }
 }
 
-/* En la lista la portada mide 52 px: la pastilla de origen, más pequeña y pegada a la esquina. */
-.tileList .coverBadge {
-  height: 18px;
-  left: 4px;
-  min-width: 18px;
+/* En la lista la portada mide 52 px y el origen y el número de tomo se pisaban: el origen sale
+   de la portada y va en la línea de datos, delante del texto; el tomo se queda, más pequeño. */
+.tileList .coverBadge,
+.tileList .coverFormat .coverOrigin {
+  display: none;
+}
+
+.tileList .coverVolume {
+  font-size: 0.5625rem;
+  height: 16px;
+  min-width: 16px;
   padding: 0 4px;
+  right: 4px;
   top: 4px;
+}
+
+.tileOrigin {
+  align-items: center;
+  color: var(--pliegue-color-text-secondary);
+  display: inline-flex;
+  gap: 3px;
+}
+
+.tileOrigin[data-unavailable="true"] {
+  color: var(--pliegue-color-status-danger);
 }
