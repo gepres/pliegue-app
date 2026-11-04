@@ -4,8 +4,8 @@ import { useState } from "react";
 
 import { Button, Card, Tag } from "@pliegue/ui";
 
-import { removeDocumentCatalogRecords } from "../ai/document-catalog-store";
 import { copyReleaseNote, releaseCopies } from "../library/book-copies-store";
+import { describeForgotten, forgetDocumentDerivatives } from "../library/forget-derivatives";
 import {
   linkLocalFolder,
   scanLinkedFolder,
@@ -162,6 +162,7 @@ export function LocalSourcesPanel() {
         "el permiso de lectura de la carpeta",
         `el índice de texto de ${affected} documento${affected === 1 ? "" : "s"}`,
         "sus fichas del catálogo IA",
+        "sus traducciones guardadas y las portadas traídas de Open Library",
       ],
       icon: "folder",
       note: `${copies ? `${copies} ` : ""}Los archivos originales no cambian. Volver a vincularla obliga a extraer el texto y a analizarlo otra vez. Si solo quieres recuperar el acceso, cancela y usa «Conceder acceso».`,
@@ -177,8 +178,8 @@ export function LocalSourcesPanel() {
       // Los libros que siguen en Drive (u otra copia) se llevan su estado antes de borrar nada.
       await releaseCopies(documentIds);
       await unlinkLocalFolder(source.id);
-      await removeDocumentCatalogRecords(documentIds).catch(() => undefined);
-      setStatusMessage(`«${source.name}» se desvinculó. Los originales permanecen intactos.`);
+      const forgotten = await forgetDocumentDerivatives(documentIds);
+      setStatusMessage(`«${source.name}» se desvinculó. ${describeForgotten(forgotten)} Los originales permanecen intactos.`);
     } catch {
       setStatusMessage("No fue posible desvincular la carpeta.");
     } finally {

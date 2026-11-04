@@ -5,7 +5,6 @@ import { useState } from "react";
 
 import { Button, Card, Tag, buttonClassName } from "@pliegue/ui";
 
-import { removeDocumentCatalogRecords } from "../ai/document-catalog-store";
 import { formatFileSize } from "../library/local-file-metadata";
 import {
   linkLocalFiles,
@@ -13,6 +12,7 @@ import {
   useLinkedFiles,
 } from "../library/local-file-reference-store";
 import { copyReleaseNote, releaseCopies } from "../library/book-copies-store";
+import { describeForgotten, forgetDocumentDerivatives } from "../library/forget-derivatives";
 import { clearReadingProgress } from "../library/reading-progress-store";
 import { useCatalogAi } from "../ai/ai-readiness";
 import { afterLibraryGrowth } from "../guide/next-steps";
@@ -29,8 +29,9 @@ export async function forgetLinkedFiles(documentIds: readonly string[]) {
   // Lo que valga para otra copia del mismo libro pasa a ella antes de borrar nada.
   await releaseCopies(documentIds);
   await unlinkLocalFiles(documentIds);
-  await removeDocumentCatalogRecords(documentIds).catch(() => undefined);
+  const forgotten = await forgetDocumentDerivatives(documentIds);
   for (const documentId of documentIds) clearReadingProgress(documentId);
+  return forgotten;
 }
 
 /** La misma pregunta desde la Biblioteca y desde Fuentes: dice qué se olvida y qué no. */
@@ -42,6 +43,7 @@ export function unlinkFilesConfirmation(label: string, documentIds: readonly str
     details: [
       "la referencia al archivo y su índice de texto",
       "su ficha del catálogo IA",
+      "sus traducciones guardadas y la portada traída de Open Library",
       "dónde se quedó la lectura",
     ],
     icon: "link",
@@ -97,11 +99,11 @@ export function LinkedFilesPanel() {
 
     setBusy(documentIds.length === 1 ? (documentIds[0] ?? "all") : "all");
     try {
-      await forgetLinkedFiles(documentIds);
+      const forgotten = await forgetLinkedFiles(documentIds);
       setStatus(
         documentIds.length === 1
-          ? `${label} se desvinculó. El original sigue donde estaba.`
-          : `${documentIds.length} archivos desvinculados. Los originales siguen donde estaban.`,
+          ? `${label} se desvinculó. ${describeForgotten(forgotten)} El original sigue donde estaba.`
+          : `${documentIds.length} archivos desvinculados. ${describeForgotten(forgotten)} Los originales siguen donde estaban.`,
       );
     } catch {
       setStatus("No fue posible desvincular.");

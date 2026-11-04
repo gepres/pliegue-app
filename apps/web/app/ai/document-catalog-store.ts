@@ -143,14 +143,23 @@ export async function removeDocumentCatalogRecord(documentId: string) {
   return removeDocumentCatalogRecords([documentId]);
 }
 
+/** Borra las fichas de estos documentos y dice cuántas había de verdad (03.3: borrado que se ve). */
 export async function removeDocumentCatalogRecords(documentIds: readonly string[]) {
-  if (!documentIds.length) return;
+  if (!documentIds.length) return 0;
   const ids = new Set(documentIds);
   const database = await openDatabase();
+  let removed = 0;
   try {
     const transaction = database.transaction(storeName, "readwrite");
     const store = transaction.objectStore(storeName);
-    for (const documentId of ids) store.delete(documentId);
+    const keys = store.getAllKeys();
+    keys.addEventListener("success", () => {
+      for (const key of keys.result) {
+        if (!ids.has(String(key))) continue;
+        store.delete(key);
+        removed += 1;
+      }
+    });
     await transactionComplete(transaction);
   } finally {
     database.close();
@@ -160,6 +169,7 @@ export async function removeDocumentCatalogRecords(documentIds: readonly string[
     ...snapshot,
     records: snapshot.records.filter((record) => !ids.has(record.documentId)),
   });
+  return removed;
 }
 
 /**

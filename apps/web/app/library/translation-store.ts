@@ -133,6 +133,32 @@ export async function clearTranslation(documentId: string, pairId: string) {
  * Las traducciones de una copia pasan a la que guarda el estado del libro. Una página que el
  * destino ya tenía traducida se conserva: no se pisa nada.
  */
+/**
+ * Borra todas las traducciones de estos documentos, con cualquier motor y par de idiomas, y
+ * dice cuántas unidades borró. Es la caché de un libro que se desvincula (03.3): sin el libro,
+ * nadie las volvería a leer y ocuparían sitio para siempre.
+ */
+export async function clearDocumentsTranslations(documentIds: readonly string[]) {
+  if (!documentIds.length) return 0;
+  const database = await openDatabase();
+  let removed = 0;
+  try {
+    const transaction = database.transaction(storeName, "readwrite");
+    const store = transaction.objectStore(storeName);
+    for (const documentId of new Set(documentIds)) {
+      const keys = store.index(byTranslation).getAllKeys(IDBKeyRange.bound([documentId, ""], [documentId, "￿"]));
+      keys.addEventListener("success", () => {
+        for (const key of keys.result) store.delete(key);
+        removed += keys.result.length;
+      });
+    }
+    await transactionComplete(transaction);
+  } finally {
+    database.close();
+  }
+  return removed;
+}
+
 export async function transferTranslations(fromId: string, toId: string) {
   if (fromId === toId) return 0;
   const range = (documentId: string) => IDBKeyRange.bound([documentId, ""], [documentId, "\uffff"]);
