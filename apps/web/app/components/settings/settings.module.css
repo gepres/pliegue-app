@@ -1,3 +1,9 @@
+/* Mide el ancho que deja la barra de la app, para decidir dónde va la lista de categorías. */
+.frame {
+  container-name: ajustes;
+  container-type: inline-size;
+}
+
 .layout {
   display: grid;
   gap: var(--pliegue-spacing-lg) var(--pliegue-spacing-xl);
@@ -158,6 +164,48 @@
 
 .back:focus-visible {
   outline: 3px solid var(--pliegue-color-focus-ring);
+}
+
+/* ---- Tablet: categorías arriba (02.3c) ------------------------------------
+   Con la barra de la app al lado, una ventana de 860 a 1180 px dejaba el panel en unos 290 px
+   detrás de una lista de 280: los textos iban en renglones muy cortos y la comparativa de
+   traductores se cortaba. Cuando el área de Ajustes no llega a 900 px, la lista pasa arriba
+   como una fila de pestañas y el panel ocupa todo el ancho. En el teléfono manda lo de abajo. */
+
+@media (min-width: 801px) {
+  @container ajustes (max-width: 900px) {
+    .layout {
+      grid-template-areas:
+        "header"
+        "nav"
+        "detail";
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .nav {
+      position: static;
+    }
+
+    .nav ul {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .navItem {
+      min-height: 44px;
+      padding: 6px 12px 6px 6px;
+    }
+
+    .navIcon {
+      flex-basis: 28px;
+      height: 28px;
+    }
+
+    .navText small {
+      display: none;
+    }
+  }
 }
 
 /* ---- Teléfono: lista → detalle ------------------------------------------- */

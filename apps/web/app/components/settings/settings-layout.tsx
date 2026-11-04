@@ -58,60 +58,64 @@ export function SettingsLayout({ sections }: { sections: readonly SettingsSectio
   // En escritorio siempre hay una categoría a la vista; en móvil, sin fragmento, la lista.
   const shown = active ?? sections[0]?.id ?? null;
 
+  // El marco mide el ancho que deja la barra de la app: en una tablet, o con la barra
+  // desplegada en una ventana mediana, la lista de categorías pasa arriba (02.3c).
   return (
-    <div className={styles.layout} data-detail={active ? "open" : "closed"}>
-      <header className={styles.header}>
-        <h1>Ajustes</h1>
-        <p>Apariencia, privacidad y proveedores, sin perder el control de tus datos.</p>
-      </header>
+    <div className={styles.frame}>
+      <div className={styles.layout} data-detail={active ? "open" : "closed"}>
+        <header className={styles.header}>
+          <h1>Ajustes</h1>
+          <p>Apariencia, privacidad y proveedores, sin perder el control de tus datos.</p>
+        </header>
 
-      <nav aria-label="Categorías de ajustes" className={styles.nav}>
-        <ul>
+        <nav aria-label="Categorías de ajustes" className={styles.nav}>
+          <ul>
+            {sections.map((section) => (
+              <li key={section.id}>
+                <a
+                  aria-current={shown === section.id ? "page" : undefined}
+                  className={styles.navItem}
+                  href={`#${section.id}`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    open(section.id);
+                  }}
+                >
+                  <span className={styles.navIcon}>
+                    <Icon name={section.icon} size={18} />
+                  </span>
+                  <span className={styles.navText}>
+                    <strong>{section.label}</strong>
+                    <small>{section.description}</small>
+                  </span>
+                  <Icon className={styles.navChevron} name="chevronRight" size={18} />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className={styles.detail}>
           {sections.map((section) => (
-            <li key={section.id}>
-              <a
-                aria-current={shown === section.id ? "page" : undefined}
-                className={styles.navItem}
-                href={`#${section.id}`}
-                onClick={(event) => {
-                  event.preventDefault();
-                  open(section.id);
-                }}
-              >
-                <span className={styles.navIcon}>
-                  <Icon name={section.icon} size={18} />
-                </span>
-                <span className={styles.navText}>
-                  <strong>{section.label}</strong>
-                  <small>{section.description}</small>
-                </span>
-                <Icon className={styles.navChevron} name="chevronRight" size={18} />
-              </a>
-            </li>
+            <section
+              aria-labelledby={`settings-${section.id}-title`}
+              className={cx(styles.panel)}
+              hidden={shown !== section.id}
+              id={`ajustes-${section.id}`}
+              key={section.id}
+            >
+              <div className={styles.panelHeader}>
+                <button className={styles.back} onClick={back} type="button">
+                  <Icon name="back" size={18} />
+                  Ajustes
+                </button>
+                <h2 id={`settings-${section.id}-title`}>{section.label}</h2>
+                <p>{section.description}</p>
+              </div>
+              {section.content}
+            </section>
           ))}
-        </ul>
-      </nav>
-
-      <div className={styles.detail}>
-        {sections.map((section) => (
-          <section
-            aria-labelledby={`settings-${section.id}-title`}
-            className={cx(styles.panel)}
-            hidden={shown !== section.id}
-            id={`ajustes-${section.id}`}
-            key={section.id}
-          >
-            <div className={styles.panelHeader}>
-              <button className={styles.back} onClick={back} type="button">
-                <Icon name="back" size={18} />
-                Ajustes
-              </button>
-              <h2 id={`settings-${section.id}-title`}>{section.label}</h2>
-              <p>{section.description}</p>
-            </div>
-            {section.content}
-          </section>
-        ))}
+        </div>
       </div>
     </div>
   );
