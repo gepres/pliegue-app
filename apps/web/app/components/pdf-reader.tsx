@@ -1617,6 +1617,10 @@ function PageField({
   pageCount: number;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  // Enter y Escape quitan el foco al terminar, y el `blur` confirmaría otra vez con el borrador
+  // que aún ve su cierre: con Escape, saltaba a la página que se quería descartar y, como el
+  // avance solo crece, lo dejaba ahí para siempre (05.10). El blur que ellos provocan se ignora.
+  const skipBlurRef = useRef(false);
 
   function commit() {
     if (draft === null) return;
@@ -1625,22 +1629,40 @@ function PageField({
     if (Number.isFinite(page)) onSubmit(Math.min(pageCount, Math.max(1, page)));
   }
 
+  function commitOnBlur() {
+    if (skipBlurRef.current) {
+      skipBlurRef.current = false;
+      return;
+    }
+    commit();
+  }
+
   return (
     <label className={styles.pageField}>
       <span className={styles.visuallyHidden}>Página actual</span>
       <input
         disabled={disabled}
         inputMode="numeric"
-        onBlur={commit}
+        onBlur={commitOnBlur}
         onChange={(event) => setDraft(event.target.value.replace(/[^0-9]/g, ""))}
-        onFocus={(event) => event.target.select()}
+        onFocus={(event) => {
+          // Si el salto movió el foco antes del `blur()`, la marca quedó puesta: al volver al
+          // campo se empieza de cero, para que salir con un clic fuera confirme.
+          skipBlurRef.current = false;
+          event.target.select();
+        }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
             commit();
+            skipBlurRef.current = true;
             event.currentTarget.blur();
           } else if (event.key === "Escape") {
+            // Que no lo recoja también la hoja o el modo inmersivo: aquí Escape solo descarta.
+            event.preventDefault();
+            event.stopPropagation();
             setDraft(null);
+            skipBlurRef.current = true;
             event.currentTarget.blur();
           }
         }}
