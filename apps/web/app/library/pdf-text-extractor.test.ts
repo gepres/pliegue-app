@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
-import { createTestPdf as pdf } from "./pdf-test-fixture";
+import { createTestPdf as pdf, pdfjsWarmUpTimeout, warmUpPdfjs } from "./pdf-test-fixture";
 import { extractPdfText, joinPdfPages, maxPdfInputBytes } from "./pdf-text-extractor";
 
 describe("extracción local de texto en PDF", () => {
+  beforeAll(warmUpPdfjs, pdfjsWarmUpTimeout);
+
   it("extrae el texto de cada página conservando su número", async () => {
     const result = await extractPdfText(
       pdf(["Hallazgo principal del corpus", "Segunda pagina con contexto"]),
