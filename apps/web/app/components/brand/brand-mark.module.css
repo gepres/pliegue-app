@@ -1,0 +1,12 @@
+.mark {
+  display: block;
+  flex: none;
+}
+
+.body {
+  fill: var(--pliegue-color-action-primary);
+}
+
+.page {
+  fill: var(--pliegue-paper-50);
+}

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 
 import { buttonClassName } from "@pliegue/ui";
@@ -8,6 +7,7 @@ import { SmoothScroll } from "./components/home/smooth-scroll";
 import { InstallAppButton } from "./components/pwa/install-app";
 import { ThemeToggle } from "./components/theme-toggle";
 import styles from "./page.module.css";
+import { BrandMark } from "./components/brand/brand-mark";
 
 /**
  * La portada de Pliegue: qué es y qué hace, contado como se cuenta un libro. Arriba, un pliego
@@ -225,7 +225,7 @@ export default function HomePage() {
 
       <header className={styles.header}>
         <Link aria-label="Pliegue, inicio" className={styles.wordmark} href="/">
-          <Image alt="" height={30} priority src="/brand/pliegue-mark.svg" width={30} />
+          <BrandMark size={30} />
           <span>Pliegue</span>
         </Link>
         <nav aria-label="Secciones" className={styles.nav}>
@@ -474,7 +474,7 @@ export default function HomePage() {
       <footer className={styles.footer}>
         <div className={styles.footerBrand}>
           <Link aria-label="Pliegue, inicio" className={styles.wordmark} href="/">
-            <Image alt="" height={26} src="/brand/pliegue-mark.svg" width={26} />
+            <BrandMark size={26} />
             <span>Pliegue</span>
           </Link>
           <p>Todo lo que guardaste, por fin entendible, legible y conectado.</p>

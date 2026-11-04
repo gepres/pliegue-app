@@ -1,6 +1,5 @@
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 
 import { elevationTokens, primitiveColors, semanticTokens, spacingTokens } from "@pliegue/tokens";
@@ -9,6 +8,7 @@ import { Button, Card, Field, Input, Select, Switch, Tag, buttonClassName } from
 import { Icon } from "../components/app-ui/icons";
 import { ThemeToggle } from "../components/theme-toggle";
 import styles from "./page.module.css";
+import { BrandMark } from "../components/brand/brand-mark";
 
 export const metadata: Metadata = {
   title: "Sistema visual",
@@ -29,7 +29,7 @@ function StyleFrame({ theme }: { theme: "dark" | "light" }) {
       </div>
       <div className={styles.frameShell}>
         <div className={styles.frameRail}>
-          <Image alt="" height={34} src="/brand/pliegue-mark.svg" width={34} />
+          <BrandMark size={34} />
           <div className={styles.frameRailItems} aria-hidden="true">
             <span className={styles.frameRailActive}>IN</span>
             <span>BI</span>

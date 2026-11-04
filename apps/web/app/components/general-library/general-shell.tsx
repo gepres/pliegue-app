@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
@@ -11,6 +10,7 @@ import { ConfirmDialogHost } from "../app-ui/confirm-dialog";
 import { ThemeToggle } from "../theme-toggle";
 import styles from "./general-library.module.css";
 import { ReportLibraryButton } from "./report-library";
+import { BrandMark } from "../brand/brand-mark";
 
 /** Salir de la biblioteca: borra la sesión de este navegador (solo la de esta biblioteca). */
 function LeaveButton({ place }: { place: LibraryPlace }) {
@@ -48,7 +48,7 @@ export function GeneralShell({
     <div className={styles.shell}>
       <header className={styles.topbar}>
         <Link className={styles.brand} href={place.path}>
-          <Image alt="" height={26} priority src="/brand/pliegue-mark.svg" width={26} />
+          <BrandMark size={26} />
           <span>
             Pliegue <small>· {place.title}</small>
           </span>
