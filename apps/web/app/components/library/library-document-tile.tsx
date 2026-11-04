@@ -9,7 +9,7 @@ import { documentLanguage, type LibraryDocument } from "../../library/documents"
 import { languageLabel } from "../../library/language";
 import { useReadingProgress } from "../../library/reading-progress-store";
 import { IconButton } from "../app-ui/controls";
-import { Icon } from "../app-ui/icons";
+import { Icon, type IconName } from "../app-ui/icons";
 import { MenuItem, MenuSeparator, Popover } from "../app-ui/overlays";
 import styles from "./library.module.css";
 
@@ -42,6 +42,21 @@ function coverInitials(title: string) {
     .filter((word) => word.length > 2);
   const letters = (words.length ? words : [title]).slice(0, 2).map((word) => word[0] ?? "");
   return letters.join("").toLocaleUpperCase("es");
+}
+
+/**
+ * Dónde está el libro, para el icono de la portada (03.10). Un libro con copias en tu equipo
+ * y en Drive lleva los dos; una copia importada vive en el navegador.
+ */
+function originPlaces(document: LibraryDocument): { icon: IconName; label: string }[] {
+  if (document.reference.kind === "local-copy") {
+    return [{ icon: "database", label: "Copia guardada en este navegador" }];
+  }
+  const origins = new Set(document.copies?.length ? document.copies.map((copy) => copy.origin) : [document.origin]);
+  return [
+    ...(origins.has("local") ? [{ icon: "folder" as const, label: "En tu equipo" }] : []),
+    ...(origins.has("drive") ? [{ icon: "cloud" as const, label: "En Google Drive" }] : []),
+  ];
 }
 
 /**
@@ -115,6 +130,20 @@ export function LibraryDocumentTile({
     { lead: false, text: attributes },
   ].filter((fact) => fact.text);
 
+  // Dónde está, siempre a la vista (03.10). Antes, en cuanto había avance, «47 % leído»
+  // sustituía a «Local» o «Drive», y la disponibilidad solo salía si faltaba el archivo.
+  const places = originPlaces(document);
+  const placeText = [places.map((place) => place.label).join(" y "), unavailable ? availabilityLabel : ""]
+    .filter(Boolean)
+    .join(" · ");
+  const origin = (
+    <span className={styles.coverOrigin} data-unavailable={unavailable ? "true" : undefined} title={placeText}>
+      {places.map((place) => (
+        <Icon key={place.icon} name={place.icon} size={12} />
+      ))}
+    </span>
+  );
+
   // La portada real, si la ficha la trae; si no, la generada con formato e iniciales. La
   // imagen viene incrustada en la ficha, así que no hay petición a la red que esperar.
   const cover = (
@@ -125,11 +154,17 @@ export function LibraryDocumentTile({
       data-format={document.format}
     >
       {image ? (
-        // eslint-disable-next-line @next/next/no-img-element -- data URI local: no hay nada que optimizar
-        <img alt="" className={styles.coverImage} decoding="async" loading="lazy" src={image} />
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element -- data URI local: no hay nada que optimizar */}
+          <img alt="" className={styles.coverImage} decoding="async" loading="lazy" src={image} />
+          <span className={styles.coverBadge}>{origin}</span>
+        </>
       ) : (
         <>
-          <span className={styles.coverFormat}>{document.format.toUpperCase()}</span>
+          <span className={styles.coverFormat}>
+            {document.format.toUpperCase()}
+            {origin}
+          </span>
           <span className={styles.coverInitials}>{coverInitials(title)}</span>
         </>
       )}
@@ -169,7 +204,11 @@ export function LibraryDocumentTile({
         <p className={styles.tileAuthor}>{author}</p>
         <p className={styles.tileMeta}>
           {percent > 0 ? (
-            <span className={styles.tileProgressText}>{percent} % leído</span>
+            <>
+              <span className={styles.tileProgressText}>{percent} % leído</span>
+              {/* La portada es decorativa para el lector de pantalla: el origen se dice aquí. */}
+              <span className={styles.srOnly}>{placeText}</span>
+            </>
           ) : (
             <span>{originLabel}</span>
           )}
