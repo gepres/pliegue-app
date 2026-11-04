@@ -2,19 +2,29 @@
 
 import { useSyncExternalStore } from "react";
 
-import { DriveApiError, downloadDriveFile, getDriveFile, walkDriveFolder } from "../drive/drive-api";
+import {
+  DriveApiError,
+  downloadDriveFile,
+  getDriveFile,
+  getDriveStartPageToken,
+  listDriveChanges,
+  walkDriveFolder,
+  type DriveChange,
+} from "../drive/drive-api";
 import { getDriveToken, readDriveConnection, subscribeDriveConnection } from "../drive/drive-connection";
 import { isDriveFolder } from "../drive/drive-files";
 import type { PickerDocument } from "../drive/google-scripts";
-import { createDriveDocument, listSkippedDriveFiles, sameDriveContent, type DriveDocument } from "./drive-document";
 import {
-  carriedIndexFields,
-  contentIndexVersion,
-  createLocalContentIndex,
-  isCurrentContentIndex,
-} from "./local-content-index";
+  applyDriveChangePlan,
+  carryIndex,
+  maxIncrementalChanges,
+  planDriveChanges,
+  type SkippedDriveFile,
+} from "./drive-changes";
+import { createDriveDocument, listSkippedDriveFiles, type DriveDocument } from "./drive-document";
+import { contentIndexVersion, createLocalContentIndex, isCurrentContentIndex } from "./local-content-index";
 import { maxImportedFileBytes } from "./local-file-metadata";
-import { compareFolderDocuments, type FolderChangeSummary, type SkippedLinkedFile } from "./local-folder";
+import { compareFolderDocuments, type FolderChangeSummary } from "./local-folder";
 
 const databaseName = "pliegue-drive";
 const databaseVersion = 1;
@@ -37,7 +47,12 @@ export interface DriveFolderSource {
   id: string;
   lastScannedAt: string | null;
   name: string;
-  skippedFiles: SkippedLinkedFile[];
+  skippedFiles: SkippedDriveFile[];
+  /**
+   * Para «Buscar cambios» con `changes.list` (03.1): desde dónde contar y qué carpetas forman
+   * el árbol, con su ruta. Sin esto (carpetas vinculadas antes), se recorre la carpeta entera.
+   */
+  changes?: { folders: Record<string, string>; pageToken: string };
 }
 
 /**
@@ -61,6 +76,8 @@ interface DriveLibrarySnapshot {
 }
 
 export interface DriveFolderResult extends FolderChangeSummary {
+  /** `changes`: solo se pidió lo que cambió; `full`: se recorrió la carpeta entera. */
+  mode: "changes" | "full";
   relinked: boolean;
   skipped: number;
   sourceId: string;
@@ -258,27 +275,6 @@ function requireToken() {
   return token;
 }
 
-/** Conserva el índice de un documento cuyo contenido no cambió; si cambió, queda pendiente. */
-function carryIndex(previous: DriveDocument | undefined, next: DriveDocument): DriveDocument {
-  if (!previous) return next;
-  const { indexStatus, indexVersion } = previous;
-  const reusable =
-    sameDriveContent(previous, next) &&
-    (indexStatus === "indexed" || indexStatus === "metadata-only") &&
-    indexVersion !== undefined &&
-    isCurrentContentIndex(indexVersion);
-  if (!reusable) return { ...next, addedAt: previous.addedAt };
-  return {
-    ...next,
-    ...carriedIndexFields(previous),
-    addedAt: previous.addedAt,
-    indexedAt: previous.indexedAt ?? previous.addedAt,
-    indexStatus,
-    indexVersion,
-    searchText: previous.searchText ?? "",
-  };
-}
-
 async function runLimited<Item>(items: readonly Item[], limit: number, task: (item: Item) => Promise<void>) {
   let next = 0;
   await Promise.all(
@@ -330,11 +326,20 @@ export async function addDriveFiles(picked: readonly PickerDocument[]): Promise<
   return result;
 }
 
-async function saveFolder(folder: { driveId: string | null; folderId: string; name: string }, onProgress?: (folders: number) => void) {
+async function saveFolder(
+  folder: { driveId: string | null; folderId: string; name: string },
+  onProgress?: (folders: number) => void,
+): Promise<DriveFolderResult> {
   const token = requireToken();
   if (!readDriveConnection().readonly) {
     throw new DriveApiError("scope", 403, "Vincular una carpeta completa necesita el permiso de solo lectura de Drive.");
   }
+  // Antes de recorrer: lo que cambie durante el recorrido entrará en la próxima búsqueda.
+  // Si Drive no lo da, la próxima vez se recorre entera, como antes.
+  const pageToken = await getDriveStartPageToken(token, folder.driveId).catch((error: unknown) => {
+    if (error instanceof DriveApiError && error.kind === "auth") throw error;
+    return null;
+  });
   const walk = await walkDriveFolder(folder.folderId, token, onProgress ? { onFolder: onProgress } : {});
   const existing = stored.sources.find((source) => source.folderId === folder.folderId);
   const sourceId = existing?.id ?? crypto.randomUUID();
@@ -360,6 +365,7 @@ async function saveFolder(folder: { driveId: string | null; folderId: string; na
     lastScannedAt: now,
     name: folder.name,
     skippedFiles,
+    ...(pageToken ? { changes: { folders: walk.folderPaths, pageToken } } : {}),
   };
   const currentIds = new Set(documents.map((document) => document.id));
   const summary = compareFolderDocuments(previous, documents);
@@ -370,7 +376,86 @@ async function saveFolder(folder: { driveId: string | null; folderId: string; na
     putSources: [source],
   });
   await loadDriveLibrary();
-  return { ...summary, relinked: Boolean(existing), skipped: skippedFiles.length, sourceId, sourceName: folder.name };
+  return {
+    ...summary,
+    mode: "full",
+    relinked: Boolean(existing),
+    skipped: skippedFiles.length,
+    sourceId,
+    sourceName: folder.name,
+  };
+}
+
+/** Los cambios desde el último token, página a página; `null` si hay que recorrer la carpeta. */
+async function readDriveChanges(source: DriveFolderSource, token: string) {
+  if (!source.changes) return null;
+  const changes: DriveChange[] = [];
+  let pageToken: string | null = source.changes.pageToken;
+  let newStartPageToken: string | null = null;
+  try {
+    while (pageToken) {
+      const page = await listDriveChanges(pageToken, token, source.driveId);
+      changes.push(...page.changes);
+      if (changes.length > maxIncrementalChanges) return null;
+      newStartPageToken = page.newStartPageToken ?? newStartPageToken;
+      pageToken = page.nextPageToken;
+    }
+  } catch (error) {
+    // Sin token: hay que reconectar, como en el recorrido. Un token caducado u otro fallo de
+    // `changes.list` no deja la carpeta sin revisar: se recorre entera.
+    if (error instanceof DriveApiError && error.kind === "auth") throw error;
+    return null;
+  }
+  return newStartPageToken ? { changes, newStartPageToken } : null;
+}
+
+/** «Buscar cambios» con `changes.list`; si no se puede resolver con seguridad, recorre la carpeta. */
+async function scanWithChanges(source: DriveFolderSource, onProgress?: (folders: number) => void): Promise<DriveFolderResult> {
+  const token = requireToken();
+  // Con solo `drive.file`, `changes.list` vería una parte: el recorrido pide el permiso que falta.
+  if (!readDriveConnection().readonly) return saveFolder(source, onProgress);
+  const read = await readDriveChanges(source, token);
+  const previous = stored.documents.filter((document) => document.sourceId === source.id);
+  const known = new Set<string>([
+    ...previous.map((document) => document.reference.fileId),
+    ...source.skippedFiles.flatMap((file) => (file.fileId ? [file.fileId] : [])),
+  ]);
+  const plan = read && source.changes
+    ? planDriveChanges(read.changes, { folders: source.changes.folders, rootId: source.folderId }, known)
+    : null;
+  if (!read || !plan || plan.kind === "full") return saveFolder(source, onProgress);
+
+  const now = new Date().toISOString();
+  const applied = applyDriveChangePlan({
+    now,
+    plan,
+    previous,
+    skippedFiles: source.skippedFiles,
+    sourceId: source.id,
+    sourceName: source.name,
+  });
+  await write({
+    deleteDocuments: applied.deleteIds,
+    putDocuments: applied.put,
+    putSources: [
+      {
+        ...source,
+        changes: { folders: plan.folders, pageToken: read.newStartPageToken },
+        fileCount: applied.documents.length,
+        lastScannedAt: now,
+        skippedFiles: applied.skippedFiles,
+      },
+    ],
+  });
+  await loadDriveLibrary();
+  return {
+    ...applied.summary,
+    mode: "changes",
+    relinked: true,
+    skipped: applied.skippedFiles.length,
+    sourceId: source.id,
+    sourceName: source.name,
+  };
 }
 
 /** Vincula una carpeta completa elegida en el selector (con `drive.readonly`). */
@@ -378,11 +463,15 @@ export function linkDriveFolder(folder: PickerDocument, onProgress?: (folders: n
   return saveFolder({ driveId: folder.driveId ?? null, folderId: folder.id, name: folder.name }, onProgress);
 }
 
-/** Vuelve a recorrer una carpeta vinculada: añade lo nuevo, reindexa lo cambiado y quita lo borrado. */
+/**
+ * Busca cambios en una carpeta vinculada: añade lo nuevo, reindexa lo cambiado y quita lo
+ * borrado. Pide solo lo que cambió (`changes.list`) y recorre la carpeta entera cuando no hay
+ * token o el cambio no se puede resolver con seguridad.
+ */
 export function scanDriveFolder(sourceId: string, onProgress?: (folders: number) => void): Promise<DriveFolderResult> {
   const source = stored.sources.find((item) => item.id === sourceId);
   if (!source) throw new Error("La carpeta de Drive ya no está vinculada.");
-  return saveFolder(source, onProgress);
+  return scanWithChanges(source, onProgress);
 }
 
 export async function unlinkDriveFolder(sourceId: string) {

@@ -4,6 +4,8 @@ import {
   DriveApiError,
   downloadDriveFile,
   driveRequest,
+  getDriveStartPageToken,
+  listDriveChanges,
   listDriveChildren,
   walkDriveFolder,
 } from "./drive-api";
@@ -122,6 +124,33 @@ describe("cliente de Drive", () => {
     const walk = await walkDriveFolder("raiz", "token", { ...noRetry, fetcher });
     expect(walk.files.map((file) => file.relativePath)).toEqual(["Actos humanos.pdf", "FILOSOFÍA/Kant.pdf"]);
     expect(walk.folders).toBe(3);
+    // El mapa de carpetas que usará «Buscar cambios»: la raíz con ruta vacía y cada subcarpeta.
+    expect(walk.folderPaths).toEqual({ filo: "FILOSOFÍA", raiz: "", vacia: "Vacía" });
+  });
+
+  it("pide el token de cambios y los cambios por páginas, también en una unidad compartida", async () => {
+    const calls: URL[] = [];
+    const fetcher = (async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      calls.push(url);
+      if (url.pathname.endsWith("/changes/startPageToken")) return json({ startPageToken: "100" });
+      return url.searchParams.get("pageToken") === "100"
+        ? json({ changes: [{ fileId: "1", removed: true }], nextPageToken: "101" })
+        : json({ changes: [{ file: pdf("2", "b.pdf"), fileId: "2" }], newStartPageToken: "150" });
+    }) as typeof fetch;
+
+    expect(await getDriveStartPageToken("token", "unidad", { ...noRetry, fetcher })).toBe("100");
+    expect(calls[0]!.searchParams.get("driveId")).toBe("unidad");
+    expect(calls[0]!.searchParams.get("supportsAllDrives")).toBe("true");
+
+    const first = await listDriveChanges("100", "token", "unidad", { ...noRetry, fetcher });
+    const last = await listDriveChanges("101", "token", "unidad", { ...noRetry, fetcher });
+    expect(first).toEqual({ changes: [{ fileId: "1", removed: true }], newStartPageToken: null, nextPageToken: "101" });
+    expect(last.newStartPageToken).toBe("150");
+    expect(last.changes[0]!.file?.name).toBe("b.pdf");
+    expect(calls[1]!.searchParams.get("fields")).toContain("file(id,name,mimeType");
+    expect(calls[1]!.searchParams.get("includeItemsFromAllDrives")).toBe("true");
+    expect(calls[1]!.searchParams.get("includeRemoved")).toBe("true");
   });
 
   it("para al pasar del límite de archivos", async () => {

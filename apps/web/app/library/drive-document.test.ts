@@ -73,7 +73,7 @@ describe("documentos de Google Drive", () => {
         { ...pdf, relativePath: "Kant.pdf" },
         { ...pdf, name: "Borrado.rar", relativePath: "Borrado.rar", trashed: true },
       ]),
-    ).toEqual([{ relativePath: "Grinberg.rar", size: 2048 }]);
+    ).toEqual([{ fileId: pdf.id, relativePath: "Grinberg.rar", size: 2048 }]);
   });
 
   it("solo reutiliza el índice si el contenido no cambió", () => {
@@ -83,5 +83,19 @@ describe("documentos de Google Drive", () => {
     if (!before || !same || !edited) throw new Error("sin documento");
     expect(sameDriveContent(before, same)).toBe(true);
     expect(sameDriveContent(before, edited)).toBe(false);
+  });
+
+  it("mover o renombrar un libro en Drive no cambia su contenido: mismo MD5, mismo índice", () => {
+    const before = createDriveDocument(pdf, { ...placement, relativePath: "Filosofía/Kant.pdf" });
+    const moved = createDriveDocument({ ...pdf, name: "Crítica.pdf" }, { ...placement, relativePath: "Kant/Crítica.pdf" });
+    const { md5Checksum: _md5, ...withoutMd5 } = pdf;
+    void _md5;
+    const googleDoc = { ...withoutMd5, mimeType: "application/vnd.google-apps.document" };
+    const docBefore = createDriveDocument(googleDoc, { ...placement, relativePath: "Apuntes/Notas" });
+    const docMoved = createDriveDocument(googleDoc, { ...placement, relativePath: "Otros/Notas" });
+    if (!before || !moved || !docBefore || !docMoved) throw new Error("sin documento");
+    expect(sameDriveContent(before, moved)).toBe(true);
+    // Sin MD5 (Documentos de Google) decide la huella, que lleva la ruta.
+    expect(sameDriveContent(docBefore, docMoved)).toBe(false);
   });
 });
