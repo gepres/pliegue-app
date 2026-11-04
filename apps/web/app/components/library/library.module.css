@@ -433,10 +433,58 @@
 }
 
 .coverFormat {
+  align-items: center;
+  display: flex;
   font-family: var(--pliegue-font-data);
   font-size: 0.625rem;
+  gap: 6px;
   letter-spacing: 0.1em;
   opacity: 0.85;
+}
+
+/* Dónde está el libro (03.10): carpeta, Drive o copia en el navegador, siempre a la vista.
+   En la portada generada va junto al formato; en la de imagen, en una pastilla arriba a la
+   izquierda (a la derecha va el tomo). Si el archivo no está disponible, en tono de alerta. */
+.coverOrigin {
+  align-items: center;
+  display: inline-flex;
+  gap: 3px;
+}
+
+.coverOrigin[data-unavailable="true"] {
+  color: color-mix(in srgb, var(--pliegue-ochre-500) 60%, white);
+}
+
+.coverBadge {
+  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--pliegue-ink-950) 68%, transparent);
+  border-radius: var(--pliegue-radius-full);
+  color: var(--pliegue-white-1000);
+  display: grid;
+  height: 24px;
+  left: 8px;
+  min-width: 24px;
+  padding: 0 7px;
+  place-items: center;
+  position: absolute;
+  top: 8px;
+}
+
+.coverBadge:has([data-unavailable="true"]) {
+  background: color-mix(in srgb, var(--pliegue-color-status-danger) 78%, var(--pliegue-ink-950));
+}
+
+.coverBadge [data-unavailable="true"] {
+  color: var(--pliegue-white-1000);
+}
+
+.srOnly {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 
 .coverInitials {
@@ -850,4 +898,13 @@
     animation: none;
     transition: none;
   }
+}
+
+/* En la lista la portada mide 52 px: la pastilla de origen, más pequeña y pegada a la esquina. */
+.tileList .coverBadge {
+  height: 18px;
+  left: 4px;
+  min-width: 18px;
+  padding: 0 4px;
+  top: 4px;
 }
