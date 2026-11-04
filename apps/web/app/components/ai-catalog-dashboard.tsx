@@ -20,6 +20,7 @@ import {
   type CatalogAnalysisProgress,
   type CatalogQueueReason,
 } from "../ai/catalog-analysis";
+import { groupCatalogFailures } from "../ai/catalog-failures";
 import type { AiProvider } from "../ai/document-catalog";
 import { languageLabel, normalizeLanguage } from "../library/language";
 import { hasStaleIndex } from "../library/stale-index";
@@ -63,6 +64,9 @@ const reasonLabels: Record<CatalogQueueReason, (count: number) => string> = {
     `${count} con ficha de una versión anterior, sin categoría ni datos de la edición`,
 };
 
+/** Títulos que se ven de cada motivo; con un límite de uso pueden ser cientos. */
+const failureTitleLimit = 6;
+
 function plural(count: number, singular: string, pluralForm = `${singular}s`) {
   return `${count} ${count === 1 ? singular : pluralForm}`;
 }
@@ -72,7 +76,7 @@ function describeSummary(summary: Awaited<ReturnType<typeof analyzeDocumentCatal
     summary.stopped ? "Detenido" : "",
     summary.analyzed ? `${plural(summary.analyzed, "catalogado")}` : "",
     summary.needsContent ? `${summary.needsContent} sin texto que leer` : "",
-    summary.failed ? `${summary.failed} con error` : "",
+    summary.failed ? `${summary.failed} con error: el motivo, en «Por qué fallaron»` : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -150,6 +154,11 @@ export function AiCatalogDashboard() {
   const model = providerModel(settings);
   const local = settings.provider === "ollama";
   const ready = settings.provider === "ollama" || Boolean(secrets[settings.provider]);
+
+  const failures = useMemo(() => {
+    const titles = new Map(documents.map((document) => [document.id, document.title]));
+    return groupCatalogFailures(catalogs.records, (documentId) => titles.get(documentId));
+  }, [catalogs.records, documents]);
 
   const recent = useMemo(
     () =>
@@ -295,6 +304,37 @@ export function AiCatalogDashboard() {
               </p>
             )}
           </div>
+
+          {failures.length && !analyzing ? (
+            <section aria-labelledby="fallos-titulo" className={dash.failures}>
+              <h3 id="fallos-titulo">Por qué fallaron</h3>
+              <ul className={dash.failureGroups}>
+                {failures.map((group) => {
+                  const shown = group.titles.slice(0, failureTitleLimit);
+                  const more = group.titles.length - shown.length;
+                  return (
+                    <li key={`${group.provider}|${group.model}|${group.message}`}>
+                      <p className={dash.failureReason}>{group.message}</p>
+                      <p className={dash.failureMeta}>
+                        {providerNames[group.provider]} · {group.model} ·{" "}
+                        {plural(group.titles.length, "documento")}
+                      </p>
+                      <ul aria-label="Documentos" className={dash.failureTitles}>
+                        {shown.map((title, index) => (
+                          <li key={`${index}-${title}`}>{title}</li>
+                        ))}
+                        {more ? <li className={dash.failureMore}>y {plural(more, "más", "más")}</li> : null}
+                      </ul>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className={dash.failureHint}>
+                Se reintentan la próxima vez que pulses «Catalogar». Si el motivo es la clave o el
+                modelo, cámbialos antes en Ajustes.
+              </p>
+            </section>
+          ) : null}
 
           <div className={dash.actions}>
             {analyzing ? (
