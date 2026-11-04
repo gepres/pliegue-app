@@ -46,10 +46,15 @@ export interface PopoverTriggerProps {
   ref: React.RefObject<HTMLButtonElement | null>;
 }
 
+/** Lo que el panel deja libre hasta el borde de la ventana, y lo menos que mide si no hay sitio. */
+const popoverViewportMargin = 12;
+const popoverMinHeight = 120;
+
 /**
- * Panel flotante anclado a su botón: en escritorio cae bajo él; por debajo de 640 px sube
- * desde abajo como una hoja, porque ahí el pulgar llega mejor al borde inferior que a un
- * menú pegado a la barra de arriba.
+ * Panel flotante anclado a su botón: en escritorio cae bajo él (o sube, si se pide `above`) y,
+ * si por ese lado no cabe, se abre por el otro; por debajo de 640 px sube desde abajo como una
+ * hoja, porque ahí el pulgar llega mejor al borde inferior que a un menú pegado a la barra de
+ * arriba.
  */
 export function Popover({
   align = "end",
@@ -104,6 +109,7 @@ export function Popover({
   // viviera junto a él heredaría el recorte y el `backdrop-filter` de las barras, que
   // convierten `position: fixed` en relativo a la barra y dejan la hoja móvil fuera de sitio.
   const [coordinates, setCoordinates] = useState<React.CSSProperties>({});
+  const [opensAbove, setOpensAbove] = useState(placement === "above");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -116,12 +122,33 @@ export function Popover({
     function place() {
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const next: Record<string, string> = {};
-      if (placement === "above") next["--popover-bottom"] = `${window.innerHeight - rect.top + 10}px`;
+      // Lo que mide el contenido entero (aunque ahora lo recorte la altura máxima) y el sitio
+      // que queda encima y debajo del botón sin tocar el borde de la ventana.
+      const panel = panelRef.current;
+      const needed = Math.min(
+        panel ? panel.scrollHeight + panel.offsetHeight - panel.clientHeight : 0,
+        window.innerHeight * 0.7,
+        640,
+      );
+      const room = {
+        above: rect.top - 10 - popoverViewportMargin,
+        below: window.innerHeight - rect.bottom - 8 - popoverViewportMargin,
+      };
+      // Se abre hacia donde se pidió si cabe; si no, hacia el otro lado cuando allí hay más
+      // sitio. Un menú en un libro del final de la pantalla se salía por abajo y escondía sus
+      // últimas opciones, como «Eliminar copia», y al ser fijo no se alcanzaban desplazando la
+      // página. En el lado elegido, la altura se ajusta al sitio y el resto se desplaza dentro.
+      const other = placement === "above" ? "below" : "above";
+      const side = needed <= room[placement] || room[placement] >= room[other] ? placement : other;
+      const next: Record<string, string> = {
+        "--popover-max-height": `${Math.max(popoverMinHeight, Math.floor(room[side]))}px`,
+      };
+      if (side === "above") next["--popover-bottom"] = `${window.innerHeight - rect.top + 10}px`;
       else next["--popover-top"] = `${rect.bottom + 8}px`;
       if (align === "start") next["--popover-left"] = `${Math.max(12, rect.left)}px`;
       else if (align === "center") next["--popover-left"] = `${rect.left + rect.width / 2}px`;
       else next["--popover-right"] = `${Math.max(12, window.innerWidth - rect.right)}px`;
+      setOpensAbove(side === "above");
       setCoordinates(next as React.CSSProperties);
     }
     place();
@@ -185,7 +212,7 @@ export function Popover({
                   styles.popover,
                   align === "start" && styles.popoverStart,
                   align === "center" && styles.popoverCenter,
-                  placement === "above" && styles.popoverAbove,
+                  opensAbove && styles.popoverAbove,
                 )}
                 data-open={open ? "true" : "false"}
                 data-reader-chrome-ignore=""
