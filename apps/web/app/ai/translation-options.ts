@@ -8,13 +8,29 @@
  * —Gemini 2.5 Pro, en el grupo ganador de 14 de 15 pares; las traducciones humanas de referencia,
  * solo en 6—. Los modelos baratos de esas familias no se evaluaron allí: su calidad es una
  * estimación por familia, y así se dice en la tabla.
+ *
+ * DeepL y LibreTranslate, añadidos el 4-nov-2026 a petición del dueño (05.5): DeepL API Free da
+ * 500.000 caracteres al mes y la Pro cobra unos 25 $ por millón (más una cuota fija), según la
+ * ayuda de DeepL y comparativas de 2026. LibreTranslate es software libre (AGPL): gratis si lo
+ * aloja la persona; libretranslate.com cobra una suscripción mensual, no por caracteres. Su
+ * calidad, por familia de motor: DeepL a la altura de Azure, LibreTranslate por debajo.
  */
 
-export type TranslationProviderChoice = "browser" | "azure" | "openai" | "anthropic" | "gemini" | "ollama";
+export type TranslationProviderChoice =
+  | "browser"
+  | "azure"
+  | "deepl"
+  | "libretranslate"
+  | "openai"
+  | "anthropic"
+  | "gemini"
+  | "ollama";
 
 export const translationProviderChoices: readonly TranslationProviderChoice[] = [
   "browser",
   "azure",
+  "deepl",
+  "libretranslate",
   "openai",
   "anthropic",
   "gemini",
@@ -66,6 +82,24 @@ export const translationOptions: readonly TranslationOption[] = [
     privacy: "Va a Microsoft",
     quality: "Buena",
     speed: "1-2 s por página",
+  },
+  {
+    free: "500.000 caracteres al mes",
+    id: "deepl",
+    label: "DeepL",
+    pricing: { kind: "characters", perMillion: 25 },
+    privacy: "Va a DeepL",
+    quality: "Buena",
+    speed: "1-2 s por página",
+  },
+  {
+    free: "Si lo alojas tú",
+    id: "libretranslate",
+    label: "LibreTranslate",
+    pricing: { kind: "free" },
+    privacy: "Va a tu servidor",
+    quality: "Básica",
+    speed: "Según el servidor",
   },
   {
     free: "No",

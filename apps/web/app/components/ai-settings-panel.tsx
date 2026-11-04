@@ -4,7 +4,13 @@ import { useState, useSyncExternalStore } from "react";
 
 import { Button, Card, Field, Input, Select, Switch, Tag } from "@pliegue/ui";
 
-import { defaultAiSettings, normalizeAzureRegion, translationProviderOf, type AiSettings } from "../ai/ai-settings";
+import {
+  defaultAiSettings,
+  normalizeAzureRegion,
+  normalizeServiceUrl,
+  translationProviderOf,
+  type AiSettings,
+} from "../ai/ai-settings";
 import { saveAiSettings, useAiSettings } from "../ai/ai-settings-store";
 import {
   clearSessionApiKey,
@@ -36,11 +42,13 @@ const providerLabels: Record<AiProvider, string> = {
   openai: "OpenAI",
 };
 
-/** Quién pide clave: los proveedores de IA alojados y Azure Translator. */
+/** Quién pide clave: los proveedores de IA alojados y los traductores Azure, DeepL y LibreTranslate. */
 const keyLabels: Record<KeyProvider, string> = {
   anthropic: "Anthropic · Claude",
   azure: "Azure Translator",
+  deepl: "DeepL",
   gemini: "Google · Gemini",
+  libretranslate: "LibreTranslate",
   openai: "OpenAI",
 };
 
@@ -49,7 +57,9 @@ const translationLabels: Record<TranslationProviderChoice, string> = {
   anthropic: "Anthropic · Claude",
   azure: "Azure Translator",
   browser: "Chrome o Edge · gratis, en tu equipo",
+  deepl: "DeepL",
   gemini: "Google · Gemini",
+  libretranslate: "LibreTranslate · libre, en tu servidor",
   ollama: "Ollama · en tu equipo",
   openai: "OpenAI",
 };
@@ -78,7 +88,9 @@ function useTextMask() {
 const connectionHints: Record<ConnectionTarget["provider"], string> = {
   anthropic: "Comprueba la clave y el modelo sin enviar texto ni gastar tokens.",
   azure: "Traduce «Hola» para comprobar la clave y la región: 4 caracteres de tu cupo.",
+  deepl: "Comprueba la clave y dice cuánto llevas del cupo del mes, sin traducir nada.",
   gemini: "Comprueba la clave y el modelo sin enviar texto ni gastar tokens.",
+  libretranslate: "Traduce «Hola» para comprobar la dirección y, si la pones, la clave.",
   ollama: "Comprueba que Ollama responde y que tiene el modelo descargado.",
   openai: "Comprueba la clave y el modelo sin enviar texto ni gastar tokens.",
 };
@@ -123,18 +135,21 @@ function ConnectionTest({ target }: { target: ConnectionTarget }) {
 /**
  * La clave de un proveedor para esta sesión. Aparece una vez por proveedor: en «Catalogar» y,
  * si la traducción usa otro, también en «Traducir con tu IA». Cada proveedor guarda la suya.
- * `model` (o `region`, con Azure) es lo que prueba «Probar conexión» junto con la clave.
+ * `model` (o `region`, con Azure; `url`, con LibreTranslate) es lo que prueba «Probar conexión»
+ * junto con la clave.
  */
 function ApiKeyField({
   id,
   model = "",
   provider,
   region = "",
+  url = "",
 }: {
   id: string;
   model?: string;
   provider: KeyProvider;
   region?: string;
+  url?: string;
 }) {
   const secrets = useAiSessionSecrets();
   const textMask = useTextMask();
@@ -213,9 +228,26 @@ function ApiKeyField({
           Está en tu recurso de Translator del portal de Azure, en «Claves y punto de conexión». El
           plan gratuito (F0) da 2 millones de caracteres al mes.
         </p>
+      ) : provider === "deepl" ? (
+        <p className={styles.aiSecretIssue}>
+          Está en tu cuenta de DeepL, en «Claves de API». La API Free da 500.000 caracteres al mes y
+          sus claves acaban en «:fx»; con una de la API Pro se cobra por caracteres.
+        </p>
+      ) : provider === "libretranslate" ? (
+        <p className={styles.aiSecretIssue}>
+          Opcional: un LibreTranslate propio no suele pedirla; libretranslate.com, sí (se crea en su portal).
+        </p>
       ) : null}
       <ConnectionTest
-        target={provider === "azure" ? { apiKey, provider, region } : { apiKey, model, provider }}
+        target={
+          provider === "azure"
+            ? { apiKey, provider, region }
+            : provider === "deepl"
+              ? { apiKey, provider }
+              : provider === "libretranslate"
+                ? { apiKey, provider, url }
+                : { apiKey, model, provider }
+        }
       />
     </Field>
   );
@@ -302,9 +334,14 @@ export function AiSettingsPanel() {
 
   const translationProvider = translationProviderOf(draft);
   const sameProvider = translationProvider === draft.provider;
-  // Un modelo que elegir: solo los LLM. El navegador y Azure Translator no tienen.
+  // Un modelo que elegir: solo los LLM. El navegador, Azure, DeepL y LibreTranslate no tienen.
   const translationModelProvider: AiProvider | null =
-    translationProvider === "browser" || translationProvider === "azure" ? null : translationProvider;
+    translationProvider === "browser" ||
+    translationProvider === "azure" ||
+    translationProvider === "deepl" ||
+    translationProvider === "libretranslate"
+      ? null
+      : translationProvider;
 
   function updateModel(model: string) {
     editDraft((current) => ({
@@ -466,8 +503,9 @@ export function AiSettingsPanel() {
           <h3>Traducir libros</h3>
           <p>
             Por defecto, el traductor de Chrome o Edge: gratis, al instante y sin que el texto salga de
-            tu equipo. Si quieres más calidad, o traducir en el móvil, Firefox o Safari, elige una IA o
-            Azure Translator, con tu clave. En el lector siempre puedes cambiar de uno a otro.
+            tu equipo. Si quieres más calidad, o traducir en el móvil, Firefox o Safari, elige una IA, Azure
+            Translator o DeepL, con tu clave, o un LibreTranslate, el tuyo o el de libretranslate.com. En el
+            lector siempre puedes cambiar de uno a otro.
           </p>
         </div>
 
@@ -520,6 +558,34 @@ export function AiSettingsPanel() {
               value={draft.azureRegion}
             />
           </Field>
+        ) : translationProvider === "deepl" ? (
+          <p className={styles.aiGroupNote}>
+            Traducción automática de DeepL, sin modelo que elegir. Va por el servidor de Pliegue con tu clave, que
+            no se guarda; el texto de la página llega a DeepL.
+          </p>
+        ) : translationProvider === "libretranslate" ? (
+          <Field
+            description="La de tu LibreTranslate, en tu equipo o en tu servidor, o https://libretranslate.com. Se le pregunta desde tu navegador: tiene que permitir esta web."
+            label="Dirección de LibreTranslate"
+            labelFor="ai-libretranslate-url"
+          >
+            <Input
+              autoComplete="off"
+              id="ai-libretranslate-url"
+              inputMode="url"
+              onBlur={(event) => {
+                const url = normalizeServiceUrl(event.target.value, defaultAiSettings.libreTranslateUrl);
+                editDraft((current) => ({ ...current, libreTranslateUrl: url }));
+              }}
+              onChange={(event) => {
+                const url = event.target.value;
+                editDraft((current) => ({ ...current, libreTranslateUrl: url }));
+              }}
+              placeholder="http://localhost:5000"
+              spellCheck={false}
+              value={draft.libreTranslateUrl}
+            />
+          </Field>
         ) : (
           <p className={styles.aiGroupNote}>
             No necesita clave ni configuración. Funciona en Chrome y Edge de escritorio; en el móvil,
@@ -538,6 +604,12 @@ export function AiSettingsPanel() {
           ) : (
             <OllamaFields draft={draft} model={draft.translationModels.ollama} onChange={editDraft} />
           )
+        ) : translationProvider === "deepl" || translationProvider === "libretranslate" ? (
+          <ApiKeyField
+            id="ai-translation-api-key"
+            provider={translationProvider}
+            url={draft.libreTranslateUrl}
+          />
         ) : sameProvider ? (
           <div className={styles.aiConnectionRow}>
             <p className={styles.aiGroupNote}>

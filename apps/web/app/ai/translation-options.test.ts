@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { booksPerMonth, costPerBook, formatBookCost, translationOptions } from "./translation-options";
+import { booksPerMonth, costPerBook, formatBookCost, translationOptions, translationProviderChoices } from "./translation-options";
 
 const option = (id: string) => translationOptions.find((item) => item.id === id)!;
 
@@ -31,5 +31,21 @@ describe("lo que cuesta traducir un libro", () => {
 
   it("escribe el coste en dólares con la coma decimal", () => {
     expect(formatBookCost(0.0942)).toMatch(/^≈ 0,09\s?US\$$/);
+  });
+});
+
+describe("DeepL y LibreTranslate en la comparativa (05.5)", () => {
+  it("DeepL cobra por caracteres, a unos 25 $ el millón: un libro, unos 14 $", () => {
+    const deepl = translationOptions.find((option) => option.id === "deepl")!;
+    expect(costPerBook(deepl.pricing)).toBeCloseTo(13.75, 2);
+  });
+
+  it("LibreTranslate alojado por la persona sale gratis", () => {
+    const libre = translationOptions.find((option) => option.id === "libretranslate")!;
+    expect(costPerBook(libre.pricing)).toBe(0);
+  });
+
+  it("cada opción del selector está en la comparativa", () => {
+    expect(translationOptions.map((option) => option.id).sort()).toEqual([...translationProviderChoices].sort());
   });
 });

@@ -1,5 +1,6 @@
 import type { KeyProvider } from "../../../ai/api-key";
 import { normalizeAzureRegion } from "../../../ai/ai-settings";
+import { deeplEndpoint, deeplHeaders, deeplLanguage } from "../../../ai/deepl";
 import {
   apiKeyFrom,
   hostedProviders,
@@ -23,8 +24,10 @@ import {
  * Traduce un lote de pasajes de un libro con el proveedor y la clave del usuario («Tu IA»). La
  * clave viaja en la cabecera y no se guarda; el texto tampoco.
  *
- * Los LLM reciben el lote con instrucciones y devuelven un JSON por esquema; Azure Translator es
- * traducción automática clásica: recibe los textos tal cual y devuelve uno por texto.
+ * Los LLM reciben el lote con instrucciones y devuelven un JSON por esquema; Azure Translator y
+ * DeepL son traducción automática clásica: reciben los textos tal cual y devuelven uno por texto.
+ * DeepL va por aquí porque su API no admite llamadas desde el navegador (CORS); LibreTranslate
+ * no pasa por esta ruta, se le llama desde el navegador.
  */
 
 interface TranslateRouteRequest {
@@ -36,11 +39,35 @@ interface TranslateRouteRequest {
   target?: unknown;
 }
 
-const translateProviders: readonly KeyProvider[] = [...hostedProviders, "azure"];
+const translateProviders: readonly KeyProvider[] = [...hostedProviders, "azure", "deepl"];
+/** Los que traducen sin modelo que elegir. */
+const machineTranslators: readonly KeyProvider[] = ["azure", "deepl"];
 
 /** Azure nombra el chino por su escritura: el simplificado es «zh-Hans». */
 function azureLanguage(code: string) {
   return code === "zh" ? "zh-Hans" : code;
+}
+
+async function callDeepL(apiKey: string, source: string, target: string, passages: readonly string[]) {
+  const response = await fetch(`${deeplEndpoint(apiKey)}/v2/translate`, {
+    body: JSON.stringify({
+      source_lang: deeplLanguage(source, "source"),
+      target_lang: deeplLanguage(target, "target"),
+      text: passages,
+    }),
+    headers: deeplHeaders(apiKey),
+    method: "POST",
+    signal: AbortSignal.timeout(60_000),
+  });
+  let payload: unknown = {};
+  try {
+    payload = await response.json();
+  } catch {
+    payload = {};
+  }
+  if (!response.ok) throw new ProviderFailureError(classifyProviderFailure("deepl", response.status, payload, ""));
+  const results = (payload as { translations?: { text?: unknown }[] }).translations ?? [];
+  return results.map((result) => (typeof result.text === "string" ? result.text : ""));
 }
 
 async function callAzure(apiKey: string, region: string, source: string, target: string, passages: readonly string[]) {
@@ -96,7 +123,7 @@ export async function POST(request: Request) {
   if (!body.provider || !translateProviders.includes(body.provider)) {
     return Response.json({ error: "Proveedor no compatible en esta ruta." }, { status: 400 });
   }
-  const needsModel = body.provider !== "azure";
+  const needsModel = !machineTranslators.includes(body.provider);
   if ((needsModel && (!model || model.length > 120)) || !isLanguageCode(body.source) || !isLanguageCode(body.target)) {
     return Response.json({ error: "Modelo o idiomas no válidos." }, { status: 400 });
   }
@@ -117,12 +144,25 @@ export async function POST(request: Request) {
     }
   }
 
+  if (body.provider === "deepl") {
+    try {
+      const translations = await callDeepL(apiKey, body.source, body.target, passages);
+      if (translations.length !== passages.length) {
+        return Response.json({ error: "DeepL no devolvió una traducción por texto.", mismatch: true }, { status: 422 });
+      }
+      // DeepL también cobra por caracteres.
+      return Response.json({ translations, usage: { characters, inputTokens: 0, outputTokens: 0 } });
+    } catch (error) {
+      return providerErrorResponse(error);
+    }
+  }
+
   try {
     const { json, usage } = await requestStructuredJson({
       apiKey,
       maxOutputTokens: translationMaxOutputTokens(characters),
       model,
-      provider: body.provider as Exclude<KeyProvider, "azure">,
+      provider: body.provider as Exclude<KeyProvider, "azure" | "deepl" | "libretranslate">,
       schema: translationJsonSchema,
       schemaName: "pliegue_translation",
       system: translationSystemPrompt(body.source, body.target),

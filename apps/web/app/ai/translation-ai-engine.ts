@@ -26,7 +26,9 @@ export const translationProviderNames: Record<TranslationProviderChoice, string>
   anthropic: "Anthropic",
   azure: "Azure Translator",
   browser: "Chrome o Edge",
+  deepl: "DeepL",
   gemini: "Gemini",
+  libretranslate: "LibreTranslate",
   ollama: "Ollama",
   openai: "OpenAI",
 };
@@ -41,9 +43,12 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 
 type RequestBatch = (passages: readonly string[], signal?: AbortSignal) => Promise<string[]>;
 
-/** El modelo con el que se traduce; Azure Translator y el navegador no eligen modelo. */
+/** Los traductores que no son un LLM: no eligen modelo. */
+const translatorServices: readonly TranslationProviderChoice[] = ["azure", "browser", "deepl", "libretranslate"];
+
+/** El modelo con el que se traduce; los traductores (navegador, Azure, DeepL, LibreTranslate) no eligen modelo. */
 function translationModelOf(settings: AiSettings, provider: TranslationProviderChoice) {
-  return provider === "azure" || provider === "browser" ? null : settings.translationModels[provider];
+  return translatorServices.includes(provider) ? null : settings.translationModels[provider as AiSettings["provider"]];
 }
 
 function hostedRequest(settings: AiSettings, apiKey: string, pair: TranslationPair): RequestBatch {
@@ -65,6 +70,48 @@ function hostedRequest(settings: AiSettings, apiKey: string, pair: TranslationPa
       throw new Error(typeof payload.error === "string" ? payload.error : "El proveedor no pudo traducir.");
     }
     return parseTranslations(payload, passages.length);
+  };
+}
+
+/**
+ * LibreTranslate se consulta desde el navegador, como Ollama, y no desde el servidor de
+ * Pliegue: así sirve un LibreTranslate propio en el equipo o en la red de la persona, y el
+ * servidor nunca pide una dirección que escribió alguien (05.5). Acepta un lote entero en `q`
+ * y devuelve las traducciones en el mismo orden. La clave es opcional: un servidor propio no
+ * suele pedirla; libretranslate.com, sí.
+ */
+function libreTranslateRequest(settings: AiSettings, apiKey: string, pair: TranslationPair): RequestBatch {
+  const endpoint = `${settings.libreTranslateUrl.replace(/\/$/, "")}/translate`;
+  return async (passages, signal) => {
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        body: JSON.stringify({
+          format: "text",
+          q: passages,
+          source: pair.source,
+          target: pair.target,
+          ...(apiKey ? { api_key: apiKey } : {}),
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+        ...(signal ? { signal } : {}),
+      });
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      throw new Error(
+        `No se pudo conectar con LibreTranslate en ${settings.libreTranslateUrl}. Revisa la dirección, que el servidor esté en marcha y que permita esta web.`,
+      );
+    }
+    const payload = (await readJson(response)) as { error?: unknown; translatedText?: unknown };
+    if (!response.ok) {
+      throw new Error(classifyProviderFailure("libretranslate", response.status, payload, "").message);
+    }
+    const translated = Array.isArray(payload.translatedText) ? payload.translatedText : [payload.translatedText];
+    if (translated.length !== passages.length || translated.some((text) => typeof text !== "string")) {
+      throw new TranslationCountError(passages.length, null);
+    }
+    return translated as string[];
   };
 }
 
@@ -155,7 +202,8 @@ export function createAiTranslationEngine(settings: AiSettings, apiKey: string):
     };
   }
   const model = translationModelOf(settings, provider);
-  const hosted = provider !== "ollama";
+  // Por el servidor de Pliegue y con clave obligatoria; Ollama y LibreTranslate, desde el navegador.
+  const hosted = provider !== "ollama" && provider !== "libretranslate";
 
   return {
     async availability(pair) {
@@ -164,7 +212,12 @@ export function createAiTranslationEngine(settings: AiSettings, apiKey: string):
     },
     async create(pair) {
       if (hosted && !apiKey) throw new Error(`Falta la clave de ${translationProviderNames[provider]} en esta sesión.`);
-      const request = hosted ? hostedRequest(settings, apiKey, pair) : ollamaRequest(settings, pair);
+      const request =
+        provider === "ollama"
+          ? ollamaRequest(settings, pair)
+          : provider === "libretranslate"
+            ? libreTranslateRequest(settings, apiKey, pair)
+            : hostedRequest(settings, apiKey, pair);
       const translateMany: OpenTranslator["translateMany"] = (texts, signal) => translateInBatches(request, texts, signal);
       return {
         destroy: () => {},
@@ -175,6 +228,7 @@ export function createAiTranslationEngine(settings: AiSettings, apiKey: string):
     // Lo traducido con un modelo no vale para otro: cada uno guarda lo suyo.
     id: model ? `ai:${provider}:${model}` : `ai:${provider}`,
     label: model ? `${translationProviderNames[provider]} · ${model}` : translationProviderNames[provider],
-    onDevice: !hosted,
+    // En el equipo solo con Ollama: LibreTranslate puede estar en otro servidor.
+    onDevice: provider === "ollama",
   };
 }

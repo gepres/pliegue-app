@@ -130,3 +130,20 @@ describe("ruta «Probar conexión»", () => {
     expect(response.status).toBe(504);
   });
 });
+
+describe("«Probar conexión» con DeepL (05.5)", () => {
+  it("pregunta lo gastado del mes, sin traducir nada, y devuelve el cupo", async () => {
+    const deepl = vi.fn().mockResolvedValue(Response.json({ character_count: 1200, character_limit: 500000 }));
+    vi.stubGlobal("fetch", deepl);
+    const key = "12345678-1234-1234-1234-123456789abc:fx";
+
+    const response = await POST(request({ provider: "deepl" }, key));
+    const [url, options] = deepl.mock.calls[0] as [string, RequestInit];
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ characterCount: 1200, characterLimit: 500000, modelName: null, ok: true, plan: "Free" });
+    expect(url).toBe("https://api-free.deepl.com/v2/usage");
+    expect(options.method).toBe("GET");
+    expect((options.headers as Record<string, string>).authorization).toBe(`DeepL-Auth-Key ${key}`);
+  });
+});

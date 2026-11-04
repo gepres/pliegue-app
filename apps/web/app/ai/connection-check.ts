@@ -1,4 +1,5 @@
 import type { HostedAiProvider } from "./api-key";
+import { deeplEndpoint, deeplHeaders, deeplPlan } from "./deepl";
 import { ProviderFailureError } from "./hosted-json";
 import { classifyProviderFailure, type FailingProvider } from "./provider-error";
 
@@ -91,4 +92,30 @@ export async function checkAzureConnection(apiKey: string, region: string): Prom
   });
   await failIfNotOk(response, "azure", "");
   return { modelName: null };
+}
+
+export interface DeepLUsage extends ConnectionCheckResult {
+  characterCount: number | null;
+  characterLimit: number | null;
+  plan: "Free" | "Pro";
+}
+
+/**
+ * DeepL: pregunta lo gastado del mes (`/v2/usage`). No traduce nada ni gasta caracteres, y la
+ * respuesta confirma la clave y dice cuánto queda del cupo.
+ */
+export async function checkDeepLConnection(apiKey: string): Promise<DeepLUsage> {
+  const response = await fetch(`${deeplEndpoint(apiKey)}/v2/usage`, {
+    headers: deeplHeaders(apiKey),
+    method: "GET",
+    signal: AbortSignal.timeout(checkTimeoutMs),
+  });
+  const payload = (await failIfNotOk(response, "deepl", "")) as { character_count?: unknown; character_limit?: unknown };
+  const numberOf = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
+  return {
+    characterCount: numberOf(payload.character_count),
+    characterLimit: numberOf(payload.character_limit),
+    modelName: null,
+    plan: deeplPlan(apiKey),
+  };
 }

@@ -1,6 +1,6 @@
 import type { KeyProvider } from "../../../ai/api-key";
 import { normalizeAzureRegion } from "../../../ai/ai-settings";
-import { checkAzureConnection, checkHostedConnection } from "../../../ai/connection-check";
+import { checkAzureConnection, checkDeepLConnection, checkHostedConnection } from "../../../ai/connection-check";
 import { apiKeyFrom, hostedProviders, looksLikeApiKey, providerErrorResponse } from "../../../ai/hosted-json";
 
 /**
@@ -14,7 +14,8 @@ interface CheckRouteRequest {
   region?: unknown;
 }
 
-const checkProviders: readonly KeyProvider[] = [...hostedProviders, "azure"];
+/** LibreTranslate no pasa por aquí: se prueba desde el navegador, como Ollama. */
+const checkProviders: readonly KeyProvider[] = [...hostedProviders, "azure", "deepl"];
 
 export async function POST(request: Request) {
   const contentLength = Number(request.headers.get("content-length") ?? 0);
@@ -42,6 +43,12 @@ export async function POST(request: Request) {
   try {
     if (body.provider === "azure") {
       return Response.json({ ok: true, ...(await checkAzureConnection(apiKey, normalizeAzureRegion(body.region))) });
+    }
+    if (body.provider === "deepl") {
+      return Response.json({ ok: true, ...(await checkDeepLConnection(apiKey)) });
+    }
+    if (body.provider === "libretranslate") {
+      return Response.json({ error: "Proveedor no compatible en esta ruta." }, { status: 400 });
     }
     const model = typeof body.model === "string" ? body.model.trim() : "";
     if (!model || model.length > 120) {

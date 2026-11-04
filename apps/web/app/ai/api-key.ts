@@ -2,8 +2,11 @@ import type { AiProvider } from "./document-catalog";
 
 export type HostedAiProvider = Exclude<AiProvider, "ollama">;
 
-/** Todo lo que pide una clave: los proveedores de IA alojados y Azure Translator. */
-export type KeyProvider = HostedAiProvider | "azure";
+/**
+ * Todo lo que pide una clave: los proveedores de IA alojados y los traductores Azure, DeepL y
+ * LibreTranslate. La de LibreTranslate es opcional: un servidor propio no suele pedirla.
+ */
+export type KeyProvider = HostedAiProvider | "azure" | "deepl" | "libretranslate";
 
 export interface ApiKeyCheck {
   /** Bloquea el envío: lo pegado no puede ser una credencial. */
@@ -65,18 +68,25 @@ export function normalizeApiKey(value: string): NormalizedApiKey {
   return { key, removed: [...removed] };
 }
 
-/** Azure no tiene prefijo: sus claves son una ristra de letras y cifras. */
+/**
+ * Azure, DeepL y LibreTranslate no tienen prefijo: Azure da una ristra de letras y cifras;
+ * DeepL y LibreTranslate, un UUID (el de DeepL Free acaba en «:fx»).
+ */
 const expectedPrefix: Record<KeyProvider, string | null> = {
   anthropic: "sk-ant-",
   azure: null,
+  deepl: null,
   gemini: "AIza",
+  libretranslate: null,
   openai: "sk-",
 };
 
 const providerLabel: Record<KeyProvider, string> = {
   anthropic: "Anthropic",
   azure: "Azure",
+  deepl: "DeepL",
   gemini: "Gemini",
+  libretranslate: "LibreTranslate",
   openai: "OpenAI",
 };
 

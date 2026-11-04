@@ -99,3 +99,45 @@ describe("«Probar conexión» en el navegador", () => {
     );
   });
 });
+
+describe("«Probar conexión» con LibreTranslate y DeepL (05.5)", () => {
+  it("LibreTranslate traduce «Hola» desde el navegador y lo enseña", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(Response.json({ translatedText: "Hello" }));
+
+    const result = await testConnection({ apiKey: "", provider: "libretranslate", url: "http://localhost:5000/" }, fetchImpl);
+
+    expect(result).toEqual({ message: "LibreTranslate traduce en http://localhost:5000: «Hola» → «Hello».", ok: true });
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe("http://localhost:5000/translate");
+  });
+
+  it("LibreTranslate enseña el motivo que da el servidor, como el de pedir clave", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(Response.json({ error: "Visit https://portal.libretranslate.com to get an API key" }, { status: 400 }));
+
+    const result = await testConnection({ apiKey: "", provider: "libretranslate", url: "https://libretranslate.com" }, fetchImpl);
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("LibreTranslate respondió: «Visit https://portal.libretranslate.com");
+  });
+
+  it("una dirección que no es http(s) no sale del navegador", async () => {
+    const fetchImpl = vi.fn();
+    const result = await testConnection({ apiKey: "", provider: "libretranslate", url: "ftp://servidor" }, fetchImpl);
+    expect(result.ok).toBe(false);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("DeepL dice el plan y lo que lleva del cupo del mes", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(Response.json({ characterCount: 1200, characterLimit: 500000, ok: true, plan: "Free" }));
+
+    const result = await testConnection({ apiKey: "12345678-1234-1234-1234-123456789abc:fx", provider: "deepl" }, fetchImpl);
+
+    expect(result).toEqual({ message: "DeepL acepta la clave (API Free): este mes lleva 1200 de 500.000 caracteres.", ok: true });
+    expect(JSON.parse(String((fetchImpl.mock.calls[0] as [string, RequestInit])[1].body))).toEqual({ provider: "deepl" });
+  });
+
+  it("cambiar la dirección o la clave caduca el resultado", () => {
+    const base = { apiKey: "", provider: "libretranslate", url: "http://localhost:5000" } as const;
+    expect(connectionSignature(base)).not.toBe(connectionSignature({ ...base, url: "https://libretranslate.com" }));
+    expect(connectionSignature({ apiKey: "a", provider: "deepl" })).not.toBe(connectionSignature({ apiKey: "b", provider: "deepl" }));
+  });
+});
