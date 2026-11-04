@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import {
   contentIndexVersion,
@@ -6,9 +6,11 @@ import {
   isCurrentContentIndex,
   maxIndexedTextCharacters,
 } from "./local-content-index";
-import { createTestPdf } from "./pdf-test-fixture";
+import { createTestPdf, pdfjsWarmUpTimeout, warmUpPdfjs } from "./pdf-test-fixture";
 
 describe("createLocalContentIndex", () => {
+  beforeAll(warmUpPdfjs, pdfjsWarmUpTimeout);
+
   it("crea un índice derivado para texto sin conservar el archivo", async () => {
     const result = await createLocalContentIndex(
       "txt",

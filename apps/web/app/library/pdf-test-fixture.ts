@@ -41,3 +41,16 @@ export function createTestPdf(pages: readonly (string | null)[]) {
 
   return new Blob([new TextEncoder().encode(body)], { type: "application/pdf" });
 }
+
+/**
+ * Abre un PDF de una página para dejar pdf.js cargado antes de las pruebas. En frío (la
+ * primera pasada de la suite en Windows, justo detrás de lint y type-check) importarlo tarda
+ * más que los 5 s de una prueba, y la primera de cada archivo que lo usaba fallaba por
+ * tiempo aunque estuviera bien (02.1b). Va en un `beforeAll` con su propio margen.
+ */
+export async function warmUpPdfjs() {
+  const { extractPdfText } = await import("./pdf-text-extractor");
+  await extractPdfText(createTestPdf(["Calentar"]));
+}
+
+export const pdfjsWarmUpTimeout = 60_000;
