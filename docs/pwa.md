@@ -1,6 +1,6 @@
 # App instalable (PWA)
 
-- Estado: primera versión
+- Estado: en producción; abre archivos desde el sistema (noviembre de 2026)
 - Foundry: `06.6 · Empaquetar Web, Windows y macOS`
 
 ## Qué es
@@ -24,6 +24,16 @@ queda para cuando haga falta algo nativo: vigilar carpetas, SQLite o la bóveda 
   de 192 y 512 px, su versión `maskable` y el SVG. `launch_handler` enfoca la ventana ya
   abierta. Sin `window-controls-overlay`: la cabecera no reserva el hueco de los botones de
   la ventana.
+  - **`file_handlers`:** con la app instalada, «Abrir con → Pliegue» sobre un PDF, un EPUB o
+    un DOCX en el Explorador o el Finder. El sistema entrega los archivos a `/app/abrir`
+    (`components/pwa/open-files.tsx`) por la `launchQueue`. Se vinculan como cualquier archivo
+    suelto, sin copiarlos, con `linkFileHandles`; si es uno solo, se abre en el lector.
+    Volver a abrir el mismo archivo lo actualiza en lugar de duplicarlo. La primera vez,
+    Windows pregunta si se deja que Pliegue abra ese tipo de archivo.
+  - **`screenshots`:** una ancha (la Biblioteca) y una estrecha (el lector en el móvil), para
+    el diálogo de instalación de Chrome. Están en `public/screenshots/` y se hicieron con una
+    biblioteca de ejemplo de clásicos de dominio público, con portadas propias. No salen de
+    la biblioteca de nadie.
 - `public/sw.js`, el service worker:
   - **Páginas:** primero la red y, sin conexión, la última copia de esa ruta, ignorando la
     consulta.
