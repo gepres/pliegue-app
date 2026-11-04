@@ -115,11 +115,20 @@ export function bodyFontSize(items: readonly ReflowTextItem[]) {
  */
 function spaceThreshold(ordered: readonly ReflowTextItem[]) {
   const fontHeight = Math.max(...ordered.map((item) => item.fontHeight), 1);
-  const plain = fontHeight * 0.25;
   // Los fragmentos de espacio ya dicen dónde separar, así que no cuentan para decidir si
   // el renglón está deletreado: incluirlos haría pasar por deletreado cualquier texto
   // normal, donde la mitad de los fragmentos son precisamente esos espacios.
   const written = ordered.filter((item) => item.text.trim().length > 0);
+
+  // La referencia corriente es una fracción del cuerpo, pero el alto que da la matriz no
+  // siempre es el de la letra: en un escaneo con capa de texto (OCR) cada renglón trae el
+  // alto de su caja, inflado y distinto en cada uno, y con él un espacio de 3 pt quedaba
+  // por debajo del umbral («ofatmosphereon», 05.13). El ancho medio de un carácter del
+  // propio renglón no se infla: un espacio de palabra pasa de un tercio de él, y las
+  // letras de una misma palabra partida en fragmentos quedan pegadas o casi.
+  const characters = written.reduce((sum, item) => sum + [...item.text.trim()].length, 0);
+  const characterWidth = characters ? written.reduce((sum, item) => sum + item.width, 0) / characters : 0;
+  const plain = characterWidth > 0 ? Math.min(fontHeight * 0.25, characterWidth * 0.35) : fontHeight * 0.25;
   if (written.length < 6) return plain;
 
   const short = written.filter((item) => item.text.trim().length <= 2).length;
@@ -143,6 +152,10 @@ function spaceThreshold(ordered: readonly ReflowTextItem[]) {
 
 /** Marca dónde había un espacio de palabra, para no confundirlo con la separación entre letras. */
 const wordBreak = "\u001F";
+
+/** Signos que van pegados a la palabra de delante (cierre) o a la de detrás (apertura). */
+const closingPunctuation = /^[.,;:!?)\]}»”’…%]/u;
+const openingPunctuation = /[(\[{«“‘¿¡]$/u;
 
 /**
  * Recompone las palabras de un texto compuesto con las letras separadas.
@@ -210,7 +223,11 @@ export function groupIntoLines(items: readonly ReflowTextItem[]): ReflowLine[] {
 
       if (previousRight !== null) {
         const gap = item.x - previousRight;
-        const needsSpace = gap > threshold && !/[\s]$/.test(text) && !/^\s/.test(fragment);
+        // Ante un signo de cierre o tras uno de apertura no va espacio aunque haya hueco: un
+        // escaneo con OCR coloca cada signo suelto, y con el umbral fino salía «animated .».
+        const hugsPunctuation = closingPunctuation.test(fragment) || openingPunctuation.test(text);
+        const needsSpace =
+          gap > threshold && !hugsPunctuation && !/[\s\u001F]$/.test(text) && !/^\s/.test(fragment);
         if (needsSpace) text += isWordGap ? "" : wordBreak;
       }
 
@@ -255,6 +272,16 @@ export function joinLineText(lines: readonly ReflowLine[]) {
   return text.replace(/\s+/g, " ").trim();
 }
 
+/** El interlineado de un bloque, la mediana de sus saltos; `null` si aún tiene un renglón. */
+function blockLeading(lines: readonly ReflowLine[]) {
+  if (lines.length < 2) return null;
+  const gaps = lines
+    .slice(1)
+    .map((line, index) => lines[index]!.y - line.y)
+    .sort((left, right) => left - right);
+  return gaps[Math.floor(gaps.length / 2)]!;
+}
+
 /** Agrupa renglones contiguos de tamaño parecido y sin un salto vertical entre medias. */
 export function groupIntoBlocks(lines: readonly ReflowLine[]): ReflowLine[][] {
   const blocks: ReflowLine[][] = [];
@@ -268,8 +295,23 @@ export function groupIntoBlocks(lines: readonly ReflowLine[]): ReflowLine[][] {
       const reference = Math.max(previous.fontHeight, line.fontHeight, 1);
       const sameSize = Math.abs(previous.fontHeight - line.fontHeight) <= 0.6;
       const closeEnough = gap >= 0 && gap <= reference * (1 + blockGapRatio);
+      // En un escaneo con OCR cada renglón trae su propio alto (14, 13, 12…) aunque sea el
+      // mismo párrafo, y con el tamaño exacto salía un bloque por renglón (05.13). Si el alto
+      // se parece, el renglón de arriba llega al margen derecho del bloque (párrafo lleno o
+      // justificado) y el salto es el del interlineado, sigue el mismo párrafo. Un título
+      // no cumple las tres: es corto, o lleva más aire encima y debajo, o es mucho mayor.
+      const similarSize = Math.abs(previous.fontHeight - line.fontHeight) <= reference * 0.25;
+      const margin = Math.max(line.right, ...current.map((candidate) => candidate.right));
+      const previousReachesMargin = previous.right >= margin - reference * 1.5;
+      const leading = blockLeading(current);
+      const regularGap = leading === null ? gap <= reference * 1.5 : gap <= leading * 1.4;
+      // Tras un renglón corto, uno que entra con sangría abre párrafo aunque el tamaño sea el
+      // mismo: es la marca más clara de párrafo nuevo en un libro, y sin ella dos párrafos
+      // seguidos y sin blanco entre medias se leían como uno.
+      const opensParagraph = !previousReachesMargin && line.left - previous.left >= reference * 0.8;
+      const sameParagraph = sameSize || (similarSize && previousReachesMargin && regularGap);
 
-      if (sameSize && closeEnough) {
+      if (sameParagraph && closeEnough && !opensParagraph) {
         current.push(line);
         continue;
       }
@@ -281,8 +323,32 @@ export function groupIntoBlocks(lines: readonly ReflowLine[]): ReflowLine[][] {
   return blocks;
 }
 
+/**
+ * El cuerpo que domina en un bloque, pesado por caracteres. Con el más alto, un párrafo de
+ * escaneo con un renglón de caja algo mayor pasaba por título (05.13).
+ */
+function dominantSize(lines: readonly ReflowLine[]) {
+  const buckets = new Map<number, { height: number; weight: number }>();
+  for (const line of lines) {
+    const size = roundSize(line.fontHeight);
+    const bucket = buckets.get(size) ?? { height: 0, weight: 0 };
+    bucket.weight += Math.max(line.text.length, 1);
+    bucket.height = Math.max(bucket.height, line.fontHeight);
+    buckets.set(size, bucket);
+  }
+  let best = { height: 0, weight: -1 };
+  for (const bucket of buckets.values()) {
+    if (bucket.weight > best.weight || (bucket.weight === best.weight && bucket.height > best.height)) best = bucket;
+  }
+  // El alto real del grupo ganador, sin redondear: un renglón suelto se mide igual que antes.
+  return best.height;
+}
+
 function classify(lines: readonly ReflowLine[], body: number): "heading" | "paragraph" {
-  const size = Math.max(...lines.map((line) => line.fontHeight));
+  const size = dominantSize(lines);
+  // Tres renglones o más de un cuerpo apenas mayor son un párrafo, no un título: en un
+  // escaneo, el alto de cada caja varía un punto arriba o abajo del cuerpo de la página.
+  if (lines.length >= 3 && size < body * 1.25) return "paragraph";
   const bold = lines.every((line) => line.fontNames.some(looksBold));
   const short = lines.length <= 2;
 

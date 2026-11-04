@@ -403,3 +403,106 @@ describe("conversión desde pdf.js", () => {
     expect(toReflowItems([{ str: "Suelto" }, { transform: [1, 0, 0, 1, 0, 0] }])).toEqual([]);
   });
 });
+
+/**
+ * Un escaneo con capa de texto (OCR), como «The Lost Continent of Mu» (1926), página 40:
+ * cada palabra es un fragmento sin espacios, el alto de cada renglón es el de su caja
+ * (14, 13, 12, 10 en un mismo párrafo) y los signos van sueltos (05.13).
+ */
+describe("escaneos con capa de texto (05.13)", () => {
+  /** Palabras de un renglón con el ancho de letra real (4,5 pt) y huecos de 3 pt. */
+  function ocrLine(words: readonly string[], y: number, fontHeight: number, left = 82, gap = 3.2) {
+    const items: ReflowTextItem[] = [];
+    let x = left;
+    for (const word of words) {
+      const width = [...word].length * 4.5;
+      items.push({ fontHeight, fontName: "g_d0_f1", text: word, width, x, y });
+      x += width + (/^[.,;:]/.test(words[items.length] ?? "") ? 0.5 : gap);
+    }
+    return items;
+  }
+
+  it("separa las palabras aunque el alto de la caja infle el umbral", () => {
+    const [line] = groupIntoLines(ocrLine(["The", "particles", "of", "atmosphere", "on"], 561, 14, 82, 3.3));
+
+    expect(line?.text).toBe("The particles of atmosphere on");
+  });
+
+  it("no pone espacio delante de un signo de cierre ni detrás de uno de apertura", () => {
+    const items = [
+      ...ocrLine(["“The", "divine", "arrows", "became", "animated"], 546, 13),
+      { fontHeight: 13, fontName: "g_d0_f1", text: ".", width: 2.6, x: 300, y: 546 },
+    ];
+    // El punto, a 2,2 pt de «animated»: por encima del umbral fino, pero va pegado.
+    items[items.length - 1]!.x = items.at(-2)!.x + items.at(-2)!.width + 2.2;
+
+    expect(groupIntoLines(items)[0]?.text).toBe("“The divine arrows became animated.");
+  });
+
+  it("une en un párrafo los renglones de alto desigual que llegan al margen", () => {
+    const right = (words: string[]) => 82 + words.join("").length * 4.5 + (words.length - 1) * 3.2;
+    const rows = [
+      ["being", "hit", "by", "the", "divine", "arrows", "became", "animated,"],
+      ["which", "determines", "the", "movement", "of", "matter,", "was", "made"],
+      ["in", "it."],
+    ];
+    const lines = groupIntoLines([
+      ...ocrLine(rows[0]!, 546, 14),
+      ...ocrLine(rows[1]!, 532, 12),
+      ...ocrLine(rows[2]!, 519, 10),
+    ]);
+    expect(Math.abs(right(rows[0]!) - right(rows[1]!))).toBeLessThan(20);
+
+    const blocks = groupIntoBlocks(lines);
+
+    expect(blocks).toHaveLength(1);
+    expect(joinLineText(blocks[0]!)).toBe(
+      "being hit by the divine arrows became animated, which determines the movement of matter, was made in it.",
+    );
+  });
+
+  it("abre párrafo con la sangría tras un renglón corto, aunque el tamaño sea el mismo", () => {
+    const blocks = groupIntoBlocks([
+      line("temple histories, and taught religion and science", 463, 13, 82),
+      line("Lorem ipsum dolor sit amet, consectetur adipiscing elit", 446, 13, 94),
+    ]);
+
+    expect(blocks).toHaveLength(2);
+  });
+
+  it("deja aparte un título algo mayor, con más aire, aunque el renglón de antes sea corto", () => {
+    // «MAGIA ASTRAL», página 53: el último renglón del párrafo, corto, y «3. Vigilia Lúcida»
+    // a 18 pt sobre un cuerpo de 16, con el doble de aire que el interlineado.
+    const blocks = groupIntoBlocks([
+      line("realiza que se ha tenido el sueño antes, puede recordarse cómo se", 701, 16, 113),
+      line("desarrolla, y no se quiere re-experimentarlo.", 682, 16, 113),
+      line("3. Vigilia Lúcida", 644, 18, 113),
+      line("Un psicólogo alemán, Paul Tholey, ha sugerido que si somos", 607, 16, 149),
+    ]);
+
+    expect(blocks.map((block) => block.map((entry) => entry.text))).toEqual([
+      ["realiza que se ha tenido el sueño antes, puede recordarse cómo se", "desarrolla, y no se quiere re-experimentarlo."],
+      ["3. Vigilia Lúcida"],
+      ["Un psicólogo alemán, Paul Tholey, ha sugerido que si somos"],
+    ]);
+  });
+
+  it("no toma por título un párrafo de varios renglones apenas mayores que el cuerpo", () => {
+    // Renglones justificados: el mismo largo, así que todos llegan al margen derecho.
+    const justified = (text: string) => text.padEnd(56, ".");
+    const { blocks } = layoutPage(
+      [
+        item(justified("There is no question whatever, and both written and"), 82, 700, 13),
+        item(justified("legendary history say, that these books were written"), 82, 687, 13),
+        item(justified("ancient temple records, and that the Naacals wrote the"), 82, 674, 13),
+        item(justified("temple histories, and taught religion and science too"), 82, 661, 13),
+        item(justified("the scientific sections and recorded, by the use of"), 82, 600, 14),
+        item(justified("the facts without the whys and wherefores. The reason"), 82, 586, 14),
+        item(justified("this is well told by Clement of Alexandria, who said"), 82, 572, 14),
+      ],
+      pageWidth,
+    );
+
+    expect(blocks.map((block) => block.kind)).toEqual(["paragraph", "paragraph"]);
+  });
+});
