@@ -14,6 +14,7 @@ import { CatalogImportPanel } from "../catalog-import-panel";
 import { DriveSourcesPanel } from "../drive-sources-panel";
 import { LinkedFilesPanel } from "../linked-files-panel";
 import { LocalSourcesPanel } from "../local-sources-panel";
+import { CoverSearchPanel } from "./cover-search-panel";
 import styles from "./sources.module.css";
 
 type FolderDocument = LibraryDocument & { relativePath?: string; sizeBytes?: number };
@@ -301,6 +302,18 @@ export function SourcesOverview() {
           </p>
         </div>
         <CatalogImportPanel documents={allDocuments} />
+      </section>
+
+      {/* ---- Portadas de Open Library ------------------------------------------------- */}
+      <section aria-labelledby="fuentes-portadas" className={styles.section} id="portadas">
+        <div className={styles.sectionHeader}>
+          <h2 id="fuentes-portadas">Portadas</h2>
+          <p>
+            Las del índice JSON y las que Pliegue saca del propio archivo no salen del equipo. Buscar en Open Library
+            es opcional.
+          </p>
+        </div>
+        <CoverSearchPanel documents={allDocuments} />
       </section>
 
       {/* ---- IA ------------------------------------------------------------------ */}
