@@ -332,7 +332,9 @@
   border-radius: var(--pliegue-radius-md);
   box-shadow: var(--pliegue-elevation-overlay);
   color: var(--pliegue-color-text-primary);
-  max-height: min(70vh, 640px);
+  /* `--popover-max-height` es el sitio que queda hasta el borde de la ventana por el lado
+     en que se abre: lo que no cabe se desplaza dentro del panel, en vez de quedar fuera. */
+  max-height: min(70vh, 640px, var(--popover-max-height, 640px));
   overflow: auto;
   padding: var(--pliegue-spacing-xs);
   position: fixed;
