@@ -88,6 +88,80 @@
   padding-left: 1.1rem;
 }
 
+/* Por qué fallaron: cada motivo una vez, con los documentos que lo comparten debajo. Va con
+   el tono de aviso de las notas de capacidad, sin el rojo de un error que ya no se puede
+   arreglar: casi siempre se resuelve esperando o cambiando la clave. */
+.failures {
+  background: color-mix(in srgb, var(--pliegue-color-accent-warm) 8%, var(--pliegue-color-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--pliegue-color-accent-warm) 35%, var(--pliegue-color-border-default));
+  border-left: 3px solid var(--pliegue-color-accent-warm);
+  border-radius: var(--pliegue-radius-md);
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  padding: var(--pliegue-spacing-md);
+}
+
+.failures h3 {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.failureGroups {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.failureGroups > li {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.failureGroups > li + li {
+  border-top: 1px dashed var(--pliegue-color-border-default);
+  padding-top: var(--pliegue-spacing-md);
+}
+
+.failureReason {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.failureMeta,
+.failureHint {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.failureTitles {
+  display: grid;
+  font-size: 0.875rem;
+  gap: 2px;
+  line-height: 1.45;
+  margin: var(--pliegue-spacing-xs) 0 0;
+  padding-left: 1.1rem;
+}
+
+.failureTitles li {
+  overflow-wrap: anywhere;
+}
+
+.failureMore {
+  color: var(--pliegue-color-text-secondary);
+  list-style: none;
+  margin-left: -1.1rem;
+}
+
 .actions {
   align-items: center;
   display: flex;

@@ -13,7 +13,7 @@ import {
   documentWorkTypes,
   type DocumentWorkType,
 } from "../ai/document-catalog";
-import { removeDocumentCatalogRecord } from "../ai/document-catalog-store";
+import { readDocumentCatalogRecords, removeDocumentCatalogRecord } from "../ai/document-catalog-store";
 import {
   availabilityStates,
   catalogFacets,
@@ -432,7 +432,15 @@ export function LibraryBrowser() {
         force: true,
         retryErrors: true,
       });
-      setCatalogMessage(describeCatalogSummary(summary) || "El documento ya estaba al día.");
+      // Con un solo documento, «1 con error» no dice nada: el motivo está en su ficha.
+      const reason = summary.failed
+        ? (await readDocumentCatalogRecords().catch(() => [])).find((record) => record.documentId === documentId)?.error
+        : null;
+      setCatalogMessage(
+        reason
+          ? `No se pudo catalogar «${document.title}»: ${reason}`
+          : describeCatalogSummary(summary) || "El documento ya estaba al día.",
+      );
     } catch (error) {
       setCatalogMessage(
         error instanceof Error ? error.message : "No fue posible analizar el documento.",
