@@ -844,6 +844,40 @@
   overflow-wrap: anywhere;
 }
 
+/* «Probar conexión» (04.1): el botón y, a su lado, la pista o el resultado. En estrecho, el texto
+   baja debajo del botón en lugar de apretarlo. */
+.aiConnectionRow {
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+  grid-column: 1 / -1;
+}
+
+.aiConnectionTest {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-xs) var(--pliegue-spacing-sm);
+  margin-top: var(--pliegue-spacing-sm);
+}
+
+.aiConnectionTest > p {
+  color: var(--pliegue-color-text-secondary);
+  flex: 1 1 16rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.aiConnectionTest > p.aiConnectionOk {
+  color: var(--pliegue-color-text-primary);
+  font-weight: 600;
+}
+
+.aiConnectionTest > p.aiConnectionFail {
+  color: var(--pliegue-color-status-danger);
+}
+
 /* El interruptor viene de @pliegue/ui; aquí solo se le da el marco de fila de ajustes. */
 .aiAutoControl {
   background: var(--pliegue-color-bg-subtle);

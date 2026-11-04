@@ -59,7 +59,8 @@ function kindOf(status: number, code: string, message: string): ProviderFailureK
   // acompañado tanto de 404 como de 400 según la ruta.
   if (code === "model_not_found" || code === "not_found_error") return "model";
   if (code === "invalid_api_key" || code === "authentication_error") return "credential";
-  if (code === "insufficient_quota" || code === "rate_limit_error") return "quota";
+  // Anthropic responde 402 «billing_error» cuando la cuenta se queda sin saldo.
+  if (code === "insufficient_quota" || code === "rate_limit_error" || code === "billing_error") return "quota";
   if (code === "permission_error") return "permission";
   // Gemini: nombres de gRPC. Una clave mal puesta llega como 400 «API key not valid».
   if (code === "UNAUTHENTICATED" || /api key not valid/i.test(message)) return "credential";
