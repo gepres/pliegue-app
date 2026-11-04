@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -25,6 +24,7 @@ import { IconButton } from "./app-ui/controls";
 import { Icon } from "./app-ui/icons";
 import { ThemeToggle } from "./theme-toggle";
 import styles from "./workspace-shell.module.css";
+import { BrandMark } from "./brand/brand-mark";
 
 type NavigationItem = (typeof navigationItems)[number];
 
@@ -116,7 +116,7 @@ export function WorkspaceShell({ children }: Readonly<{ children: ReactNode }>) 
             href="/"
             title={navigationCollapsed ? "Pliegue" : undefined}
           >
-            <Image alt="" height={30} priority src="/brand/pliegue-mark.svg" width={30} />
+            <BrandMark size={30} />
             <span className={styles.brandName}>Pliegue</span>
           </Link>
         </div>
@@ -174,7 +174,7 @@ export function WorkspaceShell({ children }: Readonly<{ children: ReactNode }>) 
       <div className={styles.contentColumn}>
         <header className={styles.topbar} data-scrolled={scrolled ? "true" : "false"}>
           <Link aria-label="Pliegue, inicio público" className={styles.mobileBrand} href="/">
-            <Image alt="" height={28} priority src="/brand/pliegue-mark.svg" width={28} />
+            <BrandMark size={28} />
           </Link>
           {/* Título pequeño de barra: aparece cuando el grande de la página se ha ido hacia
               arriba, como en las apps nativas. No es un encabezado; el de la página lo es. */}
