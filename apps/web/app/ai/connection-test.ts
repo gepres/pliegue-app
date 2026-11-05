@@ -1,6 +1,7 @@
 import { normalizeOllamaUrl, normalizeServiceUrl, type AiSettings } from "./ai-settings";
 import { checkApiKey, type HostedAiProvider } from "./api-key";
 import { classifyProviderFailure } from "./provider-error";
+import { unreachableServiceMessage } from "./translation-options";
 
 /**
  * «Probar conexión» desde el Panel IA (04.1). Prueba lo que se ve en el formulario, aunque aún
@@ -144,10 +145,7 @@ async function testLibreTranslate(
       signal: AbortSignal.timeout(10_000),
     });
   } catch {
-    return {
-      message: `No se pudo conectar con LibreTranslate en ${endpoint}. Revisa la dirección, que el servidor esté en marcha y que permita esta web.`,
-      ok: false,
-    };
+    return { message: unreachableServiceMessage("LibreTranslate", endpoint), ok: false };
   }
   const payload = await readJson(response);
   if (!response.ok) {

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { booksPerMonth, costPerBook, formatBookCost, translationOptions, translationProviderChoices } from "./translation-options";
+import {
+  booksPerMonth,
+  costPerBook,
+  formatBookCost,
+  translationNeedsKey,
+  translationOptions,
+  translationProviderChoices,
+  unreachableServiceMessage,
+} from "./translation-options";
 
 const option = (id: string) => translationOptions.find((item) => item.id === id)!;
 
@@ -47,5 +55,27 @@ describe("DeepL y LibreTranslate en la comparativa (05.5)", () => {
 
   it("cada opción del selector está en la comparativa", () => {
     expect(translationOptions.map((option) => option.id).sort()).toEqual([...translationProviderChoices].sort());
+  });
+});
+
+describe("LibreTranslate sin clave y desde la web segura (05.5)", () => {
+  it("solo piden clave los que van por el servidor de Pliegue: LibreTranslate no", () => {
+    const needing = translationProviderChoices.filter(translationNeedsKey);
+    expect(needing).toEqual(["azure", "deepl", "openai", "anthropic", "gemini"]);
+  });
+
+  it("desde https, un LibreTranslate en http de la red se explica como bloqueo del navegador", () => {
+    expect(unreachableServiceMessage("LibreTranslate", "http://192.168.1.20:5000", "https:")).toBe(
+      "El navegador no deja que esta web, que va por https, llame a LibreTranslate en http://192.168.1.20:5000. Ponlo tras https:// o en este mismo equipo (http://localhost).",
+    );
+    // En el propio equipo sí se puede, y desde http (en local) no hay bloqueo: el aviso de siempre.
+    for (const [endpoint, protocol] of [
+      ["http://localhost:5000", "https:"],
+      ["http://127.0.0.1:5000", "https:"],
+      ["http://192.168.1.20:5000", "http:"],
+      ["https://libre.example.org", "https:"],
+    ] as const) {
+      expect(unreachableServiceMessage("LibreTranslate", endpoint, protocol)).toMatch(/^No se pudo conectar con LibreTranslate en /);
+    }
   });
 });
