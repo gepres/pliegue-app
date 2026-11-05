@@ -21,7 +21,7 @@ import {
   type ReadingAnchor,
 } from "../library/pdf-page-layout";
 import type { HighlightColor, NormalizedRect } from "../library/annotations";
-import { placeFigures, readPageFigures, type FigureBox } from "../library/pdf-figures";
+import { placeFigures, readPageImages, type FigureBox } from "../library/pdf-figures";
 import { layoutPage, structuredBlock, toReflowItems } from "../library/pdf-reflow";
 import { describePdfFailure, loadPdfjs, openPdfDocument } from "../library/pdf-runtime";
 import {
@@ -67,6 +67,8 @@ export type PdfViewMode = "original" | "reading";
 interface ReadingFigureSpot {
   rect: NormalizedRect;
   slot: number;
+  /** Es la página entera: un escaneo sin capa de texto. */
+  whole?: boolean;
 }
 
 interface ReflowedPage {
@@ -115,13 +117,17 @@ async function reflowDocumentPage(
       viewport.width,
     );
     // Sin las figuras, la página se lee igual: un fallo aquí no la deja en blanco.
-    const boxes = await loadPdfjs()
-      .then(({ OPS }) => readPageFigures(page, OPS))
-      .catch(() => []);
+    const images = await loadPdfjs()
+      .then(({ OPS }) => readPageImages(page, OPS))
+      .catch(() => ({ figures: [], scan: null }));
+    const figures = placeFigures(images.figures, blocks).map(({ box, slot }) => ({ rect: pageRect(viewport, box), slot }));
+    // Un escaneo sin capa de texto —una historieta, un libro sin OCR— no tiene nada que
+    // recomponer: en Lectura se ve la página entera, en vez de un aviso.
+    const scanned = blocks.length === 0 && figures.length === 0 && images.scan !== null;
     return {
       blocks: blocks.map(structuredBlock),
       columns,
-      figures: placeFigures(boxes, blocks).map(({ box, slot }) => ({ rect: pageRect(viewport, box), slot })),
+      figures: scanned && images.scan ? [{ rect: pageRect(viewport, images.scan), slot: 0, whole: true }] : figures,
       number,
       size: { height: viewport.height, width: viewport.width },
     };
@@ -792,7 +798,8 @@ function ReadingFigure({
   const [source, setSource] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   // Algo menos estrecha que en la página —la columna de lectura es más angosta—, y nunca enana.
-  const share = Math.min(100, Math.max(45, Math.round(figure.rect.width * 125)));
+  // Una página escaneada ocupa todo el ancho.
+  const share = figure.whole ? 100 : Math.min(100, Math.max(45, Math.round(figure.rect.width * 125)));
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -838,7 +845,11 @@ function ReadingFigure({
     >
       {source ? (
         // eslint-disable-next-line @next/next/no-img-element -- recorte local de la página: no hay nada que optimizar
-        <img alt={`Ilustración ${order} de la página ${page}`} decoding="async" src={source} />
+        <img
+          alt={figure.whole ? `Página ${page}, escaneada` : `Ilustración ${order} de la página ${page}`}
+          decoding="async"
+          src={source}
+        />
       ) : null}
     </figure>
   );
@@ -997,6 +1008,7 @@ function PdfReadingView({
           <header className={styles.readingPageMark}>
             <span>Página {page.number}</span>
             {page.columns > 1 ? <span>Dos columnas</span> : null}
+            {page.figures[0]?.whole ? <span>Escaneada · sin capa de texto</span> : null}
             {translated ? <span>Traducida</span> : null}
           </header>
           {view?.pending && !parallel ? (

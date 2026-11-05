@@ -177,11 +177,35 @@ export interface FigureSource {
   view: readonly number[];
 }
 
+/**
+ * La imagen que cubre casi toda la página —el escaneo de un libro sin capa de texto, la viñeta a
+ * página completa de una historieta—, recortada a la parte visible; `null` si no la hay.
+ * `pageFigures` la deja fuera por ser el fondo, pero en una página sin texto es la página misma.
+ */
+export function scanBox(boxes: readonly FigureBox[], view: FigureBox): FigureBox | null {
+  const pageArea = Math.max(1, view.right - view.left) * Math.max(1, view.top - view.bottom);
+  const largest = [...boxes].sort((a, b) => area(b) - area(a))[0];
+  if (!largest || area(largest) < pageArea * backgroundShare) return null;
+  return {
+    bottom: Math.max(view.bottom, largest.bottom),
+    left: Math.max(view.left, largest.left),
+    right: Math.min(view.right, largest.right),
+    top: Math.min(view.top, largest.top),
+  };
+}
+
+/** Las figuras de una página y su escaneo, si lo tiene, leídos de sus operaciones y sin dibujarla. */
+export async function readPageImages(page: FigureSource, ops: FigureOps) {
+  const [left = 0, bottom = 0, right = 0, top = 0] = page.view;
+  const view = { bottom, left, right, top };
+  const { argsArray, fnArray } = await page.getOperatorList();
+  const boxes = imageBoxes(fnArray, argsArray, ops);
+  return { figures: pageFigures(boxes, view), scan: scanBox(boxes, view) };
+}
+
 /** Las figuras de una página, leídas de sus operaciones y sin dibujarla. */
 export async function readPageFigures(page: FigureSource, ops: FigureOps) {
-  const [left = 0, bottom = 0, right = 0, top = 0] = page.view;
-  const { argsArray, fnArray } = await page.getOperatorList();
-  return pageFigures(imageBoxes(fnArray, argsArray, ops), { bottom, left, right, top });
+  return (await readPageImages(page, ops)).figures;
 }
 
 const centerInside = (inner: FigureBox, outer: FigureBox) => {

@@ -1,6 +1,14 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { imageBoxes, pageFigures, placeFigures, readPageFigures, type FigureOps } from "./pdf-figures";
+import {
+  imageBoxes,
+  pageFigures,
+  placeFigures,
+  readPageFigures,
+  readPageImages,
+  scanBox,
+  type FigureOps,
+} from "./pdf-figures";
 import { loadPdfjs, openPdfDocument } from "./pdf-runtime";
 import { pdfjsWarmUpTimeout, warmUpPdfjs } from "./pdf-test-fixture";
 
@@ -108,6 +116,24 @@ describe("las imágenes de una página de PDF (05.6)", () => {
     ]);
   });
 
+  it("el escaneo de una página (una historieta, un libro sin OCR) es la imagen que la cubre casi entera", () => {
+    // Desborda un poco la página, como suele: se recorta a la parte visible.
+    expect(
+      scanBox(
+        [
+          { bottom: 400, left: 100, right: 400, top: 600 },
+          { bottom: -6, left: -4, right: 616, top: 798 },
+        ],
+        page,
+      ),
+    ).toEqual({ bottom: 0, left: 0, right: 612, top: 792 });
+    // Con márgenes blancos alrededor, si cubre al menos tres cuartos, también.
+    expect(scanBox([{ bottom: 40, left: 30, right: 582, top: 752 }], page)).toEqual({ bottom: 40, left: 30, right: 582, top: 752 });
+    // Una ilustración grande no es el escaneo, ni lo es una página sin imágenes.
+    expect(scanBox([{ bottom: 200, left: 72, right: 540, top: 700 }], page)).toBeNull();
+    expect(scanBox([], page)).toBeNull();
+  });
+
   describe("con pdf.js y un PDF de verdad", () => {
     beforeAll(warmUpPdfjs, pdfjsWarmUpTimeout);
 
@@ -121,6 +147,8 @@ describe("las imágenes de una página de PDF (05.6)", () => {
           { bottom: 400, left: 100, right: 400, top: 600 },
           { bottom: 120, left: 300, right: 500, top: 270 },
         ]);
+        // El escaneo queda aparte, para cuando la página no tiene texto que recomponer.
+        expect((await readPageImages(first, pdfjs.OPS)).scan).toEqual({ bottom: 0, left: 0, right: 612, top: 792 });
       } finally {
         await close();
       }
