@@ -362,10 +362,11 @@ function StructuredPreview({
   );
 }
 
-/** Lo que el visor de PDF necesita para marcar y recortar zonas. */
+/** Lo que el visor de PDF necesita para marcar y recortar zonas, traducir y leer sus escaneos. */
 type PdfAnnotationProps = Pick<
   PdfReaderProps,
   | "cropMode"
+  | "ocr"
   | "onCropModeChange"
   | "onRegionClick"
   | "onRegionSelected"
@@ -1073,6 +1074,10 @@ export function LocalReaderShell({
     normalizeLanguage(catalog?.language) ??
     ("detectedLanguage" in document && typeof document.detectedLanguage === "string" ? document.detectedLanguage : null);
   const { pair: translationPair, snapshot: translationSnapshot, unit: translatedUnit } = translation;
+  // Para leer sus páginas escaneadas (03.5b): el idioma del par de la traducción, que es el que
+  // la persona confirmó, y si no, el de la ficha o el detectado.
+  const ocrLanguage = translationPair?.source ?? sourceLanguageGuess;
+  const pdfOcr = useMemo(() => ({ documentId: document.id, language: ocrLanguage }), [document.id, ocrLanguage]);
   const showTranslation = translatable && translationActive && translationVisible;
   const parallel = showTranslation && parallelFits && translationLayout === "parallel";
   const translationView: TranslationView = !translationVisible
@@ -1533,6 +1538,7 @@ export function LocalReaderShell({
             pageRequest={pageRequest}
             pdf={{
               cropMode,
+              ocr: pdfOcr,
               onCropModeChange: (active) => {
                 setCropMode(active);
                 if (!active) setPendingRegion(null);

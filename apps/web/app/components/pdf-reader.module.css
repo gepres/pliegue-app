@@ -220,10 +220,36 @@
   max-width: var(--pliegue-reader-measure, 66ch);
   padding-top: var(--pliegue-spacing-md);
   text-transform: uppercase;
+  /* Una página escaneada lleva más datos y su botón: que bajen de renglón antes que desbordar. */
+  flex-wrap: wrap;
 }
 
 .readingPage:first-child .readingPageMark {
   border-top: 0;
+}
+
+/* «Ver la página» / «Ver el texto» de una página escaneada leída con OCR (03.5b). */
+.readingPageSwitch {
+  background: none;
+  border: 0;
+  border-radius: var(--pliegue-radius-sm);
+  color: var(--pliegue-color-action-primary);
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  padding: 2px 4px;
+  text-decoration: underline;
+  text-transform: inherit;
+  text-underline-offset: 2px;
+}
+
+.readingPageSwitch:hover {
+  text-decoration-thickness: 2px;
+}
+
+.readingPageSwitch:focus-visible {
+  outline: 2px solid var(--pliegue-color-focus-ring);
+  outline-offset: 2px;
 }
 
 /* Una ilustración del original entre los párrafos recompuestos (05.6). Antes de dibujarse

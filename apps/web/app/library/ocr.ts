@@ -1,5 +1,10 @@
 "use client";
 
+import type { OcrParagraph } from "./ocr-layout";
+import { cleanOcrText } from "./ocr-text";
+
+export { cleanOcrText };
+
 /**
  * Leer el texto de una imagen en el propio navegador (03.5), con tesseract.js: gratis y sin que
  * la imagen salga del equipo. Decisión del dueño (5-nov) frente a leerla con una IA.
@@ -25,25 +30,6 @@ export function ocrLanguages(bookLanguage: string | null | undefined) {
   return code ?? "eng+spa";
 }
 
-/**
- * Del texto que devuelve el OCR al que se lee y se traduce: los renglones de un párrafo, unidos;
- * las palabras cortadas a final de renglón («pala-/bra»), enteras; los párrafos, separados.
- */
-export function cleanOcrText(text: string) {
-  return text
-    .replace(/\r/g, "")
-    .split(/\n\s*\n/)
-    .map((paragraph) =>
-      paragraph
-        .replace(/(\p{L})-\n(\p{Ll})/gu, "$1$2")
-        .replace(/\s*\n\s*/g, " ")
-        .replace(/[ \t]+/g, " ")
-        .trim(),
-    )
-    .filter(Boolean)
-    .join("\n\n");
-}
-
 export interface OcrProgress {
   /** De 0 a 1 en cada etapa. */
   fraction: number;
@@ -58,9 +44,16 @@ export interface OcrResult {
 }
 
 type OcrWorker = Awaited<ReturnType<(typeof import("tesseract.js"))["createWorker"]>>;
+type OcrImage = Blob | HTMLCanvasElement;
 
 let current: { languages: string; worker: Promise<OcrWorker> } | null = null;
 let listener: ((progress: OcrProgress) => void) | null = null;
+/**
+ * Las lecturas van de una en una. El lector las haría en fila de todos modos, pero así el aviso
+ * de avance es siempre de la que corre: una página leída por delante no pisa el de la zona que
+ * se acaba de recortar.
+ */
+let queue: Promise<unknown> = Promise.resolve();
 
 async function createOcrWorker(languages: string) {
   const { createWorker, OEM } = await import("tesseract.js");
@@ -78,28 +71,61 @@ async function createOcrWorker(languages: string) {
 }
 
 /**
- * Lee el texto de una imagen. El lector se queda abierto para la siguiente zona del mismo libro;
- * si cambia el idioma, se abre otro.
+ * Pasa una imagen por el lector del idioma del libro. El lector se queda abierto para la
+ * siguiente lectura del mismo libro; si cambia el idioma, se abre otro.
  */
-export async function recognizeText(image: Blob, bookLanguage: string | null, onProgress?: (progress: OcrProgress) => void): Promise<OcrResult> {
-  const languages = ocrLanguages(bookLanguage);
-  if (!current || current.languages !== languages) {
-    const previous = current;
-    current = { languages, worker: createOcrWorker(languages) };
-    void previous?.worker.then((worker) => worker.terminate()).catch(() => undefined);
-  }
-  const opened = current;
-  listener = onProgress ?? null;
-  try {
-    const worker = await opened.worker;
+function withWorker<Result>(
+  bookLanguage: string | null,
+  onProgress: ((progress: OcrProgress) => void) | undefined,
+  read: (worker: OcrWorker) => Promise<Result>,
+) {
+  const run = queue.then(async () => {
+    const languages = ocrLanguages(bookLanguage);
+    if (!current || current.languages !== languages) {
+      const previous = current;
+      current = { languages, worker: createOcrWorker(languages) };
+      void previous?.worker.then((worker) => worker.terminate()).catch(() => undefined);
+    }
+    const opened = current;
+    listener = onProgress ?? null;
+    try {
+      return await read(await opened.worker);
+    } catch (error) {
+      // Un lector que no llegó a abrirse no se reutiliza: la siguiente vez se intenta de nuevo.
+      if (current === opened) current = null;
+      const reason = error instanceof Error && error.message ? ` (${error.message.slice(0, 120)})` : "";
+      throw new Error(`No se pudo leer el texto de la imagen${reason}. Comprueba la conexión la primera vez: hay que descargar el idioma.`);
+    } finally {
+      listener = null;
+    }
+  });
+  queue = run.catch(() => undefined);
+  return run;
+}
+
+/** Lee el texto de una imagen, de corrido: una zona recortada. */
+export function recognizeText(image: OcrImage, bookLanguage: string | null, onProgress?: (progress: OcrProgress) => void): Promise<OcrResult> {
+  return withWorker(bookLanguage, onProgress, async (worker) => {
     const { data } = await worker.recognize(image);
     return { confidence: Math.round(data.confidence), text: cleanOcrText(data.text) };
-  } catch (error) {
-    // Un lector que no llegó a abrirse no se reutiliza: la siguiente vez se intenta de nuevo.
-    if (current === opened) current = null;
-    const reason = error instanceof Error && error.message ? ` (${error.message.slice(0, 120)})` : "";
-    throw new Error(`No se pudo leer el texto de la imagen${reason}. Comprueba la conexión la primera vez: hay que descargar el idioma.`);
-  } finally {
-    listener = null;
-  }
+  });
+}
+
+/**
+ * Lee una página entera (03.5b): sus párrafos en orden de lectura, cada uno con su caja en
+ * píxeles de la imagen y sus renglones, para maquetarla con `ocrPageLayout`.
+ */
+export function recognizePage(image: OcrImage, bookLanguage: string | null, onProgress?: (progress: OcrProgress) => void): Promise<OcrParagraph[]> {
+  return withWorker(bookLanguage, onProgress, async (worker) => {
+    const { data } = await worker.recognize(image, {}, { blocks: true, text: false });
+    return (data.blocks ?? []).flatMap((block) =>
+      block.paragraphs.map((paragraph) => ({
+        bbox: paragraph.bbox,
+        confidence: paragraph.confidence,
+        lines: paragraph.lines.map((line) => ({ bbox: line.bbox })),
+        // Tesseract separa los renglones con saltos: `cleanOcrText` los une y repara los cortes.
+        text: paragraph.text,
+      })),
+    );
+  });
 }
