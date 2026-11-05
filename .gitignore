@@ -13,6 +13,8 @@ Thumbs.db
 
 # Copia derivada de pdfjs-dist; la genera scripts/copy-pdfjs-assets.mjs
 apps/web/public/pdfjs/
+# Copia derivada de tesseract.js y sus idiomas; la genera scripts/copy-tesseract-assets.mjs
+apps/web/public/tesseract/
 
 # Local AI/tooling bundles
 .agents/

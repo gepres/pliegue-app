@@ -11,6 +11,7 @@ import {
   type EngineAvailability,
   type TranslationEngine,
 } from "../../library/translation-engine";
+import { recognizeText, type OcrProgress } from "../../library/ocr";
 import { glossaryLimits, type GlossaryEntry } from "../../library/translation-glossary";
 import { readGlossary, useBookGlossary } from "../../library/translation-glossary-store";
 import { useOutsidePointer } from "../app-ui/controls";
@@ -54,15 +55,24 @@ export async function translateSnippet(
 
 export interface SnippetRequest {
   anchor: DOMRect;
-  /** Guarda la traducción como nota de una marca sobre ese trozo; `null` si no se puede marcar. */
-  onSaveNote: ((note: string) => void) | null;
+  /**
+   * Una zona sin capa de texto —una imagen, un escaneo— se dibuja y se lee con OCR en el equipo
+   * (03.5) antes de traducirla.
+   */
+  image?: (() => Promise<Blob>) | undefined;
+  /** Guarda la traducción como nota de una marca sobre ese trozo, con su texto; `null` si no se puede marcar. */
+  onSaveNote: ((note: string, quote: string) => void) | null;
   text: string;
 }
 
 type SnippetState =
   | { kind: "working" }
+  | ({ kind: "reading" } & OcrProgress)
   | { kind: "done"; pair: TranslationPair; text: string }
   | { kind: "error"; message: string };
+
+/** Por debajo de esta confianza, lo leído no es texto: una ilustración, un borrón. */
+const minimumConfidence = 30;
 
 /**
  * La tarjeta con la traducción de lo seleccionado: se copia, se guarda como nota o se lleva al
@@ -88,7 +98,11 @@ export function SnippetTranslationCard({
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const position = usePlacement(cardRef, request.anchor, true);
-  const [state, setState] = useState<SnippetState>({ kind: "working" });
+  const [state, setState] = useState<SnippetState>(() =>
+    request.text.trim() || !request.image ? { kind: "working" } : { fraction: 0, kind: "reading", stage: "loading" },
+  );
+  // El texto que se traduce: el seleccionado o, en una imagen, el que lee el OCR, con su confianza.
+  const [source, setSource] = useState<{ confidence: number | null; text: string }>({ confidence: null, text: request.text });
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -111,12 +125,28 @@ export function SnippetTranslationCard({
   useEffect(() => {
     const abort = new AbortController();
     void (async () => {
-      if (!request.text.trim()) {
-        setState({ kind: "error", message: "Esta zona no tiene texto: es parte de una imagen o de un escaneo sin OCR." });
-        return;
-      }
+      let original = request.text;
       try {
-        const source = bookPair?.source ?? sourceGuess ?? (await detectLanguage(request.text)) ?? "en";
+        if (!original.trim()) {
+          if (!request.image) {
+            setState({ kind: "error", message: "Aquí no hay texto que traducir." });
+            return;
+          }
+          setState({ fraction: 0, kind: "reading", stage: "loading" });
+          const image = await request.image();
+          const read = await recognizeText(image, bookPair?.source ?? sourceGuess, (progress) => {
+            if (!abort.signal.aborted) setState({ kind: "reading", ...progress });
+          });
+          if (abort.signal.aborted) return;
+          if (!read.text || read.confidence < minimumConfidence) {
+            setState({ kind: "error", message: "No se distingue texto en esta zona: parece solo una imagen." });
+            return;
+          }
+          original = read.text;
+          setSource({ confidence: read.confidence, text: read.text });
+          setState({ kind: "working" });
+        }
+        const source = bookPair?.source ?? sourceGuess ?? (await detectLanguage(original)) ?? "en";
         const target = bookPair?.target ?? (source === "es" ? "en" : "es");
         const pair = { source, target };
         if (source === target) {
@@ -124,7 +154,7 @@ export function SnippetTranslationCard({
           return;
         }
         // El glosario del libro hacia ese idioma también vale para lo suelto.
-        const text = await translateSnippet(engine, pair, request.text, readGlossary(documentId, target), abort.signal);
+        const text = await translateSnippet(engine, pair, original, readGlossary(documentId, target), abort.signal);
         if (!abort.signal.aborted) setState({ kind: "done", pair, text });
       } catch (error) {
         if (abort.signal.aborted) return;
@@ -133,9 +163,9 @@ export function SnippetTranslationCard({
       }
     })();
     return () => abort.abort();
-  }, [bookPair, documentId, engine, request.text, sourceGuess]);
+  }, [bookPair, documentId, engine, request, sourceGuess]);
 
-  const quote = request.text.length > 220 ? `${request.text.slice(0, 220).trimEnd()}…` : request.text;
+  const quote = source.text.length > 220 ? `${source.text.slice(0, 220).trimEnd()}…` : source.text;
 
   return (
     <div
@@ -156,8 +186,21 @@ export function SnippetTranslationCard({
           · {engineLabel}
         </span>
       </header>
-      <blockquote className={styles.cardQuote}>{quote}</blockquote>
-      {state.kind === "working" ? (
+      {quote ? <blockquote className={styles.cardQuote}>{quote}</blockquote> : null}
+      {source.confidence !== null ? (
+        <p className={styles.snippetOrigin}>
+          <Icon name="image" size={14} />
+          Leído de la imagen con OCR, en tu equipo · confianza {source.confidence}&nbsp;%
+        </p>
+      ) : null}
+      {state.kind === "reading" ? (
+        <p className={styles.snippetStatus} role="status">
+          <span aria-hidden="true" className={styles.snippetSpinner} />
+          {state.stage === "loading"
+            ? "Preparando el lector de texto (la primera vez descarga el idioma)…"
+            : `Leyendo el texto de la imagen… ${Math.round(state.fraction * 100)} %`}
+        </p>
+      ) : state.kind === "working" ? (
         <p className={styles.snippetStatus} role="status">
           <span aria-hidden="true" className={styles.snippetSpinner} />
           Traduciendo…
@@ -173,7 +216,7 @@ export function SnippetTranslationCard({
       )}
       {state.kind === "done" && adding ? (
         <GlossaryQuickAdd
-          initialSource={request.text.length <= glossaryLimits.term ? request.text : ""}
+          initialSource={source.text.length <= glossaryLimits.term ? source.text : ""}
           initialTarget={state.text.length <= glossaryLimits.term ? state.text : ""}
           language={state.pair.target}
           onCancel={() => setAdding(false)}
@@ -201,7 +244,7 @@ export function SnippetTranslationCard({
               <Button
                 disabled={saved}
                 onClick={() => {
-                  request.onSaveNote?.(state.text);
+                  request.onSaveNote?.(state.text, source.text);
                   setSaved(true);
                 }}
                 size="sm"
