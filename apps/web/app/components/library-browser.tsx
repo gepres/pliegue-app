@@ -13,7 +13,7 @@ import {
   documentWorkTypes,
   type DocumentWorkType,
 } from "../ai/document-catalog";
-import { readDocumentCatalogRecords, removeDocumentCatalogRecord } from "../ai/document-catalog-store";
+import { readDocumentCatalogRecords } from "../ai/document-catalog-store";
 import {
   availabilityStates,
   catalogFacets,
@@ -55,8 +55,9 @@ import { categoryChipLimit, sortLabels, usePhoneWidth } from "./library/library-
 import { LinkingUnavailableNotice } from "./library/linking-unavailable-notice";
 import { useCatalogAi } from "../ai/ai-readiness";
 import { afterLibraryGrowth } from "../guide/next-steps";
-import { confirmAction } from "./app-ui/confirm-dialog";
 import { suggestNextStep } from "./app-ui/next-step-dialog";
+import { describeForgotten, forgetDocumentDerivatives } from "../library/forget-derivatives";
+import { confirmForgetting } from "./library/confirm-forgetting";
 import { forgetLinkedFiles, unlinkFilesConfirmation } from "./linked-files-panel";
 import { StaleIndexNotice } from "./stale-index-notice";
 import styles from "../(workspace)/app/workspace.module.css";
@@ -389,34 +390,39 @@ export function LibraryBrowser() {
   }
 
   async function removeCopy(documentId: string, title: string) {
-    const confirmed = await confirmAction({
+    const { confirmed, translations } = await confirmForgetting({
       confirmLabel: "Eliminar copia",
       description: "Se borra la copia guardada en este navegador, y con ella:",
-      details: ["su índice de texto", "su ficha del catálogo IA", "dónde se quedó la lectura"],
+      details: [
+        "su índice de texto",
+        "su ficha del catálogo IA",
+        "la portada traída de Open Library",
+        "dónde se quedó la lectura",
+      ],
       note: copyReleaseNote([documentId]) ?? "El archivo original, allí donde lo tengas, no se toca.",
       title: `¿Eliminar la copia de «${title}»?`,
       tone: "danger",
-    });
+    }, [documentId]);
     if (!confirmed) return;
 
     try {
       await releaseCopies([documentId]);
       await removeImportedCopy(documentId);
-      await removeDocumentCatalogRecord(documentId).catch(() => undefined);
+      const forgotten = await forgetDocumentDerivatives([documentId], { translations });
       clearReadingProgress(documentId);
-      setImportStatus("La copia local se eliminó. El archivo original no fue modificado.");
+      setImportStatus(`La copia local se eliminó. ${describeForgotten(forgotten)} El archivo original no fue modificado.`);
     } catch {
       setImportStatus("No fue posible eliminar la copia local.");
     }
   }
 
   async function removeFileReference(documentId: string, title: string) {
-    const confirmed = await confirmAction(unlinkFilesConfirmation(`«${title}»`, [documentId]));
+    const { confirmed, translations } = await confirmForgetting(unlinkFilesConfirmation(`«${title}»`, [documentId]), [documentId]);
     if (!confirmed) return;
 
     try {
-      await forgetLinkedFiles([documentId]);
-      setImportStatus(`«${title}» se desvinculó. El original sigue donde estaba.`);
+      const forgotten = await forgetLinkedFiles([documentId], { translations });
+      setImportStatus(`«${title}» se desvinculó. ${describeForgotten(forgotten)} El original sigue donde estaba.`);
     } catch {
       setImportStatus("No fue posible desvincular el archivo.");
     }

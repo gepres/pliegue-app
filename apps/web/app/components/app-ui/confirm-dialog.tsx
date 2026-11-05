@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
-import { Button } from "@pliegue/ui";
+import { Button, Switch } from "@pliegue/ui";
 
 import { useStableId } from "./controls";
 import { Icon, type IconName } from "./icons";
@@ -33,12 +33,27 @@ export interface ConfirmOptions {
   tone?: "danger" | "default";
 }
 
+/**
+ * Algo más que se puede hacer a la vez, y que empieza apagado: «También borrar sus traducciones».
+ * Lo que es opcional y cuesta rehacer no se borra sin que la persona lo elija (03.3).
+ */
+export interface ConfirmChoice {
+  description?: string;
+  label: string;
+}
+
 interface PendingConfirm extends ConfirmOptions {
+  choice?: ConfirmChoice;
+  /** Cada pregunta, la suya: el interruptor vuelve a empezar apagado. */
+  id: number;
   resolve: (confirmed: boolean) => void;
 }
 
 let pending: PendingConfirm | null = null;
 let hosts = 0;
+let asked = 0;
+/** Cómo dejó la persona el interruptor de la pregunta abierta. */
+let chosen = false;
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -66,10 +81,31 @@ export function confirmAction(options: ConfirmOptions): Promise<boolean> {
   }
   // Una pregunta nueva sustituye a la que estuviera abierta, que se da por cancelada.
   pending?.resolve(false);
+  chosen = false;
+  asked += 1;
   return new Promise((resolve) => {
-    pending = { ...options, resolve };
+    pending = { ...options, id: asked, resolve };
     emit();
   });
+}
+
+/**
+ * Como `confirmAction`, con un interruptor apagado de partida. Devuelve si se confirmó y cómo
+ * quedó el interruptor; al cancelar, nunca vale como elegido.
+ */
+export async function confirmWithChoice(
+  options: ConfirmOptions & { choice: ConfirmChoice },
+): Promise<{ chosen: boolean; confirmed: boolean }> {
+  if (!hosts) return { chosen: false, confirmed: await confirmAction(options) };
+  // Una pregunta nueva sustituye a la que estuviera abierta, que se da por cancelada.
+  pending?.resolve(false);
+  chosen = false;
+  asked += 1;
+  const confirmed = await new Promise<boolean>((resolve) => {
+    pending = { ...options, id: asked, resolve };
+    emit();
+  });
+  return { chosen: confirmed && chosen, confirmed };
 }
 
 export function ConfirmDialogHost() {
@@ -137,6 +173,18 @@ export function ConfirmDialogHost() {
                 <li key={detail}>{detail}</li>
               ))}
             </ul>
+          ) : null}
+          {current.choice ? (
+            <Switch
+              className={styles.confirmChoice}
+              defaultChecked={false}
+              description={current.choice.description}
+              key={current.id}
+              label={current.choice.label}
+              onChange={(event) => {
+                chosen = event.target.checked;
+              }}
+            />
           ) : null}
           {current.note ? <p className={styles.confirmNote}>{current.note}</p> : null}
           <div className={styles.confirmActions}>

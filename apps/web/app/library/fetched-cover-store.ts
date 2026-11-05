@@ -122,6 +122,34 @@ export async function saveFetchedCovers(records: readonly FetchedCoverRecord[]) 
   await load();
 }
 
+/**
+ * Olvida lo que se buscó en Open Library para estos documentos —la portada traída o el «no
+ * encontrado»— y dice cuántas portadas había (03.3: al desvincular un libro).
+ */
+export async function removeFetchedCovers(documentIds: readonly string[]) {
+  if (!documentIds.length) return 0;
+  const ids = new Set(documentIds);
+  const database = await openDatabase();
+  let covers = 0;
+  try {
+    const transaction = database.transaction(storeName, "readwrite");
+    const store = transaction.objectStore(storeName);
+    const all = store.getAll() as IDBRequest<FetchedCoverRecord[]>;
+    all.addEventListener("success", () => {
+      for (const record of all.result) {
+        if (!ids.has(record.documentId)) continue;
+        store.delete(record.documentId);
+        if (record.status === "found") covers += 1;
+      }
+    });
+    await transactionComplete(transaction);
+  } finally {
+    database.close();
+  }
+  await load();
+  return covers;
+}
+
 /** Quita las portadas traídas (y el recuerdo de lo no encontrado): vuelve lo de antes. */
 export async function clearFetchedCovers() {
   const database = await openDatabase();
