@@ -93,6 +93,30 @@ describe("el glosario al traducir", () => {
     expect(calls).toEqual([{ glossary: [naacal], texts: ["The Naacal wrote it."] }]);
   });
 
+  it("si la IA no respeta un término, se le vuelve a pedir ese pasaje con el término ya puesto", async () => {
+    const calls: { glossary: unknown; texts: readonly string[] }[] = [];
+    const translator: OpenTranslator = {
+      destroy: () => {},
+      glossary: "instructions",
+      translate: async (text) => text,
+      translateMany: async (texts, _signal, glossary) => {
+        calls.push({ glossary, texts });
+        // La primera vez, como qwen3:4b: «Cód: Cortesianus» en vez del término del glosario.
+        return calls.length === 1
+          ? texts.map((text) => text.replace("The Codex Cortesianus", "El Cód: Cortesianus").replace("It rains.", "Llueve."))
+          : texts.map((text) => text.replace("The ", "El "));
+      },
+    };
+    const cortesianus = { source: "Codex Cortesianus", target: "Códice Cortesiano" };
+    const blocks = await translateBlocks(translator, ["The Codex Cortesianus speaks.", "It rains."], undefined, [cortesianus]);
+    expect(calls).toEqual([
+      { glossary: [cortesianus], texts: ["The Codex Cortesianus speaks.", "It rains."] },
+      // Solo el pasaje que falló, y con el término ya sustituido.
+      { glossary: [cortesianus], texts: ["The Códice Cortesiano speaks."] },
+    ]);
+    expect(blocks.map((block) => block.text)).toEqual(["El Códice Cortesiano speaks.", "Llueve."]);
+  });
+
   it("a DeepL, Azure o LibreTranslate (por lotes, sin instrucciones) también se lo sustituye", async () => {
     const calls: { glossary: unknown; texts: readonly string[] }[] = [];
     const translator: OpenTranslator = {

@@ -202,6 +202,12 @@ export async function translateBlocks(
   return blocks;
 }
 
+/** La traducción de un pasaje no trae la de algún término del glosario que el original usa. */
+function missesGlossary(original: string, translation: string, glossary: readonly GlossaryEntry[]) {
+  const output = translation.toLocaleLowerCase();
+  return matchingEntries(original, glossary).some((entry) => !output.includes(entry.target.toLocaleLowerCase()));
+}
+
 /**
  * Lo mismo con un motor que traduce por lotes: los bloques de la unidad van juntos, cada uno
  * entero —con sus saltos de renglón, que el modelo respeta— salvo que sea larguísimo, y
@@ -227,8 +233,24 @@ async function translateBlocksInBatch(
   const passages = pieces.map((piece) => piece.text);
   const translated =
     pieces.length > 0
-      ? await translateMany(passages, signal, instructions ? entriesForTexts(passages, glossary) : undefined)
+      ? [...(await translateMany(passages, signal, instructions ? entriesForTexts(passages, glossary) : undefined))]
       : [];
+
+  // Un modelo pequeño no siempre sigue las instrucciones: con qwen3:4b, «Codex Cortesianus» salió
+  // una vez como «Cód: Cortesianus». Se comprueba pasaje a pasaje y, al que no trae la traducción
+  // de algún término suyo, se le vuelve a pedir con el término ya puesto, como a DeepL.
+  if (instructions && glossary.length > 0) {
+    const missed = passages.flatMap((passage, index) => (missesGlossary(passage, translated[index] ?? "", glossary) ? [index] : []));
+    if (missed.length > 0) {
+      signal?.throwIfAborted();
+      const fixed = missed.map((index) => applyGlossary(passages[index] ?? "", matchingEntries(passages[index] ?? "", glossary)));
+      const again = await translateMany(fixed, signal, entriesForTexts(missed.map((index) => passages[index] ?? ""), glossary));
+      missed.forEach((index, position) => {
+        if (again[position]?.trim()) translated[index] = again[position];
+      });
+    }
+  }
+
   const byBlock = new Map<number, string[]>();
   pieces.forEach((piece, index) => {
     const parts = byBlock.get(piece.block) ?? [];
