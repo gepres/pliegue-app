@@ -45,6 +45,13 @@ export interface AiEngineSummary {
   needsKey: boolean;
   onDevice: boolean;
   provider: string;
+  /**
+   * Un servicio que la persona elige dónde está —LibreTranslate—: su dirección. Ahí el texto no
+   * va a una cuenta que factura, sino a ese servidor.
+   */
+  server?: string | null | undefined;
+  /** Se traduce con una clave puesta en esta sesión. */
+  withKey?: boolean | undefined;
 }
 
 export function TranslationPanel({
@@ -126,7 +133,8 @@ export function TranslationPanel({
         <p className={styles.hint}>
           {aiUnset ? (
             <>
-              Aún no has elegido con qué IA traducir: Azure, OpenAI, Claude, Gemini u Ollama.{" "}
+              Aún no has elegido con qué IA traducir: DeepL, LibreTranslate, Azure, OpenAI, Claude, Gemini u
+              Ollama.{" "}
               <Link href="/app/ajustes#ia">Elegir y comparar en Ajustes</Link>
             </>
           ) : usingAi ? (
@@ -134,6 +142,11 @@ export function TranslationPanel({
               <>
                 {aiEngine.label}, en tu equipo: el texto no sale de él.{" "}
                 <Link href="/app/ajustes#ia">Cambiar en Ajustes</Link>
+              </>
+            ) : aiEngine.server ? (
+              <>
+                {aiEngine.label}: el texto de cada página va a tu servidor en {aiEngine.server}
+                {aiEngine.withKey ? ", con tu clave" : ""}. <Link href="/app/ajustes#ia">Cambiar en Ajustes</Link>
               </>
             ) : (
               <>
