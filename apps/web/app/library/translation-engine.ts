@@ -1,7 +1,8 @@
 "use client";
 
 import { detectTextLanguage } from "./language";
-import { chunkBySentence, hashText, isTranslatable, type TranslatedBlock, type TranslationPair } from "./translation";
+import { chunkBySentence, isTranslatable, type TranslatedBlock, type TranslationPair } from "./translation";
+import { applyGlossary, entriesForTexts, glossaryHash, matchingEntries, protectTerms, type GlossaryEntry } from "./translation-glossary";
 
 /**
  * Motores de traducción. El primero, y el predeterminado, es el traductor que el propio
@@ -28,12 +29,17 @@ export type EngineAvailability =
 
 export interface OpenTranslator {
   destroy: () => void;
+  /**
+   * Las IA reciben el glosario en sus instrucciones. Los demás traductores no aceptan
+   * instrucciones: a ellos les llega el texto con cada término ya sustituido (05.5).
+   */
+  glossary?: "instructions";
   translate: (text: string, signal?: AbortSignal) => Promise<string>;
   /**
    * Traduce varios pasajes de una vez y devuelve uno por pasaje, en orden. Los motores remotos
    * lo ofrecen: una página entera es una sola petición en lugar de una por párrafo.
    */
-  translateMany?: (texts: readonly string[], signal?: AbortSignal) => Promise<string[]>;
+  translateMany?: (texts: readonly string[], signal?: AbortSignal, glossary?: readonly GlossaryEntry[]) => Promise<string[]>;
 }
 
 export interface TranslationEngine {
@@ -158,17 +164,25 @@ const batchChunkLength = 4000;
 
 /**
  * Traduce los bloques de una unidad en orden. Lo que no tiene palabras se copia, y un bloque
- * muy largo se traduce frase a frase y se vuelve a unir.
+ * muy largo se traduce frase a frase y se vuelve a unir. Con glosario, cada bloque guarda una
+ * huella que incluye los términos que usa: si uno cambia, solo esos bloques se retraducen.
  */
-export async function translateBlocks(translator: OpenTranslator, texts: readonly string[], signal?: AbortSignal) {
-  if (translator.translateMany) return translateBlocksInBatch(translator.translateMany, texts, signal);
+export async function translateBlocks(
+  translator: OpenTranslator,
+  texts: readonly string[],
+  signal?: AbortSignal,
+  glossary: readonly GlossaryEntry[] = [],
+) {
+  if (translator.translateMany) return translateBlocksInBatch(translator, texts, signal, glossary);
   const blocks: TranslatedBlock[] = [];
-  for (const text of texts) {
+  for (const original of texts) {
     signal?.throwIfAborted();
-    if (!isTranslatable(text)) {
-      blocks.push({ hash: hashText(text), text });
+    const hash = glossaryHash(original, glossary);
+    if (!isTranslatable(original)) {
+      blocks.push({ hash, text: original });
       continue;
     }
+    const text = applyGlossary(original, matchingEntries(original, glossary));
     // Con saltos de renglón (un índice, un poema), cada renglón se traduce por su cuenta y los
     // saltos se conservan; si no, el bloque es un párrafo y se traduce seguido.
     const lines: string[] = [];
@@ -183,9 +197,15 @@ export async function translateBlocks(translator: OpenTranslator, texts: readonl
       }
       lines.push(parts.join(" ").trim());
     }
-    blocks.push({ hash: hashText(text), text: lines.join("\n") });
+    blocks.push({ hash, text: lines.join("\n") });
   }
   return blocks;
+}
+
+/** La traducción de un pasaje no trae la de algún término del glosario que el original usa. */
+function missesGlossary(original: string, translation: string, glossary: readonly GlossaryEntry[]) {
+  const output = translation.toLocaleLowerCase();
+  return matchingEntries(original, glossary).some((entry) => !output.includes(entry.target.toLocaleLowerCase()));
 }
 
 /**
@@ -195,18 +215,44 @@ export async function translateBlocks(translator: OpenTranslator, texts: readonl
  * original: mejor leer el texto sin traducir que un hueco.
  */
 async function translateBlocksInBatch(
-  translateMany: NonNullable<OpenTranslator["translateMany"]>,
+  translator: OpenTranslator,
   texts: readonly string[],
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  glossary: readonly GlossaryEntry[],
 ) {
+  const translateMany = translator.translateMany!;
+  const instructions = translator.glossary === "instructions";
   const pieces: { block: number; text: string }[] = [];
-  texts.forEach((text, block) => {
-    if (!isTranslatable(text)) return;
+  texts.forEach((original, block) => {
+    if (!isTranslatable(original)) return;
+    const text = instructions ? original : applyGlossary(original, matchingEntries(original, glossary));
     for (const piece of chunkBySentence(text, batchChunkLength)) pieces.push({ block, text: piece });
   });
 
   signal?.throwIfAborted();
-  const translated = pieces.length > 0 ? await translateMany(pieces.map((piece) => piece.text), signal) : [];
+  const passages = pieces.map((piece) => piece.text);
+  const translated =
+    pieces.length > 0
+      ? [...(await translateMany(passages, signal, instructions ? entriesForTexts(passages, glossary) : undefined))]
+      : [];
+
+  // Un modelo pequeño no siempre sigue las instrucciones: con qwen3:4b, «Codex Cortesianus» salía
+  // como «Cód: Cortesianus», y aun con el término ya puesto, «Cód: Cortesiano». Se comprueba
+  // pasaje a pasaje y, al que no trae la traducción de algún término suyo, se le vuelve a pedir
+  // con marcas en lugar de los términos; la traducción de cada uno la pone Pliegue.
+  if (instructions && glossary.length > 0) {
+    const missed = passages.flatMap((passage, index) => (missesGlossary(passage, translated[index] ?? "", glossary) ? [index] : []));
+    if (missed.length > 0) {
+      signal?.throwIfAborted();
+      const protectedPassages = missed.map((index) => protectTerms(passages[index] ?? "", glossary));
+      const again = await translateMany(protectedPassages.map((item) => item.text), signal);
+      missed.forEach((index, position) => {
+        const text = again[position]?.trim();
+        if (text) translated[index] = protectedPassages[position]!.restore(text);
+      });
+    }
+  }
+
   const byBlock = new Map<number, string[]>();
   pieces.forEach((piece, index) => {
     const parts = byBlock.get(piece.block) ?? [];
@@ -215,7 +261,7 @@ async function translateBlocksInBatch(
   });
 
   return texts.map<TranslatedBlock>((text, index) => ({
-    hash: hashText(text),
+    hash: glossaryHash(text, glossary),
     text: byBlock.get(index)?.join(" ") ?? text,
   }));
 }

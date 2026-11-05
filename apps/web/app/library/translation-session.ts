@@ -1,10 +1,10 @@
 import {
-  hashText,
   planTranslationQueue,
   translationPercent,
   type TranslatedBlock,
 } from "./translation";
 import { translateBlocks, type OpenTranslator } from "./translation-engine";
+import { glossaryHash, type GlossaryEntry } from "./translation-glossary";
 
 /**
  * Una sesión de traducción de un libro: la cola, lo ya traducido y el avance.
@@ -30,6 +30,8 @@ export interface TranslationStorage {
 }
 
 export interface TranslationSessionOptions<Block extends { text: string }> {
+  /** El glosario vigente del libro; se lee al traducir cada unidad. */
+  glossary?: () => readonly GlossaryEntry[];
   loadUnit: (unit: number) => Promise<SourceUnit<Block>>;
   pagesAhead: number;
   /** Unidades que ya estaban traducidas y guardadas al empezar: cuentan para el avance. */
@@ -59,6 +61,8 @@ const maxConsecutiveFailures = 3;
 export class TranslationSession<Block extends { text: string }> {
   private current = 1;
   private readonly units = new Map<number, TranslatedUnit<Block>>();
+  /** Traducidas con un glosario que ya cambió: se siguen viendo hasta que se rehacen. */
+  private readonly stale = new Set<number>();
   private readonly storedIds: Set<string>;
   private readonly failed = new Set<number>();
   private readonly listeners = new Set<() => void>();
@@ -94,6 +98,16 @@ export class TranslationSession<Block extends { text: string }> {
     void this.pump();
   }
 
+  /**
+   * El glosario cambió: las unidades ya traducidas se repasan —primero la que se lee— y solo
+   * se vuelven a traducir los bloques donde aparece un término que cambió.
+   */
+  refreshGlossary() {
+    for (const unit of this.units.keys()) this.stale.add(unit);
+    this.publish();
+    void this.pump();
+  }
+
   /** Vuelve a intentar las unidades que fallaron. */
   retry() {
     this.failed.clear();
@@ -110,7 +124,7 @@ export class TranslationSession<Block extends { text: string }> {
   }
 
   private plan() {
-    const skip = new Set<number>([...this.units.keys(), ...this.failed]);
+    const skip = new Set<number>([...[...this.units.keys()].filter((unit) => !this.stale.has(unit)), ...this.failed]);
     if (this.working !== null) skip.add(this.working);
     return planTranslationQueue(this.current, this.options.unitCount, this.options.pagesAhead, skip);
   }
@@ -155,16 +169,25 @@ export class TranslationSession<Block extends { text: string }> {
     const id = unitId(unit);
     try {
       const source = await loadUnit(unit);
+      const glossary = this.options.glossary?.() ?? [];
+      const texts = source.blocks.map((block) => block.text);
+      const expected = texts.map((text) => glossaryHash(text, glossary));
       const stored = this.storedIds.has(id) ? await storage.read(id) : null;
-      const reusable =
-        stored !== null &&
-        stored.length === source.blocks.length &&
-        stored.every((block, index) => block.hash === hashText(source.blocks[index]?.text ?? ""));
-      const translated = reusable
-        ? stored
-        : await translateBlocks(translator, source.blocks.map((block) => block.text), this.abort.signal);
-      if (!reusable) await storage.write(id, translated);
+      // Se reutiliza bloque a bloque: con la misma extracción, solo se traduce lo que cambió
+      // (un término del glosario corregido); si la extracción es otra, todo.
+      const sameShape = stored !== null && stored.length === texts.length;
+      const missing = texts.flatMap((_, index) => (sameShape && stored[index]?.hash === expected[index] ? [] : [index]));
+      let translated = sameShape ? stored : [];
+      if (missing.length > 0) {
+        const fresh = await translateBlocks(translator, missing.map((index) => texts[index] ?? ""), this.abort.signal, glossary);
+        translated = texts.map((_, index) => {
+          const position = missing.indexOf(index);
+          return position === -1 ? stored![index]! : fresh[position]!;
+        });
+        await storage.write(id, translated);
+      }
       if (this.abort.signal.aborted) return;
+      this.stale.delete(unit);
       this.units.set(unit, { source: source.blocks, translated });
       this.storedIds.add(id);
       this.consecutiveFailures = 0;

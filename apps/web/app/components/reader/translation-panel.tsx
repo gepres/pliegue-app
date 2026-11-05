@@ -14,6 +14,7 @@ import type { TranslationSnapshot } from "../../library/translation-session";
 import { Segmented } from "../app-ui/controls";
 import type { TranslationView } from "./translation-view";
 import type { TranslationEngineKind, TranslationPhase } from "./use-book-translation";
+import { GlossaryEditor } from "./glossary-editor";
 import styles from "./translation-panel.module.css";
 
 /** Idiomas de origen que se ofrecen: los de los libros que suelen llegar a una biblioteca en español. */
@@ -58,6 +59,7 @@ export function TranslationPanel({
   ahead,
   aiEngine,
   browserSupported,
+  documentId,
   engineKind,
   onEngineChange,
   onClear,
@@ -79,6 +81,8 @@ export function TranslationPanel({
   aiEngine: AiEngineSummary;
   /** Hay traductor integrado en este navegador. */
   browserSupported: boolean;
+  /** El libro: su glosario va con él. */
+  documentId: string;
   engineKind: TranslationEngineKind;
   onEngineChange: (kind: TranslationEngineKind) => void;
   onClear: () => Promise<void>;
@@ -329,6 +333,8 @@ export function TranslationPanel({
           </p>
         </>
       )}
+
+      {sameLanguage ? null : <GlossaryEditor documentId={documentId} target={target} />}
 
       <p className={styles.rights}>
         {usingAi && !aiEngine.onDevice

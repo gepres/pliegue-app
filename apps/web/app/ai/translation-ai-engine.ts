@@ -1,5 +1,6 @@
 import type { TranslationPair } from "../library/translation";
 import type { OpenTranslator, TranslationEngine } from "../library/translation-engine";
+import { entriesForTexts, type GlossaryEntry } from "../library/translation-glossary";
 import { translationProviderOf, type AiSettings } from "./ai-settings";
 import { translationNeedsKey, unreachableServiceMessage, type TranslationProviderChoice } from "./translation-options";
 import { classifyProviderFailure } from "./provider-error";
@@ -41,7 +42,10 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
   }
 }
 
-type RequestBatch = (passages: readonly string[], signal?: AbortSignal) => Promise<string[]>;
+/** Los que traducen con un modelo de lenguaje: siguen instrucciones, como las del glosario. */
+const languageModels: readonly TranslationProviderChoice[] = ["openai", "anthropic", "gemini", "ollama"];
+
+type RequestBatch = (passages: readonly string[], signal?: AbortSignal, glossary?: readonly GlossaryEntry[]) => Promise<string[]>;
 
 /** Los traductores que no son un LLM: no eligen modelo. */
 const translatorServices: readonly TranslationProviderChoice[] = ["azure", "browser", "deepl", "libretranslate"];
@@ -55,9 +59,16 @@ function hostedRequest(settings: AiSettings, apiKey: string, pair: TranslationPa
   const provider = translationProviderOf(settings);
   const model = translationModelOf(settings, provider);
   const extra = provider === "azure" ? { region: settings.azureRegion } : { model };
-  return async (passages, signal) => {
+  return async (passages, signal, glossary) => {
     const response = await fetch("/api/ai/translate", {
-      body: JSON.stringify({ ...extra, passages, provider, source: pair.source, target: pair.target }),
+      body: JSON.stringify({
+        ...extra,
+        ...(glossary?.length ? { glossary } : {}),
+        passages,
+        provider,
+        source: pair.source,
+        target: pair.target,
+      }),
       headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
       method: "POST",
       ...(signal ? { signal } : {}),
@@ -116,14 +127,14 @@ function libreTranslateRequest(settings: AiSettings, apiKey: string, pair: Trans
 function ollamaRequest(settings: AiSettings, pair: TranslationPair): RequestBatch {
   const model = settings.translationModels.ollama;
   const endpoint = `${settings.ollamaUrl.replace(/\/$/, "")}/api/chat`;
-  return async (passages, signal) => {
+  return async (passages, signal, glossary) => {
     let response: Response;
     try {
       response = await fetch(endpoint, {
         body: JSON.stringify({
           format: translationJsonSchema,
           messages: [
-            { content: translationSystemPrompt(pair.source, pair.target), role: "system" },
+            { content: translationSystemPrompt(pair.source, pair.target, glossary), role: "system" },
             { content: createTranslationPrompt(passages), role: "user" },
           ],
           model,
@@ -159,24 +170,35 @@ function ollamaRequest(settings: AiSettings, pair: TranslationPair): RequestBatc
  * Pide un lote y, si el modelo se saltó o juntó pasajes, lo parte por la mitad y vuelve a
  * pedir cada parte: al final, en el peor caso, pasaje a pasaje.
  */
-async function requestWithSplit(request: RequestBatch, passages: readonly string[], signal?: AbortSignal): Promise<string[]> {
+async function requestWithSplit(
+  request: RequestBatch,
+  passages: readonly string[],
+  signal?: AbortSignal,
+  glossary: readonly GlossaryEntry[] = [],
+): Promise<string[]> {
   try {
-    return await request(passages, signal);
+    // A cada lote, solo los términos que aparecen en él: instrucciones cortas y al grano.
+    return await request(passages, signal, entriesForTexts(passages, glossary));
   } catch (error) {
     if (!(error instanceof TranslationCountError) || passages.length <= 1) throw error;
     const middle = Math.ceil(passages.length / 2);
-    const first = await requestWithSplit(request, passages.slice(0, middle), signal);
-    const second = await requestWithSplit(request, passages.slice(middle), signal);
+    const first = await requestWithSplit(request, passages.slice(0, middle), signal, glossary);
+    const second = await requestWithSplit(request, passages.slice(middle), signal, glossary);
     return [...first, ...second];
   }
 }
 
 /** Traduce en lotes que respetan los límites de la ruta, sin cambiar el orden. */
-export async function translateInBatches(request: RequestBatch, texts: readonly string[], signal?: AbortSignal) {
+export async function translateInBatches(
+  request: RequestBatch,
+  texts: readonly string[],
+  signal?: AbortSignal,
+  glossary: readonly GlossaryEntry[] = [],
+) {
   const results = new Array<string>(texts.length);
   for (const batch of batchPassages(texts)) {
     signal?.throwIfAborted();
-    const translated = await requestWithSplit(request, batch.map((index) => texts[index] ?? ""), signal);
+    const translated = await requestWithSplit(request, batch.map((index) => texts[index] ?? ""), signal, glossary);
     batch.forEach((index, position) => {
       results[index] = translated[position] ?? "";
     });
@@ -216,9 +238,12 @@ export function createAiTranslationEngine(settings: AiSettings, apiKey: string):
           : provider === "libretranslate"
             ? libreTranslateRequest(settings, apiKey, pair)
             : hostedRequest(settings, apiKey, pair);
-      const translateMany: OpenTranslator["translateMany"] = (texts, signal) => translateInBatches(request, texts, signal);
+      const translateMany: OpenTranslator["translateMany"] = (texts, signal, glossary) =>
+        translateInBatches(request, texts, signal, glossary);
       return {
         destroy: () => {},
+        // Las IA siguen instrucciones; DeepL, Azure y LibreTranslate reciben el término ya puesto.
+        ...(languageModels.includes(provider) ? { glossary: "instructions" as const } : {}),
         translate: async (text, signal) => (await translateInBatches(request, [text], signal))[0] ?? text,
         translateMany,
       };

@@ -166,3 +166,29 @@ describe("LibreTranslate como traductor (05.5)", () => {
     expect(engine.id).toBe("ai:deepl");
   });
 });
+
+describe("el glosario del libro con «Tu IA» (05.5)", () => {
+  const naacal = { source: "Naacal", target: "naacal" };
+  const sea = { source: "Dead Sea", target: "Mar Muerto" };
+
+  it("una IA lo recibe aparte, con solo los términos de cada lote", async () => {
+    const route = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(init.body as string) as { passages: string[] };
+      return Response.json({ translations: body.passages.map((passage) => `ES ${passage}`) });
+    });
+    vi.stubGlobal("fetch", route);
+    const translator = await createAiTranslationEngine(settings("openai"), "sk-test-000000000000000000000000").create(pair);
+    expect(translator.glossary).toBe("instructions");
+    await translator.translateMany!(["The Naacal wrote it."], undefined, [naacal, sea]);
+    const body = JSON.parse((route.mock.calls[0]![1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(body.glossary).toEqual([naacal]);
+    expect(body.passages).toEqual(["The Naacal wrote it."]);
+  });
+
+  it("DeepL, Azure y LibreTranslate no siguen instrucciones: a ellos se les sustituye antes", async () => {
+    for (const provider of ["deepl", "azure", "libretranslate"] as const) {
+      const translator = await createAiTranslationEngine(settings(provider), "a".repeat(36)).create(pair);
+      expect(translator.glossary).toBeUndefined();
+    }
+  });
+});

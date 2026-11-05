@@ -95,6 +95,7 @@ import type { StructuredDocumentBlock, StructuredDocumentSection } from "../libr
 import { ParallelBlocks } from "./reader/parallel-blocks";
 import { useParallelLink } from "./reader/parallel-link";
 import { useReadingPlace } from "./reader/reading-place";
+import { SnippetTranslationCard, type SnippetRequest } from "./reader/snippet-translation";
 import { TranslationPanel } from "./reader/translation-panel";
 import {
   readTranslationLayout,
@@ -994,6 +995,9 @@ export function LocalReaderShell({
   const [pendingRegion, setPendingRegion] = useState<{ anchor: DOMRect; page: number; rect: NormalizedRect } | null>(null);
   const [openCard, setOpenCard] = useState<{ anchor: DOMRect; focusNote: boolean; id: string } | null>(null);
   const [postcard, setPostcard] = useState<PostcardContent | null>(null);
+  // Traducción de una selección o de una zona suelta (05.5), en su tarjeta.
+  const [snippet, setSnippet] = useState<SnippetRequest | null>(null);
+  const closeSnippet = useCallback(() => setSnippet(null), []);
   const regionToolsRef = useRef<Parameters<NonNullable<PdfReaderProps["onRegionTools"]>>[0]>(null);
   // Mientras se recorta, las barras se quedan: el dock tiene el botón para salir.
   const chrome = useReaderChrome(appearanceOpen || cropMode || translationOpen);
@@ -1244,6 +1248,16 @@ export function LocalReaderShell({
   }
 
   function handleSelectionAction(action: SelectionAction, capture: SelectionCapture) {
+    if (action.kind === "translate") {
+      const target = capture.target;
+      setSnippet({
+        anchor: capture.rect,
+        // Como nota de una marca en ese trozo, si se puede marcar (dentro de una página).
+        onSaveNote: target ? (note) => void createAnnotation(target, "amber", note) : null,
+        text: capture.quote,
+      });
+      return;
+    }
     if (action.kind === "copy") {
       void navigator.clipboard?.writeText(capture.quote).catch(() => undefined);
       return;
@@ -1269,6 +1283,19 @@ export function LocalReaderShell({
     setCropMode(false);
     if (action.kind === "postcard") {
       void openRegionPostcard(region.page, region.rect);
+      return;
+    }
+    if (action.kind === "translate") {
+      void (async () => {
+        const quote = (await regionToolsRef.current?.readText(region.page, region.rect).catch(() => "")) ?? "";
+        setSnippet({
+          anchor: region.anchor,
+          onSaveNote: quote
+            ? (note) => void createAnnotation({ kind: "region", page: region.page, quote, rect: region.rect }, "amber", note)
+            : null,
+          text: quote,
+        });
+      })();
       return;
     }
     void (async () => {
@@ -1378,6 +1405,7 @@ export function LocalReaderShell({
                   ahead={translationAhead}
                   aiEngine={aiEngineSummary}
                   browserSupported={browserSupported}
+                  documentId={document.id}
                   engineKind={translation.engineKind}
                   onClear={translation.clear}
                   onEngineChange={translation.chooseEngine}
@@ -1499,7 +1527,18 @@ export function LocalReaderShell({
         )}
       </main>
 
-      <SelectionToolbar disabled={cropMode || postcard !== null} onAction={handleSelectionAction} rootRef={previewRef} />
+      <SelectionToolbar disabled={cropMode || postcard !== null || snippet !== null} onAction={handleSelectionAction} rootRef={previewRef} />
+      {snippet ? (
+        <SnippetTranslationCard
+          documentId={document.id}
+          engine={translation.engine}
+          engineLabel={translation.engineKind === "ai" ? aiEngineSummary.label : "Traductor del navegador"}
+          onClose={closeSnippet}
+          pair={translationPair}
+          request={snippet}
+          sourceGuess={sourceLanguageGuess}
+        />
+      ) : null}
       {pendingRegion ? <RegionToolbar anchor={pendingRegion.anchor} onAction={handleRegionAction} /> : null}
       {cardAnnotation && openCard ? (
         <AnnotationCard
