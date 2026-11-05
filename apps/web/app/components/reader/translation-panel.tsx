@@ -66,6 +66,8 @@ export function TranslationPanel({
   onRetry,
   onStart,
   onStop,
+  onStopWhole,
+  onTranslateAll,
   onViewChange,
   pair,
   parallelAvailable,
@@ -89,6 +91,9 @@ export function TranslationPanel({
   onRetry: () => void;
   onStart: (pair: TranslationPair, engine: TranslationEngineKind) => void;
   onStop: () => void;
+  /** Traducir el libro entero (con aviso del coste) o volver a solo lo de delante. */
+  onTranslateAll: () => void;
+  onStopWhole: () => void;
   onViewChange: (view: TranslationView) => void;
   pair: TranslationPair | null;
   /** La pantalla es ancha: cabe la traducción al lado del original. */
@@ -230,10 +235,21 @@ export function TranslationPanel({
                 ? `Se detuvo: ${snapshot.error}`
                 : snapshot.working !== null
                   ? `Traduciendo la ${unitNoun.singular} ${snapshot.working}${
-                      snapshot.pending.length ? `; después, ${rangeLabel(snapshot.pending)}` : ""
+                      snapshot.pending.length && !snapshot.whole ? `; después, ${rangeLabel(snapshot.pending)}` : ""
                     }.`
-                  : "Al día: las siguientes páginas ya están listas mientras lees."}
+                  : snapshot.done >= unitCount
+                    ? `El libro entero está traducido: se puede leer sin conexión.`
+                    : "Al día: las siguientes páginas ya están listas mientras lees."}
             </p>
+            {snapshot.whole && snapshot.done < unitCount ? (
+              <p className={styles.hint}>
+                Traduciendo el libro entero: faltan {unitCount - snapshot.done} {unitNoun.plural}. Sigue mientras el
+                libro esté abierto.{" "}
+                <button className={styles.inlineAction} onClick={onStopWhole} type="button">
+                  Solo lo que leo
+                </button>
+              </p>
+            ) : null}
             {snapshot.error ? (
               <Button onClick={onRetry} size="sm" variant="secondary">
                 Reintentar
@@ -259,6 +275,11 @@ export function TranslationPanel({
             </p>
           ) : null}
           <div className={styles.actions}>
+            {!snapshot.whole && snapshot.done < unitCount && !snapshot.error ? (
+              <Button onClick={onTranslateAll} size="sm" variant="secondary">
+                Traducir el libro entero
+              </Button>
+            ) : null}
             <Button onClick={onStop} size="sm" variant="secondary">
               Detener
             </Button>

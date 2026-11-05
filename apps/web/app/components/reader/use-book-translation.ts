@@ -49,6 +49,7 @@ const idleSnapshot: TranslationSnapshot = {
   pending: [],
   percent: 0,
   version: 0,
+  whole: false,
   working: null,
 };
 
@@ -287,6 +288,9 @@ export function useBookTranslation<Block extends { text: string }>({
 
   const unit = useCallback((number: number) => session?.unit(number), [session]);
   const retry = useCallback(() => session?.retry(), [session]);
+  const translateAll = useCallback(() => session?.translateAll(), [session]);
+  const stopWhole = useCallback(() => session?.stopWhole(), [session]);
+  const remaining = useCallback(() => session?.remaining() ?? { characters: 0, units: 0 }, [session]);
 
   /** Cambia de motor antes de empezar; con la traducción en marcha hay que detenerla antes. */
   const chooseEngine = useCallback((kind: TranslationEngineKind) => {
@@ -294,7 +298,7 @@ export function useBookTranslation<Block extends { text: string }>({
     setPhase((current) => (current.kind === "ready" ? current : { kind: "off" }));
   }, []);
 
-  return { chooseEngine, clear, engine, engineKind, pair, phase, retry, snapshot, start, stop, unit };
+  return { chooseEngine, clear, engine, engineKind, pair, phase, remaining, retry, snapshot, start, stop, stopWhole, translateAll, unit };
 }
 
 export type BookTranslation<Block extends { text: string }> = ReturnType<typeof useBookTranslation<Block>>;

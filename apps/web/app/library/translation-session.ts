@@ -50,6 +50,8 @@ export interface TranslationSnapshot {
   /** Las que esperan turno, sin contar la que se está traduciendo. */
   pending: readonly number[];
   percent: number;
+  /** Se traduce el libro entero, no solo lo que va por delante de la lectura. */
+  whole: boolean;
   /** Cambia con cada novedad: sirve para volver a pintar. */
   version: number;
   working: number | null;
@@ -69,6 +71,7 @@ export class TranslationSession<Block extends { text: string }> {
   private readonly abort = new AbortController();
   private consecutiveFailures = 0;
   private running = false;
+  private whole = false;
   private working: number | null = null;
   private error: string | null = null;
   private snapshot: TranslationSnapshot;
@@ -108,6 +111,31 @@ export class TranslationSession<Block extends { text: string }> {
     void this.pump();
   }
 
+  /**
+   * Traduce el libro entero en segundo plano (05.5): primero, como siempre, lo que se lee y lo que
+   * va por delante; después, el resto, desde ahí hasta el final y luego desde el principio. Lo ya
+   * guardado no se vuelve a pedir.
+   */
+  translateAll() {
+    this.whole = true;
+    this.publish();
+    void this.pump();
+  }
+
+  /** Vuelve a traducir solo lo que va por delante de la lectura; lo hecho se queda. */
+  stopWhole() {
+    this.whole = false;
+    this.publish();
+  }
+
+  /** Cuánto falta por traducir del libro: unidades y, estimados por lo ya visto, caracteres. */
+  remaining() {
+    const units = Math.max(0, this.options.unitCount - this.storedIds.size);
+    const seen = [...this.units.values()].map((unit) => unit.source.reduce((sum, block) => sum + block.text.length, 0));
+    const average = seen.length ? seen.reduce((sum, value) => sum + value, 0) / seen.length : 0;
+    return { characters: Math.round(units * average), units };
+  }
+
   /** Vuelve a intentar las unidades que fallaron. */
   retry() {
     this.failed.clear();
@@ -126,7 +154,17 @@ export class TranslationSession<Block extends { text: string }> {
   private plan() {
     const skip = new Set<number>([...[...this.units.keys()].filter((unit) => !this.stale.has(unit)), ...this.failed]);
     if (this.working !== null) skip.add(this.working);
-    return planTranslationQueue(this.current, this.options.unitCount, this.options.pagesAhead, skip);
+    const near = planTranslationQueue(this.current, this.options.unitCount, this.options.pagesAhead, skip);
+    if (!this.whole) return near;
+    const total = this.options.unitCount;
+    const queued = new Set(near);
+    const rest: number[] = [];
+    for (let offset = 0; offset < total; offset += 1) {
+      const unit = ((this.current - 1 + offset) % total) + 1;
+      if (skip.has(unit) || queued.has(unit) || this.storedIds.has(this.options.unitId(unit))) continue;
+      rest.push(unit);
+    }
+    return [...near, ...rest];
   }
 
   private buildSnapshot(version: number): TranslationSnapshot {
@@ -137,6 +175,7 @@ export class TranslationSession<Block extends { text: string }> {
       pending: this.plan(),
       percent: translationPercent(this.storedIds.size, this.options.unitCount),
       version,
+      whole: this.whole,
       working: this.working,
     };
   }

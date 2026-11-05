@@ -271,3 +271,21 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Un enlace dentro de una frase del panel: «Solo lo que leo». */
+.inlineAction {
+  background: none;
+  border: 0;
+  color: var(--pliegue-color-action-primary);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.inlineAction:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--pliegue-color-focus-ring, var(--pliegue-color-action-primary));
+  outline-offset: 2px;
+}

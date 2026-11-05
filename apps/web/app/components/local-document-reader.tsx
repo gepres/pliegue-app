@@ -10,7 +10,7 @@ import { translationProviderOf } from "../ai/ai-settings";
 import { useAiSettings } from "../ai/ai-settings-store";
 import { useDocumentCatalogs } from "../ai/document-catalog-store";
 import { createAiTranslationEngine, translationProviderNames } from "../ai/translation-ai-engine";
-import { translationNeedsKey } from "../ai/translation-options";
+import { formatBookCost, translationCost, translationNeedsKey } from "../ai/translation-options";
 import {
   clearDocumentAnnotations,
   currentAnnotation,
@@ -95,6 +95,7 @@ import type { StructuredDocumentBlock, StructuredDocumentSection } from "../libr
 import { ParallelBlocks } from "./reader/parallel-blocks";
 import { useParallelLink } from "./reader/parallel-link";
 import { useReadingPlace } from "./reader/reading-place";
+import { confirmAction } from "./app-ui/confirm-dialog";
 import { SnippetTranslationCard, type SnippetRequest } from "./reader/snippet-translation";
 import { TranslationPanel } from "./reader/translation-panel";
 import {
@@ -1203,6 +1204,33 @@ export function LocalReaderShell({
     translationView,
   ]);
 
+  /**
+   * «Traducir el libro entero» (05.5). Con el traductor del navegador, Ollama o un LibreTranslate
+   * propio es gratis y empieza sin preguntar; con una IA o un servicio de pago se avisa antes de
+   * lo que costaría, estimado con lo que ocupan las páginas ya vistas.
+   */
+  async function translateWholeBook() {
+    const { characters, units } = translation.remaining();
+    const provider = translation.engineKind === "ai" ? aiProvider : "browser";
+    const cost = translationCost(provider, characters);
+    if (cost > 0) {
+      const noun = isPdf ? (units === 1 ? "página" : "páginas") : units === 1 ? "sección" : "secciones";
+      const confirmed = await confirmAction({
+        confirmLabel: "Traducir todo",
+        description: `Se traducirá lo que falta del libro en segundo plano, mientras esté abierto.`,
+        details: [
+          `Faltan ${units.toLocaleString("es")} ${noun}, unos ${characters.toLocaleString("es")} caracteres.`,
+          `Coste estimado con ${translationProviderNames[aiProvider]}: ${formatBookCost(cost)}.`,
+        ],
+        icon: "translate",
+        note: `Lo cobra tu cuenta de ${translationProviderNames[aiProvider]}; la estimación sale de las páginas ya traducidas. Puedes pararlo cuando quieras y lo traducido se queda.`,
+        title: "¿Traducir el libro entero?",
+      });
+      if (!confirmed) return;
+    }
+    translation.translateAll();
+  }
+
   // ---- Marcas ------------------------------------------------------------------------
   function createAnnotation(target: AnnotationTarget, color: HighlightColor, note = "") {
     const now = new Date().toISOString();
@@ -1415,6 +1443,8 @@ export function LocalReaderShell({
                     void translation.start(next, engine);
                   }}
                   onStop={translation.stop}
+                  onStopWhole={translation.stopWhole}
+                  onTranslateAll={() => void translateWholeBook()}
                   onViewChange={changeTranslationView}
                   pair={translationPair}
                   parallelAvailable={parallelFits}

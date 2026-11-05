@@ -108,3 +108,36 @@ describe("sesión de traducción de un libro", () => {
     expect(destroyed()).toBe(true);
   });
 });
+
+describe("traducir el libro entero (05.5)", () => {
+  it("tras lo de delante sigue hasta el final y luego desde el principio, sin repetir lo guardado", async () => {
+    const stored = new Map<string, TranslatedBlock[]>([["page:2", [{ hash: hashText("Page 2 text"), text: "ES Page 2 text" }]]]);
+    const { calls, session } = setup({ pages: 8, stored });
+    session.setCurrent(5);
+    await idle(session);
+    // Por delante de la 5, tres: 5, 6, 7, 8.
+    expect(calls).toEqual(["Page 5 text", "Page 6 text", "Page 7 text", "Page 8 text"]);
+    expect(session.getSnapshot().whole).toBe(false);
+
+    calls.length = 0;
+    expect(session.remaining()).toEqual({ characters: 3 * "Page 5 text".length, units: 3 });
+    session.translateAll();
+    await idle(session);
+    // La 2 ya estaba guardada: no se vuelve a pedir.
+    expect(calls).toEqual(["Page 1 text", "Page 3 text", "Page 4 text"]);
+    expect(session.getSnapshot()).toMatchObject({ done: 8, percent: 100, whole: true });
+    expect(session.remaining().units).toBe(0);
+  });
+
+  it("«solo lo que leo» vuelve a la cola corta y lo hecho se queda", async () => {
+    const { calls, session } = setup({ pages: 30 });
+    session.setCurrent(1);
+    await idle(session);
+    session.translateAll();
+    session.stopWhole();
+    await idle(session);
+    expect(session.getSnapshot().whole).toBe(false);
+    expect(calls.length).toBeLessThan(30);
+    expect(session.getSnapshot().pending).toEqual([]);
+  });
+});
