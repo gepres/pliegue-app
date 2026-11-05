@@ -21,8 +21,9 @@ import {
   type ReadingAnchor,
 } from "../library/pdf-page-layout";
 import type { HighlightColor, NormalizedRect } from "../library/annotations";
-import { layoutPage, reflowPage, toReflowItems } from "../library/pdf-reflow";
-import { describePdfFailure, openPdfDocument } from "../library/pdf-runtime";
+import { placeFigures, readPageFigures, type FigureBox } from "../library/pdf-figures";
+import { layoutPage, structuredBlock, toReflowItems } from "../library/pdf-reflow";
+import { describePdfFailure, loadPdfjs, openPdfDocument } from "../library/pdf-runtime";
 import {
   dominantColor,
   fitFontSize,
@@ -32,7 +33,7 @@ import {
   originalLeading,
 } from "../library/translation";
 import type { StructuredDocumentBlock } from "../library/structured-document-extractor";
-import { ExtractedBlocks } from "./extracted-blocks";
+import { ExtractedBlocks, type BlockInsert } from "./extracted-blocks";
 import { IconButton, Segmented } from "./app-ui/controls";
 import { Icon } from "./app-ui/icons";
 import { Popover } from "./app-ui/overlays";
@@ -62,13 +63,44 @@ function pdfBlockKey(page: number, index: number) {
 
 export type PdfViewMode = "original" | "reading";
 
+/** Una ilustración de la página en el modo Lectura: su zona y cuántos bloques van delante. */
+interface ReadingFigureSpot {
+  rect: NormalizedRect;
+  slot: number;
+}
+
 interface ReflowedPage {
   blocks: StructuredDocumentBlock[];
   columns: number;
+  figures: ReadingFigureSpot[];
   number: number;
+  /** Tamaño de la página a escala 1, para la proporción de cada ilustración. */
+  size: { height: number; width: number };
 }
 
-/** Recompone una página: el ancho sale del propio documento, no de la pantalla. */
+type PageViewport = ReturnType<Awaited<ReturnType<PdfDocument["getPage"]>>["getViewport"]>;
+
+/** Una caja en el espacio del PDF, como zona de la página de 0 a 1: vale a cualquier zoom. */
+function pageRect(viewport: PageViewport, box: FigureBox): NormalizedRect {
+  const [x1 = 0, y1 = 0] = viewport.convertToViewportPoint(box.left, box.bottom);
+  const [x2 = 0, y2 = 0] = viewport.convertToViewportPoint(box.right, box.top);
+  const left = Math.max(0, Math.min(x1, x2));
+  const right = Math.min(viewport.width, Math.max(x1, x2));
+  const top = Math.max(0, Math.min(y1, y2));
+  const bottom = Math.min(viewport.height, Math.max(y1, y2));
+  return {
+    height: (bottom - top) / viewport.height,
+    width: (right - left) / viewport.width,
+    x: left / viewport.width,
+    y: top / viewport.height,
+  };
+}
+
+/**
+ * Recompone una página: el ancho sale del propio documento, no de la pantalla. De paso se
+ * miran sus imágenes y dónde caen entre los párrafos (05.6); como la recomposición va por
+ * delante de lo que se lee, al llegar a una ilustración ya tiene su sitio.
+ */
 async function reflowDocumentPage(
   document: PdfDocument,
   number: number,
@@ -78,11 +110,21 @@ async function reflowDocumentPage(
   try {
     const viewport = page.getViewport({ scale: 1 });
     const content = await page.getTextContent();
-    const { blocks, columns } = reflowPage(
+    const { blocks, columns } = layoutPage(
       toReflowItems(content.items as Parameters<typeof toReflowItems>[0]),
       viewport.width,
     );
-    return { blocks, columns, number };
+    // Sin las figuras, la página se lee igual: un fallo aquí no la deja en blanco.
+    const boxes = await loadPdfjs()
+      .then(({ OPS }) => readPageFigures(page, OPS))
+      .catch(() => []);
+    return {
+      blocks: blocks.map(structuredBlock),
+      columns,
+      figures: placeFigures(boxes, blocks).map(({ box, slot }) => ({ rect: pageRect(viewport, box), slot })),
+      number,
+      size: { height: viewport.height, width: viewport.width },
+    };
   } finally {
     page.cleanup();
   }
@@ -586,14 +628,19 @@ function regionStyle(rect: NormalizedRect): React.CSSProperties {
 }
 
 /**
- * Dibuja solo una zona de la página, a una resolución pensada para compartir: unos 1600 px de
- * ancho, sea cual sea el zoom con el que se está leyendo.
+ * Dibuja solo una zona de la página. Por defecto, a una resolución pensada para compartir: unos
+ * 1600 px de ancho, sea cual sea el zoom con el que se está leyendo.
  */
-async function renderRegionImage(pdf: PdfDocument, pageNumber: number, rect: NormalizedRect) {
+async function renderRegionImage(
+  pdf: PdfDocument,
+  pageNumber: number,
+  rect: NormalizedRect,
+  { minScale = 1.5, pixelWidth = 1600, quality, type = "image/png" }: { minScale?: number; pixelWidth?: number; quality?: number; type?: string } = {},
+) {
   const page = await pdf.getPage(pageNumber);
   try {
     const base = page.getViewport({ scale: 1 });
-    const scale = Math.min(6, Math.max(1.5, 1600 / Math.max(1, rect.width * base.width)));
+    const scale = Math.min(6, Math.max(minScale, pixelWidth / Math.max(1, rect.width * base.width)));
     const viewport = page.getViewport({ scale });
     const canvas = window.document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(rect.width * viewport.width));
@@ -604,7 +651,7 @@ async function renderRegionImage(pdf: PdfDocument, pageNumber: number, rect: Nor
       viewport,
     }).promise;
     return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("No se pudo recortar la página."))), "image/png");
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("No se pudo recortar la página."))), type, quality);
     });
   } finally {
     page.cleanup();
@@ -667,24 +714,14 @@ async function readPageLayout(pdf: PdfDocument, pageNumber: number) {
       viewport.width,
     );
     return blocks.map<PdfLayoutBlock>((block) => {
-      const [x1 = 0, y1 = 0] = viewport.convertToViewportPoint(block.box.left, block.box.bottom);
-      const [x2 = 0, y2 = 0] = viewport.convertToViewportPoint(block.box.right, block.box.top);
-      const left = Math.max(0, Math.min(x1, x2));
-      const right = Math.min(viewport.width, Math.max(x1, x2));
-      const top = Math.max(0, Math.min(y1, y2));
-      const bottom = Math.min(viewport.height, Math.max(y1, y2));
+      const box = pageRect(viewport, block.box);
       return {
-        box: {
-          height: (bottom - top) / viewport.height,
-          width: (right - left) / viewport.width,
-          x: left / viewport.width,
-          y: top / viewport.height,
-        },
+        box,
         centered: block.centered,
         fontHeight: block.fontHeight,
         kind: block.kind,
         lines: block.lines,
-        size: { height: bottom - top, width: right - left },
+        size: { height: box.height * viewport.height, width: box.width * viewport.width },
         // Un índice o una lista de ilustraciones: cada renglón acaba en su número de página. Unidos
         // en un párrafo, la traducción los fundía («… antiguos. 138 Algunos símbolos… 139»).
         text: isListLike(block.lineTexts) ? block.lineTexts.join("\n") : block.text,
@@ -708,6 +745,103 @@ export interface PdfRegionTools {
   readLayout: (page: number) => Promise<PdfLayoutBlock[]>;
   readText: (page: number, rect: NormalizedRect) => Promise<string>;
   render: (page: number, rect: NormalizedRect) => Promise<Blob>;
+}
+
+/**
+ * Las ilustraciones se dibujan de una en una: cada una pide a pdf.js la página entera, y varias
+ * a la vez se comerían la memoria y el hilo de la interfaz.
+ */
+let figureQueue: Promise<unknown> = Promise.resolve();
+
+function renderFigure(pdf: PdfDocument, pageNumber: number, rect: NormalizedRect, pixelWidth: number) {
+  const run = figureQueue.then(() =>
+    renderRegionImage(pdf, pageNumber, rect, { minScale: 1, pixelWidth, quality: 0.86, type: "image/webp" }),
+  );
+  figureQueue = run.catch(() => undefined);
+  return run;
+}
+
+/** El contenedor que se desplaza: la referencia para dibujar por delante de lo que se ve. */
+function scrollParent(element: HTMLElement) {
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    const { overflowY } = window.getComputedStyle(parent);
+    if (overflowY === "auto" || overflowY === "scroll") return parent;
+  }
+  return null;
+}
+
+/**
+ * Una ilustración del PDF en el modo Lectura (05.6), recortada de su página. Reserva su hueco
+ * con la proporción de la imagen —el texto no salta al llegar— y se dibuja cuando su página
+ * está a un par de pantallas, antes de que se vea.
+ */
+function ReadingFigure({
+  document: pdfDocument,
+  figure,
+  order,
+  page,
+  size,
+}: {
+  document: PdfDocument;
+  figure: ReadingFigureSpot;
+  order: number;
+  page: number;
+  size: { height: number; width: number };
+}) {
+  const frameRef = useRef<HTMLElement>(null);
+  const [source, setSource] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  // Algo menos estrecha que en la página —la columna de lectura es más angosta—, y nunca enana.
+  const share = Math.min(100, Math.max(45, Math.round(figure.rect.width * 125)));
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    // Se observa la página y no la figura: `content-visibility` deja sin caja lo que no se ve.
+    const section = frame?.closest<HTMLElement>("[data-page]");
+    if (!frame || !section) return;
+    let url: string | null = null;
+    let cancelled = false;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+        const ratio = Math.min(2, window.devicePixelRatio || 1);
+        const pixelWidth = Math.min(1600, Math.round((section.clientWidth || 680) * (share / 100) * ratio));
+        renderFigure(pdfDocument, page, figure.rect, pixelWidth)
+          .then((blob) => {
+            if (cancelled) return;
+            url = URL.createObjectURL(blob);
+            setSource(url);
+          })
+          .catch(() => {
+            if (!cancelled) setFailed(true);
+          });
+      },
+      { root: scrollParent(section), rootMargin: "1600px 0px" },
+    );
+    observer.observe(section);
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [figure.rect, page, pdfDocument, share]);
+
+  if (failed) return null;
+  const aspect = (figure.rect.width * size.width) / Math.max(1, figure.rect.height * size.height);
+  return (
+    <figure
+      className={styles.readingFigure}
+      data-ready={source ? "true" : undefined}
+      ref={frameRef}
+      style={{ aspectRatio: String(aspect), width: `${share}%` }}
+    >
+      {source ? (
+        // eslint-disable-next-line @next/next/no-img-element -- recorte local de la página: no hay nada que optimizar
+        <img alt={`Ilustración ${order} de la página ${page}`} decoding="async" src={source} />
+      ) : null}
+    </figure>
+  );
 }
 
 /**
@@ -842,6 +976,11 @@ function PdfReadingView({
         // Los bloques traducidos salen del mismo recompositor y en el mismo orden: casan uno a
         // uno. Si no casan (otra extracción), se lee el original antes que mezclar.
         const view = translation?.get(page.number);
+        const inserts = page.figures.map<BlockInsert>((figure, index) => ({
+          key: `figure-${page.number}-${index}`,
+          node: <ReadingFigure document={pdfDocument} figure={figure} order={index + 1} page={page.number} size={page.size} />,
+          slot: figure.slot,
+        }));
         const translated =
           view && !view.pending && page.blocks.length > 0 && view.blocks.length === page.blocks.length
             ? page.blocks.map<StructuredDocumentBlock>((block, index) =>
@@ -870,6 +1009,7 @@ function PdfReadingView({
             <ParallelBlocks
               blocks={page.blocks}
               anchorPrefix={`p${page.number}`}
+              inserts={inserts}
               keyPrefix={`pdfr:${page.number}`}
               language={view?.language}
               pending={Boolean(view?.pending)}
@@ -879,11 +1019,11 @@ function PdfReadingView({
             />
           ) : translated ? (
             <div lang={view?.language}>
-              <ExtractedBlocks anchorPrefix={`p${page.number}`} blocks={translated} sectionTitle={`página ${page.number}`} />
+              <ExtractedBlocks anchorPrefix={`p${page.number}`} blocks={translated} inserts={inserts} sectionTitle={`página ${page.number}`} />
             </div>
-          ) : page.blocks.length > 0 ? (
+          ) : page.blocks.length > 0 || inserts.length > 0 ? (
             <div data-annotation-page={page.number} data-annotation-scope={`pdf-reading:${page.number}`}>
-              <ExtractedBlocks anchorPrefix={`p${page.number}`} blocks={page.blocks} sectionTitle={`página ${page.number}`} />
+              <ExtractedBlocks anchorPrefix={`p${page.number}`} blocks={page.blocks} inserts={inserts} sectionTitle={`página ${page.number}`} />
             </div>
           ) : (
             <p className={styles.readingEmpty}>
