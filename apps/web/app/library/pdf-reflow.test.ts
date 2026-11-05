@@ -506,3 +506,24 @@ describe("escaneos con capa de texto (05.13)", () => {
     expect(blocks.map((block) => block.kind)).toEqual(["paragraph", "paragraph"]);
   });
 });
+
+describe("restos de OCR en la página (05.14)", () => {
+  it("no lee ni traduce lo que el OCR sacó de una ilustración", () => {
+    // «The Lost Continent of Mu», página 60: el texto del libro y, dentro del mapa, restos.
+    const { blocks } = layoutPage(
+      [
+        item("Both the Troano Manuscript and the Codex Cortesianus refer to the land of Mu", 72, 700, 12),
+        item("159 I Tax # 0911 ak", 200, 600, 9),
+        item("t 200 leave", 300, 560, 9),
+        item("103092E aD2009", 150, 520, 9),
+        item("MAP OF MU", 250, 450, 12),
+      ],
+      pageWidth,
+    );
+
+    expect(blocks.map((block) => block.text)).toEqual([
+      "Both the Troano Manuscript and the Codex Cortesianus refer to the land of Mu",
+      "MAP OF MU",
+    ]);
+  });
+});

@@ -17,6 +17,7 @@
  * al revés que en la pantalla.
  */
 
+import { isLatinPage, looksLikeOcrNoise } from "./ocr-noise";
 import type { StructuredDocumentBlock } from "./structured-document-extractor";
 
 /** Fragmento de texto tal como lo entrega pdf.js, ya normalizado. */
@@ -550,7 +551,12 @@ export function layoutPage(
     ];
   });
 
-  return { blocks: mergeStackedTitles(blocks, pageWidth), columns: split ? 2 : 1 };
+  // Los restos de OCR de una ilustración ni se leen ni se traducen (05.14): con ellos fuera,
+  // la vista traducida no pinta nada encima del dibujo.
+  const latinPage = isLatinPage(blocks.map((block) => block.text));
+  const legible = blocks.filter((block) => !looksLikeOcrNoise(block.text, latinPage));
+
+  return { blocks: mergeStackedTitles(legible, pageWidth), columns: split ? 2 : 1 };
 }
 
 /**
