@@ -50,6 +50,7 @@ export function translationSystemPrompt(source: string, target: string, glossary
     "No resumas, no expliques, no añadas notas ni comentarios: solo la traducción.",
     "Respeta los saltos de línea de cada pasaje (listas, poemas, entradas de índice) y deja igual los números, las referencias de página, las siglas y los nombres propios, salvo que tengan una traducción establecida.",
     "Si un pasaje ya está en el idioma de destino o no tiene nada que traducir, devuélvelo tal cual.",
+    "Las marcas entre dobles corchetes, como [[1]], van tal cual y en su sitio: no las traduzcas, quites ni cambies.",
     ...(terms ? [terms] : []),
   ].join("\n");
 }

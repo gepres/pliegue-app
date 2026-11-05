@@ -2,7 +2,7 @@
 
 import { detectTextLanguage } from "./language";
 import { chunkBySentence, isTranslatable, type TranslatedBlock, type TranslationPair } from "./translation";
-import { applyGlossary, entriesForTexts, glossaryHash, matchingEntries, type GlossaryEntry } from "./translation-glossary";
+import { applyGlossary, entriesForTexts, glossaryHash, matchingEntries, protectTerms, type GlossaryEntry } from "./translation-glossary";
 
 /**
  * Motores de traducción. El primero, y el predeterminado, es el traductor que el propio
@@ -236,17 +236,19 @@ async function translateBlocksInBatch(
       ? [...(await translateMany(passages, signal, instructions ? entriesForTexts(passages, glossary) : undefined))]
       : [];
 
-  // Un modelo pequeño no siempre sigue las instrucciones: con qwen3:4b, «Codex Cortesianus» salió
-  // una vez como «Cód: Cortesianus». Se comprueba pasaje a pasaje y, al que no trae la traducción
-  // de algún término suyo, se le vuelve a pedir con el término ya puesto, como a DeepL.
+  // Un modelo pequeño no siempre sigue las instrucciones: con qwen3:4b, «Codex Cortesianus» salía
+  // como «Cód: Cortesianus», y aun con el término ya puesto, «Cód: Cortesiano». Se comprueba
+  // pasaje a pasaje y, al que no trae la traducción de algún término suyo, se le vuelve a pedir
+  // con marcas en lugar de los términos; la traducción de cada uno la pone Pliegue.
   if (instructions && glossary.length > 0) {
     const missed = passages.flatMap((passage, index) => (missesGlossary(passage, translated[index] ?? "", glossary) ? [index] : []));
     if (missed.length > 0) {
       signal?.throwIfAborted();
-      const fixed = missed.map((index) => applyGlossary(passages[index] ?? "", matchingEntries(passages[index] ?? "", glossary)));
-      const again = await translateMany(fixed, signal, entriesForTexts(missed.map((index) => passages[index] ?? ""), glossary));
+      const protectedPassages = missed.map((index) => protectTerms(passages[index] ?? "", glossary));
+      const again = await translateMany(protectedPassages.map((item) => item.text), signal);
       missed.forEach((index, position) => {
-        if (again[position]?.trim()) translated[index] = again[position];
+        const text = again[position]?.trim();
+        if (text) translated[index] = protectedPassages[position]!.restore(text);
       });
     }
   }

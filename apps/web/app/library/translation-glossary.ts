@@ -98,6 +98,31 @@ export function applyGlossary(text: string, entries: readonly GlossaryEntry[]) {
   return result.replace(slotPattern, (_, index: string) => slots[Number(index)] ?? "");
 }
 
+const markPattern = /\[\[(\d+)\]\]/g;
+
+/**
+ * El texto con cada término cambiado por una marca, `[[1]]`, y cómo poner después su traducción.
+ * Es el último recurso con una IA que no respeta el glosario ni con el término ya puesto
+ * (qwen3:4b abreviaba «Códice» como «Cód:»): las marcas las deja tal cual, y la traducción del
+ * término la pone Pliegue. Si el modelo se come una marca, ese término no se puede poner.
+ */
+export function protectTerms(text: string, entries: readonly GlossaryEntry[]) {
+  const used: GlossaryEntry[] = [];
+  let result = text;
+  for (const entry of [...entries].sort((left, right) => right.source.length - left.source.length)) {
+    result = result.replace(termPattern(entry.source), () => {
+      used.push(entry);
+      return `[[${used.length}]]`;
+    });
+  }
+  const restore = (translated: string) =>
+    translated.replace(markPattern, (found, index: string, offset: number, whole: string) => {
+      const entry = used[Number(index) - 1];
+      return entry ? matchCase(entry.target, entry, whole.slice(Math.max(0, offset - 8), offset)) : found;
+    });
+  return { restore, text: result };
+}
+
 /**
  * La huella de un bloque traducido con su glosario. Sin términos del glosario es la misma de
  * siempre —lo ya traducido sigue valiendo—; con ellos, cambia si cambia su traducción: al

@@ -10,6 +10,7 @@ import {
   glossaryHash,
   glossaryInstructions,
   matchingEntries,
+  protectTerms,
 } from "./translation-glossary";
 import { TranslationSession } from "./translation-session";
 
@@ -93,7 +94,7 @@ describe("el glosario al traducir", () => {
     expect(calls).toEqual([{ glossary: [naacal], texts: ["The Naacal wrote it."] }]);
   });
 
-  it("si la IA no respeta un término, se le vuelve a pedir ese pasaje con el término ya puesto", async () => {
+  it("si la IA no respeta un término, se le vuelve a pedir ese pasaje con una marca, y el término lo pone Pliegue", async () => {
     const calls: { glossary: unknown; texts: readonly string[] }[] = [];
     const translator: OpenTranslator = {
       destroy: () => {},
@@ -104,17 +105,23 @@ describe("el glosario al traducir", () => {
         // La primera vez, como qwen3:4b: «Cód: Cortesianus» en vez del término del glosario.
         return calls.length === 1
           ? texts.map((text) => text.replace("The Codex Cortesianus", "El Cód: Cortesianus").replace("It rains.", "Llueve."))
-          : texts.map((text) => text.replace("The ", "El "));
+          : texts.map((text) => text.replace("The ", "El ").replace(" speaks.", " habla."));
       },
     };
     const cortesianus = { source: "Codex Cortesianus", target: "Códice Cortesiano" };
     const blocks = await translateBlocks(translator, ["The Codex Cortesianus speaks.", "It rains."], undefined, [cortesianus]);
     expect(calls).toEqual([
       { glossary: [cortesianus], texts: ["The Codex Cortesianus speaks.", "It rains."] },
-      // Solo el pasaje que falló, y con el término ya sustituido.
-      { glossary: [cortesianus], texts: ["The Códice Cortesiano speaks."] },
+      // Solo el pasaje que falló, con una marca en lugar del término.
+      { glossary: undefined, texts: ["The [[1]] speaks."] },
     ]);
-    expect(blocks.map((block) => block.text)).toEqual(["El Códice Cortesiano speaks.", "Llueve."]);
+    expect(blocks.map((block) => block.text)).toEqual(["El Códice Cortesiano habla.", "Llueve."]);
+  });
+
+  it("las marcas vuelven con la traducción del término, con mayúscula si empiezan frase", () => {
+    const { restore, text } = protectTerms("Naacal tablets. The Naacal wrote.", [naacal]);
+    expect(text).toBe("[[1]] tablets. The [[2]] wrote.");
+    expect(restore("Tablillas [[1]]. [[2]] escribieron.")).toBe("Tablillas naacal. Naacal escribieron.");
   });
 
   it("a DeepL, Azure o LibreTranslate (por lotes, sin instrucciones) también se lo sustituye", async () => {
