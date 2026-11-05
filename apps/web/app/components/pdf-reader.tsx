@@ -21,6 +21,9 @@ import {
   type ReadingAnchor,
 } from "../library/pdf-page-layout";
 import type { HighlightColor, NormalizedRect } from "../library/annotations";
+import { ocrLanguages, recognizePage, type OcrProgress } from "../library/ocr";
+import { ocrPageLayout, type OcrPageBlock, type OcrPageLayout } from "../library/ocr-layout";
+import { readOcrPage, saveOcrPage } from "../library/ocr-page-store";
 import { placeFigures, readPageImages, type FigureBox } from "../library/pdf-figures";
 import { layoutPage, structuredBlock, toReflowItems } from "../library/pdf-reflow";
 import { describePdfFailure, loadPdfjs, openPdfDocument } from "../library/pdf-runtime";
@@ -159,6 +162,11 @@ export interface PdfReaderProps {
   onError?: (message: string) => void;
   /** Marcadores del PDF, resueltos a número de página, para el índice del panel. */
   onOutline?: (items: OutlineItem[]) => void;
+  /**
+   * De qué libro es y en qué idioma está, para leer con OCR sus páginas escaneadas en Lectura y
+   * al traducir (03.5b). Sin esto, un escaneo se ve como imagen y no se traduce.
+   */
+  ocr?: PdfOcrSource | null;
   /** Página que se está leyendo y total, para la barra del lector. */
   onPageChange?: (page: number, pageCount: number) => void;
   /** Avance real, contado en páginas. Sustituye a la medición por desplazamiento. */
@@ -706,11 +714,88 @@ export interface PdfLayoutBlock {
   text: string;
 }
 
+/** De qué libro es el PDF y en qué idioma está: lo que hace falta para leer sus escaneos (03.5b). */
+export interface PdfOcrSource {
+  documentId: string;
+  language: string | null;
+}
+
+/** Las lecturas en curso, para que la Lectura y la traducción no lean dos veces la misma página. */
+const ocrInFlight = new Map<string, Promise<OcrPageLayout | null>>();
+
+/**
+ * Lee con OCR una página escaneada —sin capa de texto y con una imagen que la cubre— y la
+ * devuelve en bloques con su caja (03.5b). Lo leído se guarda en el navegador: la segunda vez
+ * sale de ahí. `null` si la página no es un escaneo. Por decisión del dueño (5-nov), solo se
+ * llama al leer en Lectura o al traducir.
+ */
+function readScannedPage(
+  pdf: PdfDocument,
+  pageNumber: number,
+  source: PdfOcrSource,
+  onProgress?: (progress: OcrProgress) => void,
+): Promise<OcrPageLayout | null> {
+  const languages = ocrLanguages(source.language);
+  const key = `${source.documentId}:${pageNumber}:${languages}`;
+  const running = ocrInFlight.get(key);
+  if (running) return running;
+
+  const reading = (async () => {
+    const saved = await readOcrPage(source.documentId, pageNumber, languages).catch(() => null);
+    if (saved) return saved;
+    const page = await pdf.getPage(pageNumber);
+    const canvas = window.document.createElement("canvas");
+    try {
+      const content = await page.getTextContent();
+      if ((content.items as { str?: string }[]).some((item) => item.str?.trim())) return null;
+      const { OPS } = await loadPdfjs();
+      if (!(await readPageImages(page, OPS)).scan) return null;
+      // Unos 2400 px de ancho: la letra de un libro queda con el tamaño con que Tesseract lee
+      // mejor, sin dibujar de más un escaneo que no tiene más detalle.
+      const base = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: Math.min(4, Math.max(1.5, 2400 / Math.max(1, base.width))) });
+      canvas.width = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+      await page.render({ canvas, viewport }).promise;
+      const layout = ocrPageLayout(await recognizePage(canvas, source.language, onProgress), canvas.width, canvas.height);
+      await saveOcrPage(source.documentId, pageNumber, languages, layout).catch(() => undefined);
+      return layout;
+    } finally {
+      // Suelta la memoria del lienzo enseguida: son unos 20 MB por página.
+      canvas.width = 0;
+      canvas.height = 0;
+      page.cleanup();
+    }
+  })();
+  ocrInFlight.set(key, reading);
+  void reading.finally(() => ocrInFlight.delete(key)).catch(() => undefined);
+  return reading;
+}
+
+/** Un bloque leído con OCR, como los de la capa de texto, para la traducción. */
+function ocrLayoutBlock(block: OcrPageBlock, page: { height: number; width: number }): PdfLayoutBlock {
+  return {
+    box: block.box,
+    centered: block.centered,
+    fontHeight: block.lineHeight * page.height,
+    kind: block.kind,
+    lines: block.lines,
+    size: { height: block.box.height * page.height, width: block.box.width * page.width },
+    text: block.text,
+  };
+}
+
+/** Un bloque leído con OCR, como los del modo Lectura. */
+function ocrStructuredBlock(block: OcrPageBlock): StructuredDocumentBlock {
+  return block.kind === "heading" ? { kind: "heading", level: 2, text: block.text } : { kind: "paragraph", text: block.text };
+}
+
 /**
  * Una página en bloques, con su caja sobre la página. Sirve para páginas que aún no se han
- * dibujado: la traducción se prepara antes de llegar a ellas.
+ * dibujado: la traducción se prepara antes de llegar a ellas. Una página escaneada se lee con
+ * OCR si se sabe de qué libro es (03.5b): así se traduce un libro escaneado.
  */
-async function readPageLayout(pdf: PdfDocument, pageNumber: number) {
+async function readPageLayout(pdf: PdfDocument, pageNumber: number, ocr: PdfOcrSource | null = null) {
   const page = await pdf.getPage(pageNumber);
   try {
     const viewport = page.getViewport({ scale: 1 });
@@ -719,6 +804,10 @@ async function readPageLayout(pdf: PdfDocument, pageNumber: number) {
       toReflowItems(content.items as Parameters<typeof toReflowItems>[0]),
       viewport.width,
     );
+    if (blocks.length === 0 && ocr) {
+      const scanned = await readScannedPage(pdf, pageNumber, ocr);
+      return (scanned?.blocks ?? []).map((block) => ocrLayoutBlock(block, viewport));
+    }
     return blocks.map<PdfLayoutBlock>((block) => {
       const box = pageRect(viewport, block.box);
       return {
@@ -862,9 +951,16 @@ function ReadingFigure({
  * abrir bloquearía el hilo de la interfaz durante segundos en un documento de doscientas
  * páginas, y quien entra aquí quiere empezar a leer, no esperar a que termine el archivo.
  */
+/** Cómo va el OCR de una página escaneada en la Lectura (03.5b). */
+type ScannedPageState =
+  | { fraction: number; status: "reading" }
+  | { layout: OcrPageLayout; status: "ready" }
+  | { message: string; status: "failed" };
+
 function PdfReadingView({
   document: pdfDocument,
   initialPage,
+  ocr,
   onPageChange,
   pageCount,
   parallel,
@@ -873,6 +969,8 @@ function PdfReadingView({
 }: {
   document: PdfDocument;
   initialPage: number;
+  /** Para leer con OCR las páginas escaneadas que se acercan; sin esto, se ven como imagen. */
+  ocr: PdfOcrSource | null;
   onPageChange: (page: number) => void;
   pageCount: number;
   /** Original y traducción en dos columnas, bloque a bloque. */
@@ -881,6 +979,15 @@ function PdfReadingView({
   translation: ReadonlyMap<number, PdfPageTranslationView> | null;
 }) {
   const [pages, setPages] = useState<ReflowedPage[]>([]);
+  // Las páginas escaneadas leídas con OCR, y las que la persona cambió de texto a imagen o al revés.
+  const [scanned, setScanned] = useState<ReadonlyMap<number, ScannedPageState>>(() => new Map());
+  const [flipped, setFlipped] = useState<ReadonlySet<number>>(() => new Set());
+  const requestedRef = useRef(new Set<number>());
+  const ocrRef = useRef(ocr);
+  useEffect(() => {
+    ocrRef.current = ocr;
+  }, [ocr]);
+  const ocrKey = ocr ? `${ocr.documentId}:${ocrLanguages(ocr.language)}` : null;
   const [target, setTarget] = useState(() =>
     Math.min(pageCount, Math.max(reflowBatch, initialPage)),
   );
@@ -955,21 +1062,98 @@ function PdfReadingView({
     const sections = [...container.querySelectorAll<HTMLElement>("[data-page]")];
     if (sections.length === 0) return;
 
+    // Cuánto alto de pantalla ocupa cada sección, con el último aviso de cada una: cada aviso
+    // solo trae las que cambiaron.
+    const visible = new Map<Element, number>();
     const observer = new IntersectionObserver(
       (entries) => {
-        // La sección que más superficie ocupa manda, igual que en el modo original.
-        const best = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
-        const page = Number(best?.target.getAttribute("data-page"));
+        for (const entry of entries) visible.set(entry.target, entry.isIntersecting ? entry.intersectionRect.height : 0);
+        // Manda la sección que más pantalla ocupa, no la que más de sí enseña: dos páginas cortas
+        // —una escaneada leída con OCR, una portadilla— se ven enteras a la vez, y con la
+        // proporción ganaba la de abajo; la traducción empezaba entonces por ella (03.5b).
+        let best: Element | null = null;
+        for (const [section, height] of visible) {
+          if (height > 0 && (!best || height > (visible.get(best) ?? 0))) best = section;
+        }
+        const page = Number(best?.getAttribute("data-page"));
         if (Number.isFinite(page) && page > 0) onPageChange(page);
       },
-      { threshold: [0, 0.25, 0.5, 0.75] },
+      { threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] },
     );
 
     for (const section of sections) observer.observe(section);
     return () => observer.disconnect();
   }, [onPageChange, pages.length]);
+
+  // ---- Leer con OCR las páginas escaneadas que se acercan (03.5b) -----------
+  // Con otro libro u otro idioma, lo leído ya no vale: se empieza de nuevo.
+  const [scannedFor, setScannedFor] = useState(ocrKey);
+  if (scannedFor !== ocrKey) {
+    setScannedFor(ocrKey);
+    setScanned(new Map());
+    setFlipped(new Set());
+  }
+  const requestedForRef = useRef(ocrKey);
+
+  useEffect(() => {
+    const article = articleRef.current;
+    const source = ocrRef.current;
+    if (!article || !source || !ocrKey) return;
+    if (requestedForRef.current !== ocrKey) {
+      requestedForRef.current = ocrKey;
+      requestedRef.current = new Set();
+    }
+    const waiting = [...article.querySelectorAll<HTMLElement>("section[data-scanned='true']")].filter(
+      (section) => !requestedRef.current.has(Number(section.dataset.page)),
+    );
+    if (!waiting.length) return;
+
+    let active = true;
+    const update = (page: number, state: ScannedPageState) => {
+      if (active) setScanned((current) => new Map(current).set(page, state));
+    };
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const page = Number(entry.target.getAttribute("data-page"));
+          if (!page || requestedRef.current.has(page)) continue;
+          requestedRef.current.add(page);
+          observer.unobserve(entry.target);
+          update(page, { fraction: 0, status: "reading" });
+          let shown = 0;
+          readScannedPage(pdfDocument, page, source, ({ fraction, stage }) => {
+            // El avance de leer, de cinco en cinco: preparar el lector va aparte y es breve.
+            const step = stage === "reading" ? Math.floor(fraction * 20) / 20 : 0;
+            if (step === shown) return;
+            shown = step;
+            update(page, { fraction: step, status: "reading" });
+          })
+            .then((layout) =>
+              update(page, layout ? { layout, status: "ready" } : { layout: { blocks: [], confidence: 0, prose: false, words: 0 }, status: "ready" }),
+            )
+            .catch((error: unknown) => update(page, { message: error instanceof Error ? error.message : "No se pudo leer el texto de la página.", status: "failed" }));
+        }
+      },
+      // La página que se ve y las que vienen, a un par de pantallas: al llegar, ya está leída.
+      // Por arriba, sin margen: lo que quedó atrás se lee al volver a verlo, y no cambia de alto
+      // fuera de la vista.
+      { root: scrollParent(article), rootMargin: "0px 0px 1600px 0px" },
+    );
+    for (const section of waiting) observer.observe(section);
+    return () => {
+      active = false;
+      observer.disconnect();
+    };
+  }, [ocrKey, pages.length, pdfDocument]);
+
+  const flipScanned = useCallback((page: number) => {
+    setFlipped((current) => {
+      const next = new Set(current);
+      if (!next.delete(page)) next.add(page);
+      return next;
+    });
+  }, []);
 
   // ---- Llegar a la página con la que se entró ------------------------------
   useEffect(() => {
@@ -987,14 +1171,23 @@ function PdfReadingView({
         // Los bloques traducidos salen del mismo recompositor y en el mismo orden: casan uno a
         // uno. Si no casan (otra extracción), se lee el original antes que mezclar.
         const view = translation?.get(page.number);
-        const inserts = page.figures.map<BlockInsert>((figure, index) => ({
-          key: `figure-${page.number}-${index}`,
-          node: <ReadingFigure document={pdfDocument} figure={figure} order={index + 1} page={page.number} size={page.size} />,
-          slot: figure.slot,
-        }));
+        // Una página escaneada: con su texto leído por OCR, prosa se lee recompuesta y lo demás
+        // (una historieta, una lámina) se ve como imagen; «Ver la página» o «Ver el texto»
+        // cambian a lo otro (decisión del dueño, 5-nov).
+        const scan = page.figures[0]?.whole ? (scanned.get(page.number) ?? null) : undefined;
+        const read = scan?.status === "ready" && scan.layout.blocks.length > 0 ? scan.layout : null;
+        const showText = read ? read.prose !== flipped.has(page.number) : false;
+        const blocks = showText && read ? read.blocks.map(ocrStructuredBlock) : page.blocks;
+        const inserts = showText
+          ? []
+          : page.figures.map<BlockInsert>((figure, index) => ({
+              key: `figure-${page.number}-${index}`,
+              node: <ReadingFigure document={pdfDocument} figure={figure} order={index + 1} page={page.number} size={page.size} />,
+              slot: figure.slot,
+            }));
         const translated =
-          view && !view.pending && page.blocks.length > 0 && view.blocks.length === page.blocks.length
-            ? page.blocks.map<StructuredDocumentBlock>((block, index) =>
+          view && !view.pending && blocks.length > 0 && view.blocks.length === blocks.length
+            ? blocks.map<StructuredDocumentBlock>((block, index) =>
                 block.kind === "table" ? block : { ...block, text: view.blocks[index]?.translated || block.text },
               )
             : null;
@@ -1003,23 +1196,43 @@ function PdfReadingView({
           aria-label={`Página ${page.number} de ${title}`}
           className={styles.readingPage}
           data-page={page.number}
-          key={page.number}
+          data-scanned={scan !== undefined ? "true" : undefined}          key={page.number}
         >
           <header className={styles.readingPageMark}>
             <span>Página {page.number}</span>
             {page.columns > 1 ? <span>Dos columnas</span> : null}
-            {page.figures[0]?.whole ? <span>Escaneada · sin capa de texto</span> : null}
+            {scan !== undefined ? (
+              <span>
+                {read ? `Escaneada · leída con OCR · confianza ${read.confidence} %` : "Escaneada · sin capa de texto"}
+              </span>
+            ) : null}
             {translated ? <span>Traducida</span> : null}
+            {read ? (
+              <button className={styles.readingPageSwitch} onClick={() => flipScanned(page.number)} type="button">
+                {showText ? "Ver la página" : "Ver el texto"}
+              </button>
+            ) : null}
           </header>
+          {scan?.status === "reading" ? (
+            <p className={styles.readingTranslating} role="status">
+              <span aria-hidden="true" className={styles.translationSpinner} />
+              Leyendo el texto de la página con OCR, en tu equipo…
+              {scan.fraction > 0 ? ` ${Math.round(scan.fraction * 100)} %` : null}
+            </p>
+          ) : scan?.status === "failed" ? (
+            <p className={styles.readingEmpty} role="alert">
+              {scan.message}
+            </p>
+          ) : null}
           {view?.pending && !parallel ? (
             <p className={styles.readingTranslating} role="status">
               <span aria-hidden="true" className={styles.translationSpinner} />
               Traduciendo esta página…
             </p>
           ) : null}
-          {parallel && page.blocks.length > 0 ? (
+          {parallel && blocks.length > 0 ? (
             <ParallelBlocks
-              blocks={page.blocks}
+              blocks={blocks}
               anchorPrefix={`p${page.number}`}
               inserts={inserts}
               keyPrefix={`pdfr:${page.number}`}
@@ -1033,9 +1246,9 @@ function PdfReadingView({
             <div lang={view?.language}>
               <ExtractedBlocks anchorPrefix={`p${page.number}`} blocks={translated} inserts={inserts} sectionTitle={`página ${page.number}`} />
             </div>
-          ) : page.blocks.length > 0 || inserts.length > 0 ? (
+          ) : blocks.length > 0 || inserts.length > 0 ? (
             <div data-annotation-page={page.number} data-annotation-scope={`pdf-reading:${page.number}`}>
-              <ExtractedBlocks anchorPrefix={`p${page.number}`} blocks={page.blocks} inserts={inserts} sectionTitle={`página ${page.number}`} />
+              <ExtractedBlocks anchorPrefix={`p${page.number}`} blocks={blocks} inserts={inserts} sectionTitle={`página ${page.number}`} />
             </div>
           ) : (
             <p className={styles.readingEmpty}>
@@ -1067,6 +1280,7 @@ export function PdfReader({
   cropMode = false,
   initialPercent = 0,
   onCropModeChange,
+  ocr = null,
   onError,
   onOutline,
   onPageChange,
@@ -1412,10 +1626,16 @@ export function PdfReader({
   useEffect(() => {
     regionToolsRef.current = onRegionTools;
   }, [onRegionTools]);
+  // El libro y su idioma pueden llegar después que el documento (el par de la traducción):
+  // las herramientas leen siempre el último, sin rehacerse.
+  const ocrRef = useRef(ocr);
+  useEffect(() => {
+    ocrRef.current = ocr;
+  }, [ocr]);
   useEffect(() => {
     if (!loadedDocument) return;
     regionToolsRef.current?.({
-      readLayout: (page) => readPageLayout(loadedDocument, page),
+      readLayout: (page) => readPageLayout(loadedDocument, page, ocrRef.current),
       readText: (page, rect) => readRegionText(loadedDocument, page, rect),
       render: (page, rect) => renderRegionImage(loadedDocument, page, rect),
     });
@@ -1557,6 +1777,7 @@ export function PdfReader({
               document={state.document}
               initialPage={entryPage}
               key={`reading-${entryPage}`}
+              ocr={ocr}
               onPageChange={reportReadingPage}
               pageCount={pageCount}
               parallel={parallel && translation !== null}

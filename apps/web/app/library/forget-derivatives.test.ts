@@ -69,6 +69,10 @@ describe("olvidar lo derivado de un libro al desvincularlo (03.3)", () => {
       { documentId: "carpeta-2", status: "not-found" },
       { cover: { src: "data:" }, documentId: "otro", status: "found" },
     ]);
+    const ocrPage = (documentId: string, page: number) => ({ documentId, id: `${documentId}:${page}`, page });
+    await seed("pliegue-ocr", 1, "pages", "id", [ocrPage("carpeta-2", 1), ocrPage("carpeta-2", 2), ocrPage("otro", 1)], [
+      ["byDocument", "documentId"],
+    ]);
 
     const ids = ["carpeta-1", "carpeta-2", "sin-nada"];
     // El interruptor del aviso sale porque hay traducciones, con cuántas son.
@@ -79,26 +83,31 @@ describe("olvidar lo derivado de un libro al desvincularlo (03.3)", () => {
 
     // Por defecto, las traducciones se conservan (decisión del dueño, 4-nov).
     const kept = await forgetDocumentDerivatives(ids);
-    expect(kept).toEqual({ catalogs: 2, covers: 1, documents: 3, translations: 0, translationsKept: 3 });
+    expect(kept).toEqual({ catalogs: 2, covers: 1, documents: 3, ocrPages: 2, translations: 0, translationsKept: 3 });
     expect(await countAll("pliegue-document-catalog", "catalogs")).toBe(1);
     expect(await countAll("pliegue-translations", "units")).toBe(4);
     expect(await countAll("pliegue-covers", "covers")).toBe(1);
+    // Lo leído con OCR se vuelve a leer si hace falta: se va siempre, como la ficha (03.5b).
+    expect(await countAll("pliegue-ocr", "pages")).toBe(1);
 
     // Con el interruptor encendido, se van también, y solo las de esos libros.
     const removed = await forgetDocumentDerivatives(ids, { translations: true });
-    expect(removed).toEqual({ catalogs: 0, covers: 0, documents: 3, translations: 3, translationsKept: 0 });
+    expect(removed).toEqual({ catalogs: 0, covers: 0, documents: 3, ocrPages: 0, translations: 3, translationsKept: 0 });
     expect(await countAll("pliegue-translations", "units")).toBe(1);
     expect(await translationsChoice(ids)).toBeNull();
   });
 
   it("dice en una frase qué se borró y qué se conserva, sin mencionar lo que no había", () => {
-    expect(describeForgotten({ catalogs: 8, covers: 3, documents: 12, translations: 340, translationsKept: 0 })).toBe(
+    expect(describeForgotten({ catalogs: 8, covers: 3, documents: 12, ocrPages: 0, translations: 340, translationsKept: 0 })).toBe(
       "Se borraron el índice de 12 documentos, 8 fichas del catálogo, 340 páginas traducidas y 3 portadas de Open Library.",
     );
-    expect(describeForgotten({ catalogs: 0, covers: 0, documents: 1, translations: 0, translationsKept: 0 })).toBe(
+    expect(describeForgotten({ catalogs: 0, covers: 0, documents: 1, ocrPages: 0, translations: 0, translationsKept: 0 })).toBe(
       "Se borró el índice de 1 documento.",
     );
-    expect(describeForgotten({ catalogs: 1, covers: 0, documents: 1, translations: 0, translationsKept: 25 })).toBe(
+    expect(describeForgotten({ catalogs: 0, covers: 0, documents: 1, ocrPages: 42, translations: 0, translationsKept: 0 })).toBe(
+      "Se borraron el índice de 1 documento y 42 páginas leídas con OCR.",
+    );
+    expect(describeForgotten({ catalogs: 1, covers: 0, documents: 1, ocrPages: 0, translations: 0, translationsKept: 25 })).toBe(
       "Se borraron el índice de 1 documento y 1 ficha del catálogo. Se conservan 25 páginas traducidas.",
     );
   });
