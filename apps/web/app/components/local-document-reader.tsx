@@ -1281,7 +1281,7 @@ export function LocalReaderShell({
       setSnippet({
         anchor: capture.rect,
         // Como nota de una marca en ese trozo, si se puede marcar (dentro de una página).
-        onSaveNote: target ? (note) => void createAnnotation(target, "amber", note) : null,
+        onSaveNote: target ? (note: string) => void createAnnotation(target, "amber", note) : null,
         text: capture.quote,
       });
       return;
@@ -1315,12 +1315,14 @@ export function LocalReaderShell({
     }
     if (action.kind === "translate") {
       void (async () => {
-        const quote = (await regionToolsRef.current?.readText(region.page, region.rect).catch(() => "")) ?? "";
+        const tools = regionToolsRef.current;
+        const quote = (await tools?.readText(region.page, region.rect).catch(() => "")) ?? "";
         setSnippet({
           anchor: region.anchor,
-          onSaveNote: quote
-            ? (note) => void createAnnotation({ kind: "region", page: region.page, quote, rect: region.rect }, "amber", note)
-            : null,
+          // Sin capa de texto (una imagen, un escaneo), la zona se dibuja y se lee con OCR (03.5).
+          image: tools ? () => tools.render(region.page, region.rect) : undefined,
+          onSaveNote: (note: string, text: string) =>
+            void createAnnotation({ kind: "region", page: region.page, quote: text, rect: region.rect }, "amber", note),
           text: quote,
         });
       })();

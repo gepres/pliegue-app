@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "pdfjs-assets": "node scripts/copy-pdfjs-assets.mjs",
-    "dev": "pnpm pdfjs-assets && next dev",
-    "build": "pnpm pdfjs-assets && next build",
+    "dev": "pnpm pdfjs-assets && pnpm ocr-assets && next dev",
+    "build": "pnpm pdfjs-assets && pnpm ocr-assets && next build",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "ocr-assets": "node scripts/copy-tesseract-assets.mjs"
   },
   "dependencies": {
     "@fontsource/cormorant-garamond": "5.3.0",
@@ -23,9 +24,16 @@
     "next": "16.2.12",
     "pdfjs-dist": "6.2.108",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "tesseract.js": "7.0.0"
   },
   "devDependencies": {
+    "@tesseract.js-data/deu": "1.0.0",
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/fra": "1.0.0",
+    "@tesseract.js-data/ita": "1.0.0",
+    "@tesseract.js-data/por": "1.0.0",
+    "@tesseract.js-data/spa": "1.0.0",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.3",
     "fake-indexeddb": "6.2.7",

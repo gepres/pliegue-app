@@ -225,6 +225,16 @@
   white-space: pre-line;
 }
 
+/* De dónde sale el texto cuando lo leyó el OCR, y con qué confianza: para revisarlo (03.5). */
+.snippetOrigin {
+  align-items: center;
+  color: var(--pliegue-color-text-secondary);
+  display: flex;
+  font-size: 0.75rem;
+  gap: 6px;
+  margin: -4px 0 0;
+}
+
 .snippetStatus {
   align-items: center;
   color: var(--pliegue-color-text-secondary);
