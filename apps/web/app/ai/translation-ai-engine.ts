@@ -1,7 +1,7 @@
 import type { TranslationPair } from "../library/translation";
 import type { OpenTranslator, TranslationEngine } from "../library/translation-engine";
 import { translationProviderOf, type AiSettings } from "./ai-settings";
-import type { TranslationProviderChoice } from "./translation-options";
+import { translationNeedsKey, unreachableServiceMessage, type TranslationProviderChoice } from "./translation-options";
 import { classifyProviderFailure } from "./provider-error";
 import {
   batchPassages,
@@ -99,9 +99,7 @@ function libreTranslateRequest(settings: AiSettings, apiKey: string, pair: Trans
       });
     } catch (error) {
       if (signal?.aborted) throw error;
-      throw new Error(
-        `No se pudo conectar con LibreTranslate en ${settings.libreTranslateUrl}. Revisa la dirección, que el servidor esté en marcha y que permita esta web.`,
-      );
+      throw new Error(unreachableServiceMessage("LibreTranslate", settings.libreTranslateUrl));
     }
     const payload = (await readJson(response)) as { error?: unknown; translatedText?: unknown };
     if (!response.ok) {
@@ -203,7 +201,7 @@ export function createAiTranslationEngine(settings: AiSettings, apiKey: string):
   }
   const model = translationModelOf(settings, provider);
   // Por el servidor de Pliegue y con clave obligatoria; Ollama y LibreTranslate, desde el navegador.
-  const hosted = provider !== "ollama" && provider !== "libretranslate";
+  const hosted = translationNeedsKey(provider);
 
   return {
     async availability(pair) {
