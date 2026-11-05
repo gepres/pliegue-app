@@ -1,4 +1,5 @@
 import { languageName } from "../library/translation";
+import { glossaryInstructions, type GlossaryEntry } from "../library/translation-glossary";
 
 /**
  * Traducir con la IA del usuario («Tu IA»): lo que se le pide y cómo se comprueba lo que
@@ -40,7 +41,8 @@ function named(code: string) {
   return name === code ? code : `${name} (${code})`;
 }
 
-export function translationSystemPrompt(source: string, target: string) {
+export function translationSystemPrompt(source: string, target: string, glossary: readonly GlossaryEntry[] = []) {
+  const terms = glossaryInstructions(glossary);
   return [
     `Eres un traductor literario. Traduces un libro del ${named(source)} al ${named(target)}, unos pasajes cada vez.`,
     "Recibes un JSON con `passages`: devuelve en `translations` exactamente una traducción por pasaje, en el mismo orden. Nunca juntes, partas ni omitas pasajes.",
@@ -48,6 +50,7 @@ export function translationSystemPrompt(source: string, target: string) {
     "No resumas, no expliques, no añadas notas ni comentarios: solo la traducción.",
     "Respeta los saltos de línea de cada pasaje (listas, poemas, entradas de índice) y deja igual los números, las referencias de página, las siglas y los nombres propios, salvo que tengan una traducción establecida.",
     "Si un pasaje ya está en el idioma de destino o no tiene nada que traducir, devuélvelo tal cual.",
+    ...(terms ? [terms] : []),
   ].join("\n");
 }
 

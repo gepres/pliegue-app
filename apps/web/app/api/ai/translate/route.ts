@@ -10,6 +10,7 @@ import {
   requestStructuredJson,
 } from "../../../ai/hosted-json";
 import { classifyProviderFailure } from "../../../ai/provider-error";
+import { cleanGlossary } from "../../../library/translation-glossary";
 import {
   createTranslationPrompt,
   isLanguageCode,
@@ -31,6 +32,8 @@ import {
  */
 
 interface TranslateRouteRequest {
+  /** Términos del glosario del libro que aparecen en el lote (05.5); solo para las IA. */
+  glossary?: unknown;
   model?: string;
   passages?: unknown;
   provider?: KeyProvider;
@@ -165,7 +168,7 @@ export async function POST(request: Request) {
       provider: body.provider as Exclude<KeyProvider, "azure" | "deepl" | "libretranslate">,
       schema: translationJsonSchema,
       schemaName: "pliegue_translation",
-      system: translationSystemPrompt(body.source, body.target),
+      system: translationSystemPrompt(body.source, body.target, cleanGlossary(body.glossary)),
       timeoutMs: 120_000,
       user: createTranslationPrompt(passages),
     });

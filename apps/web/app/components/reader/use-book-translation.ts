@@ -9,6 +9,7 @@ import {
   type SourceUnit,
   type TranslationSnapshot,
 } from "../../library/translation-session";
+import { useBookGlossary } from "../../library/translation-glossary-store";
 import {
   clearTranslation,
   listTranslatedUnits,
@@ -147,11 +148,24 @@ export function useBookTranslation<Block extends { text: string }>({
   const loadRef = useRef(loadUnit);
   const idRef = useRef(unitId);
   const attemptRef = useRef(0);
+  // El glosario del libro hacia el idioma que se traduce (05.5): la sesión lo lee al traducir
+  // cada página, y si cambia, repasa lo traducido.
+  const glossary = useBookGlossary(documentId, pair?.target ?? null);
+  const glossaryRef = useRef(glossary.entries);
+  const glossarySignature = glossary.entries.map((entry) => `${entry.source}=${entry.target}`).join("|");
+  const signatureRef = useRef(glossarySignature);
 
   useEffect(() => {
     loadRef.current = loadUnit;
     idRef.current = unitId;
+    glossaryRef.current = glossary.entries;
   });
+
+  useEffect(() => {
+    if (signatureRef.current === glossarySignature) return;
+    signatureRef.current = glossarySignature;
+    session?.refreshGlossary();
+  }, [glossarySignature, session]);
 
   useEffect(() => {
     session?.setCurrent(currentUnit);
@@ -192,6 +206,7 @@ export function useBookTranslation<Block extends { text: string }>({
         }
         setSession(
           new TranslationSession<Block>({
+            glossary: () => glossaryRef.current,
             loadUnit: (unit) => loadRef.current(unit),
             pagesAhead,
             storage: {

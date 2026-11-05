@@ -23,6 +23,14 @@
   visibility: hidden;
 }
 
+/* Con menos movimiento pedido por el sistema, aparecen sin animarse. */
+@media (prefers-reduced-motion: reduce) {
+  .toolbar,
+  .card {
+    animation: none;
+  }
+}
+
 @keyframes float-in {
   from {
     opacity: 0;
@@ -197,6 +205,68 @@
 .cardActions {
   display: flex;
   flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* ---- Traducción de una selección o de una zona (05.5) ---------------------------------- */
+
+.snippet {
+  width: min(380px, calc(100vw - 16px));
+}
+
+.snippetText {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1rem;
+  line-height: 1.55;
+  margin: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+  white-space: pre-line;
+}
+
+.snippetStatus {
+  align-items: center;
+  color: var(--pliegue-color-text-secondary);
+  display: flex;
+  font-size: 0.875rem;
+  gap: 8px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.snippetSpinner {
+  animation: snippet-spin 900ms linear infinite;
+  border: 2px solid color-mix(in srgb, var(--pliegue-color-text-secondary) 30%, transparent);
+  border-radius: 50%;
+  border-top-color: var(--pliegue-color-action-primary);
+  flex: none;
+  height: 14px;
+  width: 14px;
+}
+
+@keyframes snippet-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .snippetSpinner {
+    animation: none;
+  }
+}
+
+.snippetGlossary {
+  background: var(--pliegue-color-bg-subtle);
+  border-radius: var(--pliegue-radius-sm);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.snippetGlossaryActions {
+  display: flex;
   gap: 6px;
   justify-content: flex-end;
 }

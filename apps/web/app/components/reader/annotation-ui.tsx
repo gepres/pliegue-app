@@ -20,14 +20,26 @@ export type SelectionAction =
   | { color: HighlightColor; kind: "highlight" }
   | { kind: "copy" }
   | { kind: "note" }
-  | { kind: "postcard" };
+  | { kind: "postcard" }
+  | { kind: "translate" };
 
 /**
  * Coloca un elemento flotante junto a un rectángulo de la pantalla: encima si cabe; debajo
  * si no, o si la pantalla es táctil, porque ahí el menú nativo de la selección sale arriba.
  */
-function usePlacement(elementRef: RefObject<HTMLElement | null>, anchor: DOMRect | null, preferBelow = false) {
+export function usePlacement(elementRef: RefObject<HTMLElement | null>, anchor: DOMRect | null, preferBelow = false) {
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+  // Si crece después de colocarse —la tarjeta de la traducción, al llegar el texto—, se vuelve a
+  // colocar: si no, se salía por abajo.
+  const [height, setHeight] = useState(0);
+
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => setHeight(Math.round(element.getBoundingClientRect().height)));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [anchor, elementRef]);
 
   useLayoutEffect(() => {
     const element = elementRef.current;
@@ -45,7 +57,7 @@ function usePlacement(elementRef: RefObject<HTMLElement | null>, anchor: DOMRect
       : above;
     const left = Math.min(window.innerWidth - width - 8, Math.max(8, anchor.left + anchor.width / 2 - width / 2));
     setPosition({ left, top: Math.max(8, top) });
-  }, [anchor, elementRef, preferBelow]);
+  }, [anchor, elementRef, height, preferBelow]);
 
   return position;
 }
@@ -191,6 +203,10 @@ export function SelectionToolbar({
       ) : (
         <span className={styles.toolbarHint}>Para resaltar, elige dentro de una página</span>
       )}
+      <button className={styles.toolbarButton} onClick={() => act({ kind: "translate" })} type="button">
+        <Icon name="translate" size={18} />
+        <span>Traducir</span>
+      </button>
       <button aria-label="Copiar" className={styles.toolbarButton} onClick={() => act({ kind: "copy" })} title="Copiar" type="button">
         <Icon name="copy" size={18} />
       </button>
@@ -304,7 +320,12 @@ export function AnnotationCard({
 
 // ---- Barra del recorte ----------------------------------------------------------------------
 
-export type RegionAction = { color: HighlightColor; kind: "highlight" } | { kind: "cancel" } | { kind: "note" } | { kind: "postcard" };
+export type RegionAction =
+  | { color: HighlightColor; kind: "highlight" }
+  | { kind: "cancel" }
+  | { kind: "note" }
+  | { kind: "postcard" }
+  | { kind: "translate" };
 
 /** Lo que se hace con la zona recién recortada de una página. */
 export function RegionToolbar({ anchor, onAction }: { anchor: DOMRect; onAction: (action: RegionAction) => void }) {
@@ -333,6 +354,10 @@ export function RegionToolbar({ anchor, onAction }: { anchor: DOMRect; onAction:
       <button className={styles.toolbarButton} onClick={() => onAction({ kind: "note" })} type="button">
         <Icon name="note" size={18} />
         <span>Nota</span>
+      </button>
+      <button className={styles.toolbarButton} onClick={() => onAction({ kind: "translate" })} type="button">
+        <Icon name="translate" size={18} />
+        <span>Traducir</span>
       </button>
       <button aria-label="Descartar el recorte" className={styles.toolbarButton} onClick={() => onAction({ kind: "cancel" })} title="Descartar" type="button">
         <Icon name="close" size={18} />

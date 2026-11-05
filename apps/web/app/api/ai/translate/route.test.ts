@@ -190,3 +190,29 @@ describe("ruta de traducción con DeepL (05.5)", () => {
     expect(anything).not.toHaveBeenCalled();
   });
 });
+
+describe("el glosario del libro en las instrucciones (05.5)", () => {
+  it("lo añade a las instrucciones de la IA, limpio, y descarta lo que no es un término", async () => {
+    const providerFetch = vi.fn().mockResolvedValue(
+      Response.json({ candidates: [{ content: { parts: [{ text: translations }] } }], usageMetadata: {} }),
+    );
+    vi.stubGlobal("fetch", providerFetch);
+    await POST(
+      request(
+        {
+          glossary: [{ source: " Naacal ", target: "naacal" }, { source: "", target: "x" }, "basura"],
+          model: "gemini-3.5-flash-lite",
+          provider: "gemini",
+        },
+        geminiKey,
+      ),
+    );
+    const body = JSON.parse((providerFetch.mock.calls[0] as [string, RequestInit])[1].body as string) as {
+      systemInstruction: { parts: { text: string }[] };
+    };
+    const system = body.systemInstruction.parts[0]!.text;
+    expect(system).toContain("Usa siempre estas traducciones para estos términos");
+    expect(system).toContain("- «Naacal» → «naacal»");
+    expect(system).not.toContain("basura");
+  });
+});
