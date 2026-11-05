@@ -8,9 +8,19 @@ import type { TranslatedBlock } from "./translation";
  * navegador.
  */
 const databaseName = "pliegue-translations";
-const databaseVersion = 1;
+/** 2: el índice por fecha, para borrar primero lo más antiguo cuando se llena (05.6). */
+const databaseVersion = 2;
 const storeName = "units";
 const byTranslation = "byTranslation";
+const byTranslatedAt = "byTranslatedAt";
+
+/**
+ * Cuántas páginas o secciones traducidas se guardan como mucho. Cada una ocupa 2-3 KB (solo el
+ * texto traducido), así que el tope ronda los 12 MB: antes no había ninguno y la caché crecía
+ * con cada libro traducido. Al pasarlo se borra lo más antiguo hasta bajar al 90 %, nunca lo del
+ * libro que se está leyendo; si se vuelve a una página borrada, se traduce de nuevo.
+ */
+export const translationUnitLimit = 5000;
 
 export interface TranslatedUnitRecord {
   blocks: TranslatedBlock[];
@@ -49,9 +59,15 @@ function openDatabase() {
     request.addEventListener(
       "upgradeneeded",
       () => {
-        if (!request.result.objectStoreNames.contains(storeName)) {
-          const store = request.result.createObjectStore(storeName, { keyPath: "key" });
+        const store = request.result.objectStoreNames.contains(storeName)
+          ? request.transaction!.objectStore(storeName)
+          : request.result.createObjectStore(storeName, { keyPath: "key" });
+        if (!store.indexNames.contains(byTranslation)) {
           store.createIndex(byTranslation, ["documentId", "pairId"], { unique: false });
+        }
+        // Las filas de la versión 1 ya traen `translatedAt`: el índice nuevo las recoge sin migrar.
+        if (!store.indexNames.contains(byTranslatedAt)) {
+          store.createIndex(byTranslatedAt, "translatedAt", { unique: false });
         }
       },
       { once: true },
@@ -88,6 +104,41 @@ export async function readTranslatedUnit(documentId: string, pairId: string, uni
 
 export async function writeTranslatedUnit(record: TranslatedUnitRecord) {
   await withStore("readwrite", (store) => store.put(record));
+}
+
+/**
+ * Si hay más de `limit` unidades guardadas, borra las más antiguas hasta bajar al 90 %, salvo
+ * las del documento `keepDocumentId`. Devuelve cuántas borró. Contar es barato, así que puede
+ * llamarse tras cada escritura: solo recorre filas cuando de verdad se ha llenado.
+ */
+export async function trimTranslations(keepDocumentId: string, limit = translationUnitLimit) {
+  const database = await openDatabase();
+  try {
+    const transaction = database.transaction(storeName, "readwrite");
+    const store = transaction.objectStore(storeName);
+    let removed = 0;
+    // Todo dentro de los callbacks de la transacción: un `await` entre medias podría dejarla
+    // cerrar antes de terminar de borrar.
+    const counting = store.count();
+    counting.addEventListener("success", () => {
+      const excess = counting.result - Math.floor(limit * 0.9);
+      if (counting.result <= limit || excess <= 0) return;
+      const cursor = store.index(byTranslatedAt).openCursor();
+      cursor.addEventListener("success", () => {
+        const current = cursor.result;
+        if (!current || removed >= excess) return;
+        if ((current.value as TranslatedUnitRecord).documentId !== keepDocumentId) {
+          current.delete();
+          removed += 1;
+        }
+        current.continue();
+      });
+    });
+    await transactionComplete(transaction);
+    return removed;
+  } finally {
+    database.close();
+  }
 }
 
 /** Qué unidades de un documento están ya traducidas con este motor y par de idiomas. */
