@@ -1038,8 +1038,10 @@ export function LocalReaderShell({
       needsKey: translationNeedsKey(aiProvider) && !aiApiKey,
       onDevice: translationEngines.ai.onDevice,
       provider: translationProviderNames[aiProvider],
+      server: aiProvider === "libretranslate" ? aiSettings.libreTranslateUrl : null,
+      withKey: Boolean(aiApiKey),
     }),
-    [aiApiKey, aiProvider, translationEngines.ai],
+    [aiApiKey, aiProvider, aiSettings.libreTranslateUrl, translationEngines.ai],
   );
   const translation = useBookTranslation<TranslationSourceBlock>({
     currentUnit: isPdf ? (pages?.current ?? 1) : currentSection,
