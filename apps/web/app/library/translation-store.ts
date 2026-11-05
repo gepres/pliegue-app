@@ -130,7 +130,7 @@ export async function clearTranslation(documentId: string, pairId: string) {
 }
 
 /** Todas las traducciones de un documento, con cualquier motor y par de idiomas. */
-const documentRange = (documentId: string) => IDBKeyRange.bound([documentId, ""], [documentId, "￿"]);
+const documentRange = (documentId: string) => IDBKeyRange.bound([documentId, ""], [documentId, "\uffff"]);
 
 /** Cuántas páginas o secciones traducidas tienen estos documentos, con cualquier motor. */
 export async function countDocumentsTranslations(documentIds: readonly string[]) {
