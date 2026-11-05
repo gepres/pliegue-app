@@ -17,7 +17,8 @@ export type StructuredDocumentFormat = Extract<
 
 export type StructuredDocumentBlock =
   | { kind: "heading"; level: number; text: string }
-  | { kind: "paragraph"; text: string }
+  /** `caption`: el pie de la figura que va justo antes (03.5b), con su propio estilo. */
+  | { caption?: boolean; kind: "paragraph"; text: string }
   | { kind: "table"; rows: string[][] };
 
 export interface StructuredDocumentSection {
