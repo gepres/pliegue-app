@@ -1,5 +1,7 @@
+import { Fragment } from "react";
+
 import type { StructuredDocumentBlock } from "../../library/structured-document-extractor";
-import { ExtractedBlock } from "../extracted-blocks";
+import { ExtractedBlock, insertsAt, type BlockInsert } from "../extracted-blocks";
 import extracted from "../extracted-blocks.module.css";
 import styles from "./parallel-blocks.module.css";
 
@@ -15,6 +17,7 @@ export function ParallelBlocks({
   anchorOffset = 0,
   anchorPrefix,
   blocks,
+  inserts,
   keyPrefix,
   language,
   pending,
@@ -26,6 +29,8 @@ export function ParallelBlocks({
   anchorPrefix?: string | undefined;
   anchorOffset?: number;
   blocks: readonly StructuredDocumentBlock[];
+  /** Ilustraciones del original, en su sitio entre los bloques de la columna de la izquierda. */
+  inserts?: readonly BlockInsert[] | undefined;
   /** Prefijo de la clave que une cada bloque con su traducción: `pdfr:12`, `sec:cap-3`. */
   keyPrefix: string;
   /** Idioma de la traducción, para el atributo `lang`. */
@@ -38,7 +43,10 @@ export function ParallelBlocks({
   /** Un bloque traducido por cada bloque del original; `null` mientras no la hay. */
   translations: readonly StructuredDocumentBlock[] | null;
 }) {
-  const rows = Math.max(1, blocks.length);
+  // Cada ilustración ocupa una fila más de la rejilla: en la columna de la traducción le
+  // corresponde un hueco del mismo alto, para que lo que sigue no se descuadre.
+  const rows = Math.max(1, blocks.length + (inserts?.length ?? 0));
+  const gaps = inserts?.map((insert) => ({ ...insert, node: <div aria-hidden="true" className={styles.cell} /> }));
   const span = { gridRow: `1 / span ${rows}` };
 
   return (
@@ -50,14 +58,18 @@ export function ParallelBlocks({
         style={span}
       >
         {blocks.map((block, index) => (
-          <div className={styles.cell} key={`source-${index}`} {...linkProps(block, `${keyPrefix}:${index}`, "source")}>
-            <ExtractedBlock
-              anchor={anchorPrefix ? `${anchorPrefix}:${index + anchorOffset}` : undefined}
-              block={block}
-              sectionTitle={sectionTitle}
-            />
-          </div>
+          <Fragment key={`source-${index}`}>
+            {insertsAt(inserts, index, blocks.length)}
+            <div className={styles.cell} {...linkProps(block, `${keyPrefix}:${index}`, "source")}>
+              <ExtractedBlock
+                anchor={anchorPrefix ? `${anchorPrefix}:${index + anchorOffset}` : undefined}
+                block={block}
+                sectionTitle={sectionTitle}
+              />
+            </div>
+          </Fragment>
         ))}
+        {insertsAt(inserts, blocks.length, blocks.length)}
       </div>
       <div
         className={`${extracted.blocks} ${styles.column} ${styles.translation}`}
@@ -67,21 +79,27 @@ export function ParallelBlocks({
       >
         {blocks.map((block, index) => {
           const translated = translations?.[index];
-          return translated ? (
-            <div className={styles.cell} key={`target-${index}`} {...linkProps(translated, `${keyPrefix}:${index}`, "target")}>
-              <ExtractedBlock block={translated} sectionTitle={sectionTitle} />
-            </div>
-          ) : (
-            <div className={styles.cell} key={`target-${index}`}>
-              {index === 0 && pending ? (
-                <p className={styles.pending} role="status">
-                  <span aria-hidden="true" className={styles.spinner} />
-                  Traduciendo…
-                </p>
-              ) : null}
-            </div>
+          return (
+            <Fragment key={`target-${index}`}>
+              {insertsAt(gaps, index, blocks.length)}
+              {translated ? (
+                <div className={styles.cell} {...linkProps(translated, `${keyPrefix}:${index}`, "target")}>
+                  <ExtractedBlock block={translated} sectionTitle={sectionTitle} />
+                </div>
+              ) : (
+                <div className={styles.cell}>
+                  {index === 0 && pending ? (
+                    <p className={styles.pending} role="status">
+                      <span aria-hidden="true" className={styles.spinner} />
+                      Traduciendo…
+                    </p>
+                  ) : null}
+                </div>
+              )}
+            </Fragment>
           );
         })}
+        {insertsAt(gaps, blocks.length, blocks.length)}
       </div>
     </div>
   );

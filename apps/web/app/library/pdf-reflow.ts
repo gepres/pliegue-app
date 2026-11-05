@@ -488,12 +488,12 @@ export function reflowPage(
   pageWidth: number,
 ): ReflowResult {
   const { blocks, columns } = layoutPage(items, pageWidth);
-  return {
-    blocks: blocks.map<StructuredDocumentBlock>((block) =>
-      block.kind === "heading" ? { kind: "heading", level: block.level, text: block.text } : { kind: "paragraph", text: block.text },
-    ),
-    columns,
-  };
+  return { blocks: blocks.map(structuredBlock), columns };
+}
+
+/** Un bloque de la página como lo pinta el modo Lectura, sin su caja. */
+export function structuredBlock(block: LayoutBlock): StructuredDocumentBlock {
+  return block.kind === "heading" ? { kind: "heading", level: block.level, text: block.text } : { kind: "paragraph", text: block.text };
 }
 
 /**

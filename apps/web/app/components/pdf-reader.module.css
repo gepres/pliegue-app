@@ -107,14 +107,17 @@
    «Con tema oscuro» sigue al tema efectivo: el elegido o, en automático, el del sistema. */
 :global([data-pdf-night="always"]) .canvas,
 :global([data-pdf-night="always"]) .translationLayer,
+:global([data-pdf-night="always"]) .readingFigure img,
 :global(:root[data-theme="dark"] [data-pdf-night="dark"]) .canvas,
-:global(:root[data-theme="dark"] [data-pdf-night="dark"]) .translationLayer {
+:global(:root[data-theme="dark"] [data-pdf-night="dark"]) .translationLayer,
+:global(:root[data-theme="dark"] [data-pdf-night="dark"]) .readingFigure img {
   filter: invert(0.9) hue-rotate(180deg);
 }
 
 @media (prefers-color-scheme: dark) {
   :global(:root:not([data-theme]) [data-pdf-night="dark"]) .canvas,
-  :global(:root:not([data-theme]) [data-pdf-night="dark"]) .translationLayer {
+  :global(:root:not([data-theme]) [data-pdf-night="dark"]) .translationLayer,
+  :global(:root:not([data-theme]) [data-pdf-night="dark"]) .readingFigure img {
     filter: invert(0.9) hue-rotate(180deg);
   }
 }
@@ -221,6 +224,27 @@
 
 .readingPage:first-child .readingPageMark {
   border-top: 0;
+}
+
+/* Una ilustración del original entre los párrafos recompuestos (05.6). Antes de dibujarse
+   ocupa ya su hueco, con la proporción de la imagen, para que el texto no salte. */
+.readingFigure {
+  background: var(--pliegue-color-bg-subtle);
+  border-radius: var(--pliegue-radius-sm);
+  margin: var(--pliegue-spacing-lg) auto;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.readingFigure[data-ready="true"] {
+  background: transparent;
+}
+
+.readingFigure img {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
 }
 
 .readingEmpty {
