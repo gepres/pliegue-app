@@ -10,6 +10,7 @@ import { translationProviderOf } from "../ai/ai-settings";
 import { useAiSettings } from "../ai/ai-settings-store";
 import { useDocumentCatalogs } from "../ai/document-catalog-store";
 import { createAiTranslationEngine, translationProviderNames } from "../ai/translation-ai-engine";
+import { translationNeedsKey } from "../ai/translation-options";
 import {
   clearDocumentAnnotations,
   currentAnnotation,
@@ -1033,11 +1034,14 @@ export function LocalReaderShell({
     () => ({
       configured: aiProvider !== "browser",
       label: translationEngines.ai.label,
-      needsKey: aiProvider !== "ollama" && aiProvider !== "browser" && !aiApiKey,
+      // La clave de LibreTranslate es opcional: sin ella, un servidor propio traduce igual.
+      needsKey: translationNeedsKey(aiProvider) && !aiApiKey,
       onDevice: translationEngines.ai.onDevice,
       provider: translationProviderNames[aiProvider],
+      server: aiProvider === "libretranslate" ? aiSettings.libreTranslateUrl : null,
+      withKey: Boolean(aiApiKey),
     }),
-    [aiApiKey, aiProvider, translationEngines.ai],
+    [aiApiKey, aiProvider, aiSettings.libreTranslateUrl, translationEngines.ai],
   );
   const translation = useBookTranslation<TranslationSourceBlock>({
     currentUnit: isPdf ? (pages?.current ?? 1) : currentSection,

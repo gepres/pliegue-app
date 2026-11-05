@@ -37,6 +37,34 @@ export const translationProviderChoices: readonly TranslationProviderChoice[] = 
   "ollama",
 ];
 
+/**
+ * Los traductores que no pueden empezar sin clave en esta sesión. El del navegador y Ollama no
+ * usan; en LibreTranslate es opcional, porque un servidor propio no la suele pedir.
+ */
+export function translationNeedsKey(provider: TranslationProviderChoice) {
+  return provider !== "browser" && provider !== "ollama" && provider !== "libretranslate";
+}
+
+/**
+ * Por qué el navegador no llegó a un servicio. Desde una web segura (https), el navegador
+ * bloquea las peticiones a una dirección http que no sea el propio equipo (contenido mixto): un
+ * LibreTranslate en la red de casa por http:// nunca responde, y conviene decirlo así.
+ */
+export function unreachableServiceMessage(service: string, endpoint: string, pageProtocol = globalThis.location?.protocol) {
+  let url: URL | null = null;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    url = null;
+  }
+  const loopback =
+    url !== null && (["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) || url.hostname.endsWith(".localhost"));
+  if (pageProtocol === "https:" && url?.protocol === "http:" && !loopback) {
+    return `El navegador no deja que esta web, que va por https, llame a ${service} en ${endpoint}. Ponlo tras https:// o en este mismo equipo (http://localhost).`;
+  }
+  return `No se pudo conectar con ${service} en ${endpoint}. Revisa la dirección, que el servidor esté en marcha y que permita esta web.`;
+}
+
 /** Un libro de unas 90.000 palabras: la medida con la que se compara. */
 export const bookCharacters = 550_000;
 
