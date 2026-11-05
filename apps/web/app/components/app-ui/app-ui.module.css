@@ -737,6 +737,13 @@
   padding-left: 1.15rem;
 }
 
+/* Lo opcional que se puede hacer a la vez, apagado de partida (03.3). */
+.confirmChoice {
+  background: var(--pliegue-color-bg-subtle);
+  border-radius: var(--pliegue-radius-sm);
+  padding: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
+}
+
 .confirmBody > .confirmNote {
   border-top: 1px solid var(--pliegue-color-border-default);
   font-size: 0.8125rem;

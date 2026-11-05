@@ -32,6 +32,7 @@ import {
 } from "../library/drive-library-store";
 import { copyGroupOf, copyReleaseNote, releaseCopies, useCopyGroups } from "../library/book-copies-store";
 import { describeForgotten, forgetDocumentDerivatives } from "../library/forget-derivatives";
+import { confirmForgetting } from "./library/confirm-forgetting";
 import { formatFileSize } from "../library/local-file-metadata";
 import { clearReadingProgress } from "../library/reading-progress-store";
 import { confirmAction } from "./app-ui/confirm-dialog";
@@ -66,8 +67,8 @@ function describeFolderResult(result: DriveFolderResult) {
 }
 
 /** Olvida documentos de Drive: la referencia, su índice, su ficha IA y dónde se quedó la lectura. */
-async function forgetDriveDocuments(documentIds: readonly string[]) {
-  const forgotten = await forgetDocumentDerivatives(documentIds);
+async function forgetDriveDocuments(documentIds: readonly string[], translations: boolean) {
+  const forgotten = await forgetDocumentDerivatives(documentIds, { translations });
   for (const documentId of documentIds) clearReadingProgress(documentId);
   return forgotten;
 }
@@ -222,26 +223,26 @@ export function DriveSourcesPanel() {
 
   async function unlinkFolder(source: DriveFolderSource) {
     const documentIds = drive.documents.filter((document) => document.sourceId === source.id).map((document) => document.id);
-    const confirmed = await confirmAction({
+    const { confirmed, translations } = await confirmForgetting({
       confirmLabel: "Desvincular carpeta",
       description: "Se eliminarán de Pliegue:",
       details: [
         `el índice de ${plural(documentIds.length, "documento")}`,
         "sus fichas del catálogo IA",
-        "sus traducciones guardadas y las portadas traídas de Open Library",
+        "las portadas traídas de Open Library",
         "dónde se quedó la lectura",
       ],
       icon: "cloud",
       note: `${copyReleaseNote(documentIds) ?? ""} Los archivos siguen en tu Drive, sin cambios.`.trim(),
       title: `¿Desvincular «${source.name}»?`,
       tone: "danger",
-    });
+    }, documentIds);
     if (!confirmed) return;
     setBusy(source.id);
     try {
       await releaseCopies(documentIds);
       await unlinkDriveFolder(source.id);
-      const forgotten = await forgetDriveDocuments(documentIds);
+      const forgotten = await forgetDriveDocuments(documentIds, translations);
       setStatus(`«${source.name}» se desvinculó. ${describeForgotten(forgotten)} Los archivos siguen en tu Drive.`);
     } catch {
       setStatus("No fue posible desvincular la carpeta.");
@@ -251,26 +252,26 @@ export function DriveSourcesPanel() {
   }
 
   async function removeFiles(documentIds: readonly string[], label: string) {
-    const confirmed = await confirmAction({
+    const { confirmed, translations } = await confirmForgetting({
       confirmLabel: "Quitar",
       description: "Pliegue olvidará:",
       details: [
         "la referencia y su índice de texto",
         "su ficha del catálogo IA",
-        "sus traducciones guardadas y la portada traída de Open Library",
+        "la portada traída de Open Library",
         "dónde se quedó la lectura",
       ],
       icon: "cloud",
       note: `${copyReleaseNote(documentIds) ?? ""} El archivo sigue en tu Drive. Puedes volver a elegirlo cuando quieras.`.trim(),
       title: `¿Quitar ${label} de la biblioteca?`,
       tone: "danger",
-    });
+    }, documentIds);
     if (!confirmed) return;
     setBusy("remove");
     try {
       await releaseCopies(documentIds);
       await unlinkDriveFiles(documentIds);
-      const forgotten = await forgetDriveDocuments(documentIds);
+      const forgotten = await forgetDriveDocuments(documentIds, translations);
       setStatus(
         `${label[0]?.toLocaleUpperCase("es")}${label.slice(1)} ya no está en la biblioteca. ${describeForgotten(forgotten)} Sigue en tu Drive.`,
       );

@@ -6,6 +6,7 @@ import { Button, Card, Tag } from "@pliegue/ui";
 
 import { copyReleaseNote, releaseCopies } from "../library/book-copies-store";
 import { describeForgotten, forgetDocumentDerivatives } from "../library/forget-derivatives";
+import { confirmForgetting } from "./library/confirm-forgetting";
 import {
   linkLocalFolder,
   scanLinkedFolder,
@@ -20,7 +21,6 @@ import { LinkingUnavailableNotice } from "./library/linking-unavailable-notice";
 import { useCatalogAi } from "../ai/ai-readiness";
 import { beforeFilePermission } from "../guide/file-permission-primer";
 import { afterLibraryGrowth } from "../guide/next-steps";
-import { confirmAction } from "./app-ui/confirm-dialog";
 import { suggestNextStep } from "./app-ui/next-step-dialog";
 
 const scanDateFormatter = new Intl.DateTimeFormat("es-PE", {
@@ -155,20 +155,20 @@ export function LocalSourcesPanel() {
     // El aviso enumera lo que realmente se pierde. Decir solo «el permiso y sus metadatos»
     // llevó a desvincular una carpeta creyendo que se renovaba el acceso, y con ella se fueron
     // el índice de texto y las fichas que costaron llamadas al proveedor.
-    const confirmed = await confirmAction({
+    const { confirmed, translations } = await confirmForgetting({
       confirmLabel: "Desvincular carpeta",
       description: "Se eliminarán de Pliegue:",
       details: [
         "el permiso de lectura de la carpeta",
         `el índice de texto de ${affected} documento${affected === 1 ? "" : "s"}`,
         "sus fichas del catálogo IA",
-        "sus traducciones guardadas y las portadas traídas de Open Library",
+        "las portadas traídas de Open Library",
       ],
       icon: "folder",
       note: `${copies ? `${copies} ` : ""}Los archivos originales no cambian. Volver a vincularla obliga a extraer el texto y a analizarlo otra vez. Si solo quieres recuperar el acceso, cancela y usa «Conceder acceso».`,
       title: `¿Desvincular «${source.name}»?`,
       tone: "danger",
-    });
+    }, folderDocumentIds);
     if (!confirmed) return;
 
     setBusySourceId(source.id);
@@ -178,7 +178,7 @@ export function LocalSourcesPanel() {
       // Los libros que siguen en Drive (u otra copia) se llevan su estado antes de borrar nada.
       await releaseCopies(documentIds);
       await unlinkLocalFolder(source.id);
-      const forgotten = await forgetDocumentDerivatives(documentIds);
+      const forgotten = await forgetDocumentDerivatives(documentIds, { translations });
       setStatusMessage(`«${source.name}» se desvinculó. ${describeForgotten(forgotten)} Los originales permanecen intactos.`);
     } catch {
       setStatusMessage("No fue posible desvincular la carpeta.");
