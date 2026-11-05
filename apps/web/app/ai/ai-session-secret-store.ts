@@ -8,7 +8,7 @@ import type { KeyProvider } from "./api-key";
 
 type SessionSecrets = Record<KeyProvider, string>;
 
-const emptySecrets: SessionSecrets = { anthropic: "", azure: "", gemini: "", openai: "" };
+const emptySecrets: SessionSecrets = { anthropic: "", azure: "", deepl: "", gemini: "", libretranslate: "", openai: "" };
 let secrets = emptySecrets;
 const listeners = new Set<() => void>();
 

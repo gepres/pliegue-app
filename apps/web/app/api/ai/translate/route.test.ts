@@ -139,3 +139,54 @@ describe("ruta de traducción «Tu IA»", () => {
     expect(quota.status).toBe(429);
   });
 });
+
+describe("ruta de traducción con DeepL (05.5)", () => {
+  const freeKey = "12345678-1234-1234-1234-123456789abc:fx";
+  const proKey = "12345678-1234-1234-1234-123456789abc";
+
+  it("una clave Free va a api-free, con la variante del inglés como destino y sin modelo", async () => {
+    const deepl = vi.fn().mockResolvedValue(Response.json({ translations: [{ text: "One." }, { text: "Two." }] }));
+    vi.stubGlobal("fetch", deepl);
+
+    const response = await POST(request({ model: undefined, passages: ["Uno.", "Dos."], provider: "deepl", source: "es", target: "en" }, freeKey));
+    const [url, options] = deepl.mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Record<string, string>;
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ translations: ["One.", "Two."], usage: { characters: 8 } });
+    expect(url).toBe("https://api-free.deepl.com/v2/translate");
+    expect(headers.authorization).toBe(`DeepL-Auth-Key ${freeKey}`);
+    expect(JSON.parse(String(options.body))).toEqual({ source_lang: "ES", target_lang: "EN-US", text: ["Uno.", "Dos."] });
+  });
+
+  it("una clave Pro va a api.deepl.com, y el portugués se pide como PT-BR", async () => {
+    const deepl = vi.fn().mockResolvedValue(Response.json({ translations: [{ text: "Um." }, { text: "Dois." }] }));
+    vi.stubGlobal("fetch", deepl);
+
+    await POST(request({ model: undefined, provider: "deepl", target: "pt" }, proKey));
+    const [url, options] = deepl.mock.calls[0] as [string, RequestInit];
+
+    expect(url).toBe("https://api.deepl.com/v2/translate");
+    expect(JSON.parse(String(options.body)).target_lang).toBe("PT-BR");
+  });
+
+  it("nombra la clave mala y el cupo agotado de DeepL por separado", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ message: "Forbidden" }, { status: 403 })));
+    const credential = await POST(request({ model: undefined, provider: "deepl" }, freeKey));
+    expect(credential.status).toBe(401);
+    expect((await credential.json()).error).toMatch(/DeepL no aceptó la clave/);
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ message: "Quota exceeded" }, { status: 456 })));
+    const quota = await POST(request({ model: undefined, provider: "deepl" }, freeKey));
+    expect(quota.status).toBe(429);
+    expect((await quota.json()).error).toMatch(/DeepL rechazó la solicitud por límite de uso/);
+  });
+
+  it("LibreTranslate no pasa por el servidor de Pliegue", async () => {
+    const anything = vi.fn();
+    vi.stubGlobal("fetch", anything);
+    const response = await POST(request({ model: undefined, provider: "libretranslate" }, freeKey));
+    expect(response.status).toBe(400);
+    expect(anything).not.toHaveBeenCalled();
+  });
+});

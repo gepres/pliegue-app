@@ -20,7 +20,7 @@ describe("AI settings", () => {
     expect(translationProviderOf(separate)).toBe("gemini");
     expect(separate.provider).toBe("anthropic");
     // Un valor que no es un proveedor vuelve a «el mismo».
-    expect(parseAiSettings({ provider: "openai", translationProvider: "deepl" }).translationProvider).toBe("browser");
+    expect(parseAiSettings({ provider: "openai", translationProvider: "babel" }).translationProvider).toBe("browser");
     // La región de Azure: una palabra en minúsculas; lo demás se descarta.
     expect(normalizeAzureRegion("  WestEurope ")).toBe("westeurope");
     expect(normalizeAzureRegion("west europe")).toBe("");
@@ -74,5 +74,22 @@ describe("AI settings", () => {
     expect(normalizeOllamaUrl("https://user:secret@ollama.example.test", "remote")).toBe(
       defaultAiSettings.ollamaUrl,
     );
+  });
+});
+
+describe("la dirección de LibreTranslate (05.5)", () => {
+  it("parte de libretranslate.com y guarda la de la persona sin barra final", () => {
+    expect(parseAiSettings({}).libreTranslateUrl).toBe("https://libretranslate.com");
+    expect(parseAiSettings({ libreTranslateUrl: " http://localhost:5000/ " }).libreTranslateUrl).toBe("http://localhost:5000");
+  });
+
+  it("descarta lo que no es http(s) o trae credenciales", () => {
+    expect(parseAiSettings({ libreTranslateUrl: "javascript:alert(1)" }).libreTranslateUrl).toBe("https://libretranslate.com");
+    expect(parseAiSettings({ libreTranslateUrl: "https://yo:clave@servidor" }).libreTranslateUrl).toBe("https://libretranslate.com");
+  });
+
+  it("acepta DeepL y LibreTranslate como traductor", () => {
+    expect(parseAiSettings({ translationProvider: "deepl" }).translationProvider).toBe("deepl");
+    expect(parseAiSettings({ translationProvider: "libretranslate" }).translationProvider).toBe("libretranslate");
   });
 });

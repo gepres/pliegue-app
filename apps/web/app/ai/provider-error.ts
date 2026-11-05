@@ -16,13 +16,15 @@ export interface ProviderFailure {
   status: number;
 }
 
-/** Quien responde: un proveedor de IA o Azure Translator, que solo traduce. */
-export type FailingProvider = AiProvider | "azure";
+/** Quien responde: un proveedor de IA o un traductor (Azure, DeepL, LibreTranslate). */
+export type FailingProvider = AiProvider | "azure" | "deepl" | "libretranslate";
 
 const providerName: Record<FailingProvider, string> = {
   anthropic: "Anthropic",
   azure: "Azure Translator",
+  deepl: "DeepL",
   gemini: "Gemini",
+  libretranslate: "LibreTranslate",
   ollama: "Ollama",
   openai: "OpenAI",
 };
@@ -86,7 +88,9 @@ function describe(kind: ProviderFailureKind, provider: FailingProvider, model: s
     case "credential":
       return provider === "azure"
         ? `${name} no aceptó la clave. Comprueba la clave y la región del recurso en Ajustes: con una región que no es la suya, Azure también la rechaza.`
-        : `${name} no aceptó la API key. No es un problema del modelo: vuelve a pegar la clave en el Panel IA.`;
+        : provider === "deepl" || provider === "libretranslate"
+          ? `${name} no aceptó la clave. Vuelve a pegarla en Ajustes → IA.`
+          : `${name} no aceptó la API key. No es un problema del modelo: vuelve a pegar la clave en el Panel IA.`;
     case "model":
       return provider === "ollama"
         ? `El modelo ${quoted} no está descargado en Ollama. Ejecuta «ollama pull ${model}» o elige otro en el Panel IA.`
@@ -115,7 +119,15 @@ export function classifyProviderFailure(
   model: string,
 ): ProviderFailure {
   const { code, message } = readDetail(payload);
-  // Azure responde 403 cuando se acabó el cupo gratuito del mes: es cupo, no permiso.
-  const kind = provider === "azure" && status === 403 ? "quota" : kindOf(status, code, message);
+  // Azure responde 403 cuando se acabó el cupo gratuito del mes: es cupo, no permiso. DeepL usa
+  // su propio 456 para el cupo agotado y 403 para la clave.
+  const kind =
+    provider === "azure" && status === 403
+      ? "quota"
+      : provider === "deepl" && status === 456
+        ? "quota"
+        : provider === "deepl" && status === 403
+          ? "credential"
+          : kindOf(status, code, message);
   return { kind, message: describe(kind, provider, model, message), status: statusByKind[kind] };
 }

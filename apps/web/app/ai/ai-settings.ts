@@ -22,6 +22,11 @@ export interface AiSettings {
   translationProvider: TranslationProviderChoice;
   /** Región del recurso de Azure Translator («westeurope»); vacía si es global. */
   azureRegion: string;
+  /**
+   * Dónde está el LibreTranslate con el que se traduce: el de la persona (en su equipo o en su
+   * servidor) o libretranslate.com. Se le pregunta desde el navegador, como a Ollama.
+   */
+  libreTranslateUrl: string;
   ollamaMode: "local" | "remote";
   ollamaUrl: string;
   provider: AiProvider;
@@ -64,6 +69,7 @@ export const defaultAiSettings: AiSettings = {
   // Los de menor coste de cada proveedor, revisados el 29-sep-2026: con ellos un libro entero
   // sale por céntimos (OpenAI, Gemini) o por un dólar (Claude Haiku).
   azureRegion: "",
+  libreTranslateUrl: "https://libretranslate.com",
   translationProvider: "browser",
   translationModels: {
     anthropic: "claude-haiku-4-5",
@@ -79,17 +85,20 @@ function cleanModel(value: unknown, fallback: string) {
 
 export function normalizeOllamaUrl(value: unknown, mode: AiSettings["ollamaMode"]) {
   if (mode === "local") return defaultAiSettings.ollamaUrl;
-  if (typeof value !== "string") return defaultAiSettings.ollamaUrl;
+  return normalizeServiceUrl(value, defaultAiSettings.ollamaUrl);
+}
+
+/** Una dirección http(s) sin credenciales y sin barra final; si no lo es, la de partida. */
+export function normalizeServiceUrl(value: unknown, fallback: string) {
+  if (typeof value !== "string") return fallback;
 
   try {
     const url = new URL(value.trim());
-    if (!(["http:", "https:"] as string[]).includes(url.protocol)) {
-      return defaultAiSettings.ollamaUrl;
-    }
-    if (url.username || url.password) return defaultAiSettings.ollamaUrl;
+    if (!(["http:", "https:"] as string[]).includes(url.protocol)) return fallback;
+    if (url.username || url.password) return fallback;
     return url.toString().replace(/\/$/, "");
   } catch {
-    return defaultAiSettings.ollamaUrl;
+    return fallback;
   }
 }
 
@@ -126,6 +135,7 @@ export function parseAiSettings(value: unknown): AiSettings {
     provider,
     schemaVersion: 1,
     azureRegion: normalizeAzureRegion(candidate.azureRegion),
+    libreTranslateUrl: normalizeServiceUrl(candidate.libreTranslateUrl, defaultAiSettings.libreTranslateUrl),
     translationProvider: translationProviderChoices.includes(candidate.translationProvider as TranslationProviderChoice)
       ? (candidate.translationProvider as TranslationProviderChoice)
       : "browser",

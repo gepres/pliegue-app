@@ -122,3 +122,47 @@ describe("lotes que el modelo no respeta", () => {
     expect(request).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("LibreTranslate como traductor (05.5)", () => {
+  const pair = { source: "en", target: "es" } as const;
+  const libre = (url = "http://localhost:5000"): AiSettings => ({ ...settings("libretranslate"), libreTranslateUrl: url });
+
+  it("no pide clave y traduce el lote desde el navegador, en el mismo orden", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ translatedText: ["Uno.", "Dos."] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const engine = createAiTranslationEngine(libre(), "");
+
+    expect(await engine.availability(pair)).toBe("available");
+    expect(engine.onDevice).toBe(false);
+    const translator = await engine.create(pair);
+    expect(await translator.translateMany!(["One.", "Two."])).toEqual(["Uno.", "Dos."]);
+
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:5000/translate");
+    expect(JSON.parse(String(options.body))).toEqual({ format: "text", q: ["One.", "Two."], source: "en", target: "es" });
+  });
+
+  it("si hay clave, la manda en el cuerpo, como pide libretranslate.com", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ translatedText: ["Uno."] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const translator = await createAiTranslationEngine(libre("https://libretranslate.com"), "12345678-1234-1234-1234-123456789abc").create(pair);
+
+    await translator.translateMany!(["One."]);
+    expect(JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body)).api_key).toBe("12345678-1234-1234-1234-123456789abc");
+  });
+
+  it("si no responde, dice dónde lo buscó", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    const translator = await createAiTranslationEngine(libre(), "").create(pair);
+
+    await expect(translator.translateMany!(["One."])).rejects.toThrow(
+      "No se pudo conectar con LibreTranslate en http://localhost:5000.",
+    );
+  });
+
+  it("DeepL sí pide clave y va por el servidor de Pliegue", async () => {
+    const engine = createAiTranslationEngine(settings("deepl"), "");
+    expect(await engine.availability(pair)).toBe("needs-key");
+    expect(engine.id).toBe("ai:deepl");
+  });
+});
