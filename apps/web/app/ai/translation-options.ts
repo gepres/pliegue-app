@@ -171,6 +171,12 @@ export const translationOptions: readonly TranslationOption[] = [
   },
 ];
 
+/** Coste estimado de traducir tantos caracteres con un traductor, en dólares; 0 si es gratis. */
+export function translationCost(provider: TranslationProviderChoice, characters: number) {
+  const option = translationOptions.find((item) => item.id === provider);
+  return option ? costPerBook(option.pricing, characters) : 0;
+}
+
 /** Coste estimado de traducir un libro, en dólares. */
 export function costPerBook(pricing: Pricing, characters = bookCharacters) {
   if (pricing.kind === "free") return 0;
