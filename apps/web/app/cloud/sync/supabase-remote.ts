@@ -3,6 +3,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { OutgoingRow, RemoteRow, RemoteStore } from "./sync-runner";
+import { translationsBucket, type TranslationStorage } from "./translation-files";
 
 const table = "sync_items";
 const pageSize = 500;
@@ -36,6 +37,28 @@ export function supabaseRemote(client: SupabaseClient, userId: string, deviceId:
         const { error } = await client.from(table).upsert(batch, { onConflict: "user_id,collection,item_key" });
         if (error) throw new Error(error.message);
       }
+    },
+  };
+}
+
+/** El bucket privado de las traducciones. RLS: cada cuenta, solo su carpeta. */
+export function supabaseTranslationStorage(client: SupabaseClient): TranslationStorage {
+  const bucket = client.storage.from(translationsBucket);
+  return {
+    async download(path) {
+      const { data, error } = await bucket.download(path);
+      if (error) throw new Error(error.message);
+      return data.text();
+    },
+    async upload(path, json) {
+      // Como texto, no como Blob: así va tal cual, con su tipo, y no como formulario multiparte.
+      const { error } = await bucket.upload(path, json, {
+        // Sin caché: el mismo archivo cambia de contenido y otro equipo tiene que ver el nuevo.
+        cacheControl: "0",
+        contentType: "application/json",
+        upsert: true,
+      });
+      if (error) throw new Error(error.message);
     },
   };
 }

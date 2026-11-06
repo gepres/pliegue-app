@@ -400,6 +400,28 @@
   flex: none;
 }
 
+/* Lo que hay de traducciones en la cuenta, bajo su interruptor. */
+.translationsStatus {
+  color: var(--pliegue-color-text-secondary);
+  display: grid;
+  font-size: 0.875rem;
+  gap: 4px;
+  line-height: 1.5;
+}
+
+.translationsStatus p,
+.translationsStatus ul {
+  margin: 0;
+}
+
+.translationsStatus ul {
+  padding-left: 1.1rem;
+}
+
+.translationsStatus[data-error] p {
+  color: var(--pliegue-color-status-danger);
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

@@ -38,7 +38,9 @@ const syncedItems = [
   "Preferencias de lectura, vista y ajustes de IA",
 ];
 
-const neverSynced = "Nunca se suben tus archivos, su texto, las claves de IA ni el acceso a tus carpetas.";
+const neverSynced = "Nunca se suben tus archivos, su texto original, las claves de IA ni el acceso a tus carpetas.";
+
+const translationsItem = "Traducciones guardadas: el texto traducido de cada libro";
 
 const resendSeconds = 60;
 
@@ -47,12 +49,16 @@ const resendSeconds = 60;
  * así que se vuelve a pedir permiso cada vez que se empieza o se reanuda (03.6, decisión del
  * 6-nov): qué se junta, qué sube, qué no sube nunca y cómo volver a separarlos.
  */
-function joinConsent(catalogAi: boolean): ConfirmOptions {
+function joinConsent(catalogAi: boolean, translations: boolean): ConfirmOptions {
   return {
     confirmLabel: "Juntar y sincronizar",
     description:
       "Lo que tienes en este equipo se junta con lo que ya hay en tu cuenta y, desde ahora, se sincroniza con tus otros equipos. Nada se borra al juntarlos.",
-    details: [...syncedItems, ...(catalogAi ? ["Fichas hechas por la IA: autor, categoría, editorial, sinopsis…"] : [])],
+    details: [
+      ...syncedItems,
+      ...(catalogAi ? ["Fichas hechas por la IA: autor, categoría, editorial, sinopsis…"] : []),
+      ...(translations ? [translationsItem] : []),
+    ],
     icon: "cloud",
     note: `${neverSynced} Para volver a separarlos, pausa la sincronización en este equipo: lo de aquí se queda aquí.`,
     title: "¿Juntar este equipo con tu cuenta?",
@@ -68,6 +74,27 @@ const catalogAiConsent: ConfirmOptions = {
   note: "Son derivados de tus libros: el texto de los libros no se sube. Puedes volver a apagarlo cuando quieras.",
   title: "¿Sincronizar también las fichas de la IA?",
 };
+
+/**
+ * Subir las traducciones siempre se pregunta, se sincronice ya o no: una traducción es el libro
+ * entero en otro idioma (decisión del 6-nov, permiso propio y apagado de entrada).
+ */
+const translationsConsent: ConfirmOptions = {
+  confirmLabel: "Subir mis traducciones",
+  description:
+    "Lo que tradujiste en este equipo se guarda en tu cuenta y llega a tus otros equipos con el mismo libro, sin volver a traducirlo.",
+  details: ["El texto traducido de cada página o sección", "Hasta 5 MB por libro e idioma", "200 MB en total por cuenta"],
+  icon: "cloud",
+  note: "Una traducción contiene el libro entero en otro idioma. Se guarda en una carpeta privada de tu cuenta que solo ves tú. Si lo apagas, deja de subir y bajar; lo ya subido sigue en tu cuenta.",
+  title: "¿Sincronizar también tus traducciones?",
+};
+
+/** Lo que ocupa, en KB por debajo de 1 MB: «0 MB» no diría nada. */
+function formatBytes(bytes: number) {
+  const mb = 1024 * 1024;
+  if (bytes < mb) return `${Math.max(1, Math.round(bytes / 1024)).toLocaleString("es")} KB`;
+  return `${(bytes / mb).toLocaleString("es", { maximumFractionDigits: bytes < 10 * mb ? 1 : 0 })} MB`;
+}
 
 function formatAgo(iso: string | null, now: number) {
   if (!iso) return "todavía no";
@@ -229,11 +256,18 @@ function SignInForm({ linkError }: { linkError: string | null }) {
 
 function SyncConsent({ userId }: { userId: string }) {
   const choices = useSyncChoices(userId);
+  const { translations } = useSyncStatus();
 
   async function changeCatalogAi(next: boolean) {
     // Apagarlo no saca nada nuevo; encenderlo mientras se sincroniza, sí.
     if (next && choices.enabled && !(await confirmAction(catalogAiConsent))) return;
     setSyncChoices(userId, { catalogAi: next });
+  }
+
+  async function changeTranslations(next: boolean) {
+    if (next && !(await confirmAction(translationsConsent))) return;
+    setSyncChoices(userId, { translations: next });
+    if (next && choices.enabled) void requestSync({ reason: "manual" });
   }
 
   return (
@@ -253,7 +287,35 @@ function SyncConsent({ userId }: { userId: string }) {
         label="Fichas hechas por la IA"
         onChange={(event) => void changeCatalogAi(event.target.checked)}
       />
-      <p className={styles.note}>{neverSynced} Las traducciones guardadas llegarán en el siguiente paso.</p>
+      <Switch
+        checked={choices.translations}
+        description="El texto traducido de tus libros, para no traducirlos otra vez en otro equipo. Es el libro entero en otro idioma: solo se sube si lo aceptas."
+        label="Traducciones guardadas"
+        onChange={(event) => void changeTranslations(event.target.checked)}
+      />
+      {choices.translations && choices.enabled && translations ? (
+        <div className={styles.translationsStatus} data-error={translations.error ? true : undefined}>
+          <p role="status">
+            {translations.error ??
+              (translations.cloudFiles === 0
+                ? "Todavía no hay traducciones en tu cuenta: suben cuando llevan dos minutos sin cambiar."
+                : null) ??
+              `En tu cuenta: ${translations.cloudFiles} ${translations.cloudFiles === 1 ? "traducción" : "traducciones"} · ${formatBytes(translations.cloudBytes)} de 200\u00a0MB`}
+          </p>
+          {translations.skipped.length ? (
+            <ul>
+              {translations.skipped.map((item) => (
+                <li key={item.itemKey}>
+                  {item.reason === "size"
+                    ? `Una traducción de ${formatBytes(item.size)} no se sube: pasa de 5\u00a0MB.`
+                    : `Una traducción de ${formatBytes(item.size)} no se sube: no cabe en los 200\u00a0MB de tu cuenta.`}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+      <p className={styles.note}>{neverSynced}</p>
     </div>
   );
 }
@@ -270,7 +332,7 @@ function SignedIn({ email, provider, userId }: { email: string | null; provider:
   }, []);
 
   async function join() {
-    if (await confirmAction(joinConsent(choices.catalogAi))) setSyncChoices(userId, { enabled: true });
+    if (await confirmAction(joinConsent(choices.catalogAi, choices.translations))) setSyncChoices(userId, { enabled: true });
   }
 
   async function leave() {

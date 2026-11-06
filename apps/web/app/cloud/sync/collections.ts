@@ -41,16 +41,19 @@ export interface SyncContext {
   keys: LibraryKeys;
   local: LocalSnapshot;
   now: string;
+  /** La cuenta con sesión: lo que este equipo recuerda de la nube va por cuenta. */
+  userId?: string;
 }
 
 /**
  * Una colección sincronizada: cómo se lee de este equipo y cómo se escribe en él lo que llega.
  * `consent` marca las que solo se suben si la persona lo aceptó (ADR-0002, gate 4: los
- * derivados, como las fichas de la IA, no salen del dispositivo sin consentimiento).
+ * derivados, como las fichas de la IA o las traducciones, no salen del dispositivo sin
+ * consentimiento).
  */
 export interface SyncCollection {
   apply(entries: readonly SyncEntry[], context: SyncContext): Promise<void>;
-  consent?: "catalogAi";
+  consent?: "catalogAi" | "translations";
   /**
    * Título y autores del libro de un elemento, si lo dice. Con eso se nombra un libro que está
    * en otro equipo y no en este (06.3); solo lo hacen las fichas, que ya viajan con permiso.

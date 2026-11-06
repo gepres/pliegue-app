@@ -102,8 +102,23 @@ export async function readTranslatedUnit(documentId: string, pairId: string, uni
   return record ?? null;
 }
 
+/** Quien quiere saber que se escribió una traducción aquí: la subida a la cuenta (06.3). */
+const writtenListeners = new Set<(documentId: string, pairId: string) => void>();
+
+export function onTranslationWritten(listener: (documentId: string, pairId: string) => void) {
+  writtenListeners.add(listener);
+  return () => {
+    writtenListeners.delete(listener);
+  };
+}
+
+function notifyWritten(documentId: string, pairId: string) {
+  for (const listener of writtenListeners) listener(documentId, pairId);
+}
+
 export async function writeTranslatedUnit(record: TranslatedUnitRecord) {
   await withStore("readwrite", (store) => store.put(record));
+  notifyWritten(record.documentId, record.pairId);
 }
 
 /**
@@ -284,4 +299,73 @@ export async function translatedDocumentIds() {
     database.close();
   }
   return ids;
+}
+
+/** Cada traducción guardada (documento y par de idiomas con su motor), sin leer los textos. */
+export async function translationPairs() {
+  const database = await openDatabase();
+  const pairs: Array<{ documentId: string; pairId: string }> = [];
+  try {
+    const transaction = database.transaction(storeName, "readonly");
+    await new Promise<void>((resolve, reject) => {
+      const request = transaction.objectStore(storeName).index(byTranslation).openKeyCursor(null, "nextunique");
+      request.addEventListener("success", () => {
+        const cursor = request.result;
+        if (!cursor) return resolve();
+        const [documentId, pairId] = cursor.key as [string, string];
+        pairs.push({ documentId, pairId });
+        cursor.continue();
+      });
+      request.addEventListener("error", () => reject(request.error), { once: true });
+    });
+    await transactionComplete(transaction);
+  } finally {
+    database.close();
+  }
+  return pairs;
+}
+
+/** Todas las páginas o secciones de una traducción, con su texto. */
+export async function readTranslation(documentId: string, pairId: string) {
+  return withStore<TranslatedUnitRecord[]>("readonly", (store) =>
+    store.index(byTranslation).getAll(IDBKeyRange.only([documentId, pairId])) as IDBRequest<TranslatedUnitRecord[]>,
+  );
+}
+
+/**
+ * Guarda lo que llega de la cuenta (06.3). Una página que aquí ya está traducida se conserva:
+ * lo de este equipo no se pisa. Devuelve cuántas escribió.
+ */
+export async function mergeTranslatedUnits(records: readonly TranslatedUnitRecord[]) {
+  if (!records.length) return 0;
+  const database = await openDatabase();
+  let written = 0;
+  try {
+    const transaction = database.transaction(storeName, "readwrite");
+    const store = transaction.objectStore(storeName);
+    const groups = new Map<string, TranslatedUnitRecord[]>();
+    for (const record of records) {
+      const group = `${record.documentId}|${record.pairId}`;
+      groups.set(group, [...(groups.get(group) ?? []), record]);
+    }
+    for (const group of groups.values()) {
+      const [first] = group;
+      if (!first) continue;
+      const existing = store.index(byTranslation).getAllKeys(IDBKeyRange.only([first.documentId, first.pairId]));
+      existing.addEventListener("success", () => {
+        const taken = new Set(existing.result.map(String));
+        for (const record of group) {
+          if (taken.has(record.key)) continue;
+          store.put(record);
+          written += 1;
+        }
+      });
+    }
+    await transactionComplete(transaction);
+  } finally {
+    database.close();
+  }
+  const groups = new Map(records.map((record) => [`${record.documentId}|${record.pairId}`, record]));
+  for (const record of groups.values()) notifyWritten(record.documentId, record.pairId);
+  return written;
 }

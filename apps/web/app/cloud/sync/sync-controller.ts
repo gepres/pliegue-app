@@ -3,10 +3,17 @@
 import { useSyncExternalStore } from "react";
 
 import type { LibraryDocument } from "../../library/documents";
+import {
+  mergeTranslatedUnits,
+  onTranslationWritten,
+  readTranslation,
+  translationPairs,
+  trimTranslations,
+} from "../../library/translation-store";
 import { currentAccount } from "../account-store";
 import { cloudClient } from "../supabase-client";
-import { syncCollections, type LocalSnapshot } from "./collections";
-import { indexLibraryKeys } from "./document-key";
+import { syncCollections, type LocalSnapshot, type SyncCollection } from "./collections";
+import { indexLibraryKeys, type LibraryKeys } from "./document-key";
 import {
   activityFromSummary,
   activityLimit,
@@ -17,8 +24,16 @@ import {
 } from "./sync-activity";
 import { isSyncHeld, onSyncReleased } from "./sync-hold";
 import { MassDeletionError, runSync, type SyncSummary } from "./sync-runner";
+import {
+  localTranslationState,
+  pairRef,
+  transferTranslations,
+  translationFilesCollection,
+  type SkippedTranslation,
+  type TranslationUnits,
+} from "./translation-files";
 import { indexedDbSyncState } from "./sync-state-idb";
-import { supabaseRemote } from "./supabase-remote";
+import { supabaseRemote, supabaseTranslationStorage } from "./supabase-remote";
 
 /* ---- Qué se sincroniza, por cuenta y en este equipo ------------------------------------ */
 
@@ -27,10 +42,15 @@ export interface SyncChoices {
   catalogAi: boolean;
   /** La persona pulsó «Empezar a sincronizar» con esta cuenta en este equipo. */
   enabled: boolean;
+  /**
+   * Traducciones guardadas (06.3): el libro entero en otro idioma, así que van con permiso
+   * propio y empiezan apagadas.
+   */
+  translations: boolean;
 }
 
 const choicesKey = "pliegue-cloud-sync-v1";
-const defaultChoices: SyncChoices = { catalogAi: true, enabled: false };
+const defaultChoices: SyncChoices = { catalogAi: true, enabled: false, translations: false };
 const choicesListeners = new Set<() => void>();
 let cachedChoicesSerialized: string | null | undefined;
 let cachedChoices: Record<string, SyncChoices> = {};
@@ -53,6 +73,8 @@ export function syncChoicesFor(userId: string | null): SyncChoices {
 }
 
 export function setSyncChoices(userId: string, choices: Partial<SyncChoices>) {
+  // Al dar el permiso de las traducciones, la próxima vuelta las revisa todas.
+  if (choices.translations && !syncChoicesFor(userId).translations) pendingTranslations = null;
   const next = { ...readAllChoices(), [userId]: { ...syncChoicesFor(userId), ...choices } };
   try {
     window.localStorage.setItem(choicesKey, JSON.stringify(next));
@@ -95,6 +117,17 @@ export interface SyncStatus {
   summary: SyncSummary | null;
   /** Cambios de este equipo que la última vuelta no pudo subir. */
   unsynced: number;
+  /** Las traducciones en la cuenta, tras la última vuelta que las tocó (con su permiso). */
+  translations: TranslationsStatus | null;
+}
+
+export interface TranslationsStatus {
+  /** Lo que ocupa todo lo de la cuenta. */
+  cloudBytes: number;
+  cloudFiles: number;
+  error: string | null;
+  /** Lo que no se subió: pasa de 5 MB o no cabe en el cupo. */
+  skipped: SkippedTranslation[];
 }
 
 let status: SyncStatus = {
@@ -106,6 +139,7 @@ let status: SyncStatus = {
   lastSyncedAt: null,
   state: "idle",
   summary: null,
+  translations: null,
   unsynced: 0,
 };
 const statusListeners = new Set<() => void>();
@@ -157,6 +191,85 @@ function deviceId() {
     return created;
   } catch {
     return "sin-almacenamiento";
+  }
+}
+
+/* ---- Traducciones en la cuenta (06.3) ------------------------------------------------------- */
+
+/** El índice de lo que hay en la nube, como una colección más de `sync_items`. */
+const translationFiles: SyncCollection = translationFilesCollection();
+const collections: readonly SyncCollection[] = [...syncCollections, translationFiles];
+
+/**
+ * Traducciones escritas aquí desde la última vuelta. `null`: hay que revisarlas todas (la
+ * primera vuelta de la sesión, otra cuenta o el permiso recién dado).
+ */
+let pendingTranslations: Set<string> | null = null;
+let translationsUser: string | null = null;
+/** Tras un error de Storage, no se reintenta en cada vuelta de 45 s. */
+let translationsRetryAt = 0;
+const translationsRetryMs = 5 * 60 * 1000;
+
+if (typeof window !== "undefined") {
+  onTranslationWritten((documentId, pairId) => pendingTranslations?.add(pairRef(documentId, pairId)));
+}
+
+const indexedDbTranslations: TranslationUnits = {
+  async merge(records) {
+    const written = await mergeTranslatedUnits(records);
+    // Lo que llega cuenta para el tope de lo guardado, como lo traducido aquí.
+    const [first] = records;
+    if (first) await trimTranslations(first.documentId);
+    return written;
+  },
+  pairs: translationPairs,
+  read: readTranslation,
+};
+
+function describeTranslationsError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/bucket not found/i.test(message)) return "Falta el bucket «translations» en Supabase.";
+  if (/row-level security|unauthorized|forbidden|not allowed|403/i.test(message)) {
+    return "Supabase no deja guardar las traducciones: faltan las políticas del bucket «translations».";
+  }
+  return `No se pudieron sincronizar las traducciones: ${message}`;
+}
+
+async function syncTranslations(client: NonNullable<ReturnType<typeof cloudClient>>, userId: string, keys: LibraryKeys, reason: SyncReason) {
+  if (translationsUser !== userId) {
+    translationsUser = userId;
+    pendingTranslations = null;
+  }
+  if (reason !== "manual" && Date.now() < translationsRetryAt) return { uploaded: 0 };
+  const dirty = pendingTranslations;
+  pendingTranslations = new Set();
+  try {
+    const result = await transferTranslations({
+      dirty,
+      keys,
+      now: new Date(),
+      state: localTranslationState(userId),
+      storage: supabaseTranslationStorage(client),
+      units: indexedDbTranslations,
+      userId,
+    });
+    for (const ref of result.later) pendingTranslations?.add(ref);
+    translationsRetryAt = 0;
+    setStatus({ translations: { cloudBytes: result.cloudBytes, cloudFiles: result.cloudFiles, error: null, skipped: result.skipped } });
+    return result;
+  } catch (error) {
+    // Lo que quedaba por mirar se mira en el próximo intento.
+    pendingTranslations = dirty === null ? null : new Set([...dirty, ...(pendingTranslations ?? [])]);
+    translationsRetryAt = Date.now() + translationsRetryMs;
+    setStatus({
+      translations: {
+        cloudBytes: status.translations?.cloudBytes ?? 0,
+        cloudFiles: status.translations?.cloudFiles ?? 0,
+        error: describeTranslationsError(error),
+        skipped: status.translations?.skipped ?? [],
+      },
+    });
+    return { uploaded: 0 };
   }
 }
 
@@ -242,15 +355,26 @@ async function syncOnce(allowMassDeletion: boolean, reason: SyncReason) {
   try {
     const summary = await runSync({
       allowMassDeletion,
-      collections: syncCollections,
-      context: { keys, local: local.snapshot, now: new Date().toISOString() },
-      enabled: (collection) => collection.consent !== "catalogAi" || choices.catalogAi,
+      collections,
+      context: { keys, local: local.snapshot, now: new Date().toISOString(), userId },
+      enabled: (collection) =>
+        collection.consent === "catalogAi"
+          ? choices.catalogAi
+          : collection.consent === "translations"
+            ? choices.translations
+            : true,
       onPlanned: (plan) => {
         planned = plan;
       },
       remote: supabaseRemote(client, userId, deviceId()),
       stateStore: indexedDbSyncState(userId),
     });
+    // Las traducciones, después: el índice de la nube ya está al día. Lo que se suba entra en
+    // el índice y viaja en la vuelta siguiente, que se pide aquí mismo.
+    if (choices.translations) {
+      const transfer = await syncTranslations(client, userId, keys, reason);
+      if (transfer.uploaded) again = true;
+    }
     const at = new Date().toISOString();
     setStatus({
       activity: addActivity(userId, activityFromSummary(summary, at)),
