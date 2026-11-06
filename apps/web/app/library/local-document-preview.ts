@@ -13,6 +13,8 @@ export type LocalDocumentPreview =
   | { blob: Blob; kind: "image" }
   | { blob: Blob; kind: "pdf" }
   | {
+      /** El tamaño del archivo: por encima de 50 MB el lector avisa de que puede ir lento. */
+      bytes?: number;
       format: StructuredDocumentFormat;
       kind: "structured";
       sections: StructuredDocumentSection[];
@@ -85,7 +87,7 @@ export async function createLocalDocumentPreview(
   if (kind === "structured" && isStructuredDocumentFormat(format)) {
     const { extractStructuredDocument } = await import("./structured-document-extractor");
     const extraction = await extractStructuredDocument(format, blob);
-    return { format, kind, ...extraction };
+    return { bytes: blob.size, format, kind, ...extraction };
   }
   return { kind: "unsupported" };
 }

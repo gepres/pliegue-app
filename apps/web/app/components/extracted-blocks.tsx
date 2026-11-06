@@ -29,9 +29,17 @@ export function ExtractedBlock({
   }
 
   if (block.kind === "paragraph") {
+    // Los tramos con formato solo si siguen siendo este texto: una traducción no lo es, y sale
+    // en texto normal (decisión del dueño, 6-nov).
+    const runs = block.runs && block.runs.map((run) => run.text).join("") === block.text ? block.runs : null;
     return (
       <p {...anchorProps} className={block.caption ? styles.caption : undefined}>
-        {block.text}
+        {runs
+          ? runs.map((run, index) => {
+              const text = run.italic ? <em>{run.text}</em> : run.text;
+              return run.bold ? <strong key={index}>{text}</strong> : <Fragment key={index}>{text}</Fragment>;
+            })
+          : block.text}
       </p>
     );
   }
