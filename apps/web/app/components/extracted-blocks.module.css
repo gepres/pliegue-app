@@ -47,6 +47,17 @@
   white-space: pre-wrap;
 }
 
+/* El pie de una figura (03.5b): pegado a ella, en letra menor y en el tono secundario, como en
+   el libro. El margen negativo le quita el aire de debajo de la figura. */
+.blocks p.caption {
+  color: var(--pliegue-color-text-secondary);
+  font-size: calc(var(--pliegue-reader-font-size) * 0.86);
+  line-height: 1.45;
+  margin-top: calc(-1 * var(--pliegue-spacing-md));
+  text-align: center;
+  text-wrap: pretty;
+}
+
 .tableViewport {
   border: 1px solid var(--pliegue-color-border-default);
   border-radius: var(--pliegue-radius-sm);

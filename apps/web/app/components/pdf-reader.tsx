@@ -24,7 +24,7 @@ import type { HighlightColor, NormalizedRect } from "../library/annotations";
 import { ocrLanguages, recognizePage, type OcrProgress } from "../library/ocr";
 import { ocrPageLayout, type OcrPageBlock, type OcrPageLayout } from "../library/ocr-layout";
 import { readOcrPage, saveOcrPage } from "../library/ocr-page-store";
-import { placeFigures, readPageImages, type FigureBox } from "../library/pdf-figures";
+import { figureCaptions, placeFigures, readPageImages, type FigureBox } from "../library/pdf-figures";
 import { layoutPage, structuredBlock, toReflowItems } from "../library/pdf-reflow";
 import { describePdfFailure, loadPdfjs, openPdfDocument } from "../library/pdf-runtime";
 import {
@@ -123,12 +123,20 @@ async function reflowDocumentPage(
     const images = await loadPdfjs()
       .then(({ OPS }) => readPageImages(page, OPS))
       .catch(() => ({ figures: [], scan: null }));
-    const figures = placeFigures(images.figures, blocks).map(({ box, slot }) => ({ rect: pageRect(viewport, box), slot }));
+    const placed = placeFigures(images.figures, blocks);
+    const figures = placed.map(({ box, slot }) => ({ rect: pageRect(viewport, box), slot }));
     // Un escaneo sin capa de texto —una historieta, un libro sin OCR— no tiene nada que
     // recomponer: en Lectura se ve la página entera, en vez de un aviso.
     const scanned = blocks.length === 0 && figures.length === 0 && images.scan !== null;
+    // El pie de cada figura va pegado a ella y con su estilo (03.5b). Sigue siendo un bloque
+    // más: se traduce y se marca como los demás, en el mismo orden.
+    const [left = 0, bottom = 0, right = 0, top = 0] = page.view;
+    const captions = figureCaptions(placed, blocks, { bottom, left, right, top });
     return {
-      blocks: blocks.map(structuredBlock),
+      blocks: blocks.map((block, index) => {
+        const structured = structuredBlock(block);
+        return captions.has(index) && structured.kind === "paragraph" ? { ...structured, caption: true } : structured;
+      }),
       columns,
       figures: scanned && images.scan ? [{ rect: pageRect(viewport, images.scan), slot: 0, whole: true }] : figures,
       number,

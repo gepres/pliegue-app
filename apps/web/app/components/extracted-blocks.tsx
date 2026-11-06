@@ -28,7 +28,13 @@ export function ExtractedBlock({
     return block.level <= 2 ? <h3 {...anchorProps}>{block.text}</h3> : <h4 {...anchorProps}>{block.text}</h4>;
   }
 
-  if (block.kind === "paragraph") return <p {...anchorProps}>{block.text}</p>;
+  if (block.kind === "paragraph") {
+    return (
+      <p {...anchorProps} className={block.caption ? styles.caption : undefined}>
+        {block.text}
+      </p>
+    );
+  }
 
   return (
     <div

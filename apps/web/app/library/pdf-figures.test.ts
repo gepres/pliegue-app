@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
 import {
+  figureCaptions,
   imageBoxes,
   pageFigures,
   placeFigures,
@@ -132,6 +133,52 @@ describe("las imágenes de una página de PDF (05.6)", () => {
     // Una ilustración grande no es el escaneo, ni lo es una página sin imágenes.
     expect(scanBox([{ bottom: 200, left: 72, right: 540, top: 700 }], page)).toBeNull();
     expect(scanBox([], page)).toBeNull();
+  });
+
+  describe("el pie de cada figura (03.5b)", () => {
+    // Cuerpo de 11 puntos; una figura de 300×200 a media página.
+    const figure = { bottom: 400, left: 150, right: 450, top: 600 };
+    const body = (top: number, text = "Texto del libro que sigue y sigue con la explicación del capítulo. ".repeat(6)) => ({
+      box: { bottom: top - 80, left: 72, right: 540, top },
+      centered: false,
+      fontHeight: 11,
+      lines: 6,
+      text,
+    });
+    const line = (top: number, text: string, { fontHeight = 9, left = 150, right = 450, centered = false } = {}) => ({
+      box: { bottom: top - fontHeight * 1.2, left, right, top },
+      centered,
+      fontHeight,
+      lines: 1,
+      text,
+    });
+    const captionsOf = (blocks: Parameters<typeof figureCaptions>[1], slot: number) => [...figureCaptions([{ box: figure, slot }], blocks, page)];
+
+    it("el renglón de letra menor pegado debajo de la figura (Freud, p. 11)", () => {
+      const blocks = [body(720), line(392, "Detalles del mundo onírico de Salvador Dalí (1904-1989)."), body(360)];
+      expect(captionsOf(blocks, 1)).toEqual([1]);
+    });
+
+    it("el que se anuncia, aunque vaya en el cuerpo del libro («FIGURA 7.»), y también encima", () => {
+      expect(captionsOf([body(720), line(380, "FIGURA 7. La acumulación de hábitos.", { fontHeight: 11 }), body(340)], 1)).toEqual([1]);
+      // Encima solo si se anuncia («Figura 3»): una frase suelta encima es el texto que la presenta.
+      expect(captionsOf([body(720), line(615, "Figura 3. Mapa de las rutas.", { fontHeight: 11 }), body(380)], 2)).toEqual([1]);
+      expect(captionsOf([body(720), line(615, "Una frase suelta encima.", { fontHeight: 9 }), body(380)], 2)).toEqual([]);
+    });
+
+    it("no toma por pie el párrafo que sigue, un folio, una cabecera ni lo que queda lejos", () => {
+      // El párrafo siguiente, en el cuerpo del libro.
+      expect(captionsOf([body(720), body(390)], 1)).toEqual([]);
+      // Un folio, solo cifras.
+      expect(captionsOf([body(720), line(392, "18 19")], 1)).toEqual([]);
+      // Lejos: a más de tres renglones y medio.
+      expect(captionsOf([body(720), line(340, "Detalles del mundo onírico."), body(300)], 1)).toEqual([]);
+      // A un lado, sin compartir el ancho de la figura.
+      expect(captionsOf([body(720), line(392, "Nota al margen.", { left: 470, right: 560 })], 1)).toEqual([]);
+      // En el margen de abajo de la página: la cabecera de una revista («24• Pianist 75»).
+      const low = { bottom: 60, left: 150, right: 450, top: 260 };
+      expect([...figureCaptions([{ box: low, slot: 1 }], [body(720), line(40, "24• Pianist 75")], page)]).toEqual([]);
+    });
   });
 
   describe("con pdf.js y un PDF de verdad", () => {
