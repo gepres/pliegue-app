@@ -57,6 +57,7 @@ export const collectionNames: Record<string, { one: string; many: string; label:
   favorites: { label: "Favoritos", many: "favoritos", one: "favorito" },
   "reading-progress": { label: "Avance de lectura", many: "avances", one: "avance" },
   settings: { label: "Ajustes", many: "ajustes", one: "ajuste" },
+  "translation-files": { label: "Traducciones guardadas", many: "traducciones", one: "traducción" },
 };
 
 /** Una vuelta terminada, lista para el registro. */

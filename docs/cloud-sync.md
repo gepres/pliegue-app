@@ -17,12 +17,41 @@ Con ella, lo que la persona acepta viaja entre sus equipos:
 | `catalog-ai` | fichas de la IA (**solo con consentimiento**) | último análisis |
 | `catalog-import` | fichas importadas desde JSON | última importación |
 | `book-translation` | idiomas y motor de cada libro | último cambio |
+| `translation-files` | índice de las traducciones guardadas en Storage (**solo con consentimiento**) | último cambio; el texto se junta (ver abajo) |
 | `settings` | IA (sin la URL de Ollama), preferencias salvo las del dispositivo, vista del lector, postales | un equipo nuevo adopta los de la cuenta; después, último cambio |
 
 **Nunca se suben:** los archivos, su texto extraído, las claves de IA (ADR-0002, gate 3), los
 permisos de acceso a archivos y carpetas ni lo que es de cada equipo (vista de la Biblioteca,
-barra lateral, forma de la vista de traducción). Las traducciones guardadas llegarán en el
-siguiente paso, a Supabase Storage: un libro traducido pesa más de 1 MB.
+barra lateral, forma de la vista de traducción). Las traducciones guardadas van aparte, a
+Storage, y solo con su permiso (abajo).
+
+## Traducciones guardadas (Storage)
+
+Una traducción es el libro entero en otro idioma, así que va con **permiso propio, apagado de
+entrada** («Traducciones guardadas» en Ajustes → Cuenta). Encenderlo siempre pregunta, se esté
+sincronizando o no. Decisión del 6-nov en Foundry (06.3).
+
+- **Dónde:** bucket privado `translations`, un JSON por libro y traducción:
+  `{user_id}/{clave del libro}/{idioma}.{par}.json`. La clave es la huella de `sync_items`;
+  `{par}` es una huella corta de motor y par de idiomas, para que dos motores no se pisen.
+  RLS: cada cuenta solo lee y escribe su carpeta (`supabase/migrations/20261106120000_traducciones.sql`).
+- **Índice:** la colección `translation-files` de `sync_items` dice qué archivos hay (tamaño,
+  huella y par). Viaja con la misma fusión que el resto; no va ligada a un documento, así que
+  llega entera aunque el libro no esté en el equipo.
+- **Topes:** 5 MB por archivo (también en el bucket) y 200 MB por cuenta, que la app suma con
+  el índice. Lo que no cabe no sube, y Cuenta lo dice.
+- **Cuándo sube:** cuando la traducción lleva 2 minutos sin cambiar (no mientras se traduce).
+  En la primera vuelta de la sesión se revisan todas; después, solo las escritas aquí.
+- **Cuándo baja:** en cada vuelta, lo que el índice tiene más nuevo de los libros que hay aquí.
+- **Cómo se junta:** una página que este equipo ya tiene traducida se conserva; las que faltan se
+  añaden. Se vuelve a subir solo si aquí hay páginas que la nube no tiene o algo traducido
+  después de la última subida; si no, dos equipos con una página distinta se pisarían en cada
+  vuelta.
+- **Borrar:** borrar las traducciones de este navegador no toca la nube. «Borrar mi cuenta»
+  vacía antes la carpeta del bucket (`account-server.ts`); si no puede, no borra la cuenta.
+- **Código:** `app/cloud/sync/translation-files.ts` (con sus pruebas) y
+  `supabaseTranslationStorage` en `supabase-remote.ts`. e2e: `apps/web/e2e/traducciones-nube.mjs`,
+  con dos equipos.
 
 ## Identidad de un documento entre equipos
 
@@ -87,7 +116,9 @@ del cambio en el dispositivo) y `server_updated_at` (hora del servidor, que es e
 
 1. **Variables** en `apps/web/.env.local`: `NEXT_PUBLIC_SUPABASE_URL` y
    `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (la `sb_publishable_…`; la `service_role` nunca).
-2. **Migración:** SQL Editor → pegar el archivo de `supabase/migrations/` → Run.
+2. **Migración:** SQL Editor → pegar cada archivo de `supabase/migrations/`, en orden → Run.
+   El de traducciones (`20261106120000_traducciones.sql`) crea o ajusta el bucket
+   `translations` y sus políticas.
 3. **Correo.** El servidor de correo incluido en Supabase solo envía a direcciones del equipo de
    la organización y 2 mensajes por hora: sirve para probar. Su plantilla trae un **enlace**,
    que la app también acepta: hay que abrirlo en el mismo navegador donde se pidió, porque el

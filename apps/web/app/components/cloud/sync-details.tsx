@@ -27,6 +27,7 @@ const collectionOrder = [
   "catalog-import",
   "catalog-ai",
   "book-translation",
+  "translation-files",
   "settings",
 ];
 

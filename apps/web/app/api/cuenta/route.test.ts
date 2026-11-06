@@ -13,13 +13,28 @@ function request(body: object | null, { origin = "http://localhost", token = "to
   });
 }
 
-/** Supabase de mentira: quién es la sesión y qué se pidió borrar. */
-function supabase({ session = true, deleteStatus = 200 }: { deleteStatus?: number; session?: boolean } = {}) {
-  const calls: { headers: Headers; method: string; url: string }[] = [];
+/** Supabase de mentira: quién es la sesión, sus traducciones en Storage y qué se pidió borrar. */
+function supabase({
+  bucket = true,
+  deleteStatus = 200,
+  session = true,
+  storageDeleteStatus = 200,
+}: { bucket?: boolean; deleteStatus?: number; session?: boolean; storageDeleteStatus?: number } = {}) {
+  const calls: { body: string; headers: Headers; method: string; url: string }[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init: RequestInit = {}) => {
-      calls.push({ headers: new Headers(init.headers), method: init.method ?? "GET", url });
+      const body = typeof init.body === "string" ? init.body : "";
+      calls.push({ body, headers: new Headers(init.headers), method: init.method ?? "GET", url });
+      if (url.endsWith("/storage/v1/object/list/translations")) {
+        if (!bucket) return Response.json({ error: "Bucket not found", message: "Bucket not found", statusCode: "404" }, { status: 400 });
+        const { prefix } = JSON.parse(body) as { prefix: string };
+        if (prefix === userId) return Response.json([{ id: null, name: "libro-a" }, { id: null, name: "libro-b" }]);
+        if (prefix === `${userId}/libro-a`) return Response.json([{ id: "1", name: "es.x.json" }, { id: "2", name: "en.y.json" }]);
+        if (prefix === `${userId}/libro-b`) return Response.json([{ id: "3", name: "es.z.json" }]);
+        return Response.json([]);
+      }
+      if (url.endsWith("/storage/v1/object/translations")) return new Response("{}", { status: storageDeleteStatus });
       if (url.endsWith("/auth/v1/user")) {
         return session ? Response.json({ email: "lectora@example.com", id: userId }) : Response.json({ msg: "invalid JWT" }, { status: 401 });
       }
@@ -47,11 +62,37 @@ describe("borrar la cuenta (02.4)", () => {
     const response = await DELETE(request({ confirm: "borrar-mi-cuenta", userId: "99999999-9999-9999-9999-999999999999" }));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true });
-    const removal = calls.find((call) => call.method === "DELETE");
+    const removal = calls.find((call) => call.method === "DELETE" && call.url.includes("/auth/"));
     expect(removal?.url).toBe(`https://db.example/auth/v1/admin/users/${userId}`);
     expect(removal?.headers.get("apikey")).toBe("sb_secret_x");
     // Una clave secreta nueva no es un JWT: no va en Authorization.
     expect(removal?.headers.get("authorization")).toBeNull();
+  });
+
+  it("antes de la cuenta borra sus traducciones del bucket, y solo las suyas", async () => {
+    const calls = supabase();
+    expect((await DELETE(request({ confirm: "borrar-mi-cuenta" }))).status).toBe(200);
+    const storage = calls.findIndex((call) => call.method === "DELETE" && call.url.endsWith("/storage/v1/object/translations"));
+    const account = calls.findIndex((call) => call.method === "DELETE" && call.url.includes("/auth/v1/admin/users/"));
+    expect(storage).toBeGreaterThan(-1);
+    expect(storage).toBeLessThan(account);
+    expect(JSON.parse(calls[storage]!.body)).toEqual({
+      prefixes: [`${userId}/libro-a/es.x.json`, `${userId}/libro-a/en.y.json`, `${userId}/libro-b/es.z.json`],
+    });
+    expect(calls[storage]!.headers.get("apikey")).toBe("sb_secret_x");
+  });
+
+  it("sin bucket de traducciones, borra la cuenta igual", async () => {
+    const calls = supabase({ bucket: false });
+    expect((await DELETE(request({ confirm: "borrar-mi-cuenta" }))).status).toBe(200);
+    expect(calls.some((call) => call.url.includes("/auth/v1/admin/users/"))).toBe(true);
+  });
+
+  it("si no puede borrar las traducciones, no borra la cuenta", async () => {
+    const calls = supabase({ storageDeleteStatus: 500 });
+    const response = await DELETE(request({ confirm: "borrar-mi-cuenta" }));
+    expect(response.status).toBe(503);
+    expect(calls.some((call) => call.url.includes("/auth/v1/admin/users/"))).toBe(false);
   });
 
   it("sin la confirmación explícita, desde otro origen o sin sesión, no borra nada", async () => {
