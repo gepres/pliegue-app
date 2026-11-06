@@ -237,6 +237,9 @@ const paths = {
 
 export type IconName = keyof typeof paths;
 
+/** Todos los iconos, en su orden: para el catálogo (/design-system). */
+export const iconNames = Object.keys(paths) as IconName[];
+
 export function Icon({
   name,
   size = 20,

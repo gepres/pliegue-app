@@ -37,6 +37,14 @@ export const elevationTokens = [
   { name: "raised", use: "Controles que se pueden pulsar" },
   { name: "overlay", use: "Menús, hojas y listas desplegables" },
   { name: "focus", use: "Elemento destacado sobre el resto" },
+  { name: "sheet", use: "Hoja lateral (Sheet), desde la derecha" },
+  { name: "sheet-bottom", use: "Hoja desde abajo, en el móvil" },
+  { name: "toast", use: "Aviso breve (Toast)" },
+  { name: "dialog", use: "Diálogo de confirmación" },
+  { name: "dock", use: "Barra flotante de los lectores" },
+  { name: "thumb", use: "Tirador de un deslizador" },
+  { name: "cover", use: "Portada generada en la Biblioteca" },
+  { name: "cover-hover", use: "Portada al pasar por encima" },
 ] as const;
 
 export const spacingTokens = [

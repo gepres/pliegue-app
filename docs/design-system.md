@@ -100,6 +100,26 @@ Los números y títulos dentro de `/design-system` son muestras visuales identif
 **Muestra de catálogo**. Las rutas de producto no comparten esos fixtures: los estados
 vacíos, tarjetas, métricas y llamadas a retomar se construyen con datos reales del navegador.
 
+### Controles de la app (`app-ui`)
+
+`apps/web/app/components/app-ui` reúne los controles que nacieron con el rediseño del lector y
+de la Biblioteca: `IconButton`, `Segmented`, `Disclosure`, `Toast`, `Popover`, `MenuItem`,
+`Sheet`, el diálogo de confirmación y la iconografía (54 iconos de trazo 1,75 px).
+Se quedan en la app, y no en `@pliegue/ui`, por tres razones (02.2b):
+
+- usan CSS Modules y piezas de Next y del shell de la app (`createPortal` sobre el `body` de la
+  app, el `ConfirmDialogHost` montado en el shell, la geometría del menú lateral), mientras que
+  `@pliegue/ui` es CSS global con prefijo y sin dependencias de la app;
+- su API aún cambia con cada pantalla nueva: congelarla en el paquete obligaría a versionar
+  cambios que hoy son locales;
+- ninguna otra app consume el paquete todavía.
+
+A cambio cumplen lo mismo que el paquete: solo tokens (los colores, velos y sombras sueltos
+pasaron a `@pliegue/tokens`: `--pliegue-color-scrim`, `--pliegue-elevation-sheet`, `-toast`,
+`-dialog`, `-dock`, `-cover`… y los colores de portada `--pliegue-cover-*`), accesibilidad
+documentada en cada componente, y una sección propia en `/design-system` con sus variantes y
+estados. Si otra app los necesita, se mueven al paquete.
+
 El catálogo ejecutable en `/design-system` contiene ejemplos Light/Dark. Las preferencias
 de `/app/ajustes` consumen `Field` y `Select`; el lector local documenta la primera
 composición de producto multiformato.

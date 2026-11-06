@@ -2,6 +2,8 @@ import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AppUiCatalog } from "./app-ui-catalog";
+
 import { elevationTokens, primitiveColors, semanticTokens, spacingTokens } from "@pliegue/tokens";
 import { Button, Card, Field, Input, Select, Switch, Tag, buttonClassName } from "@pliegue/ui";
 
@@ -490,6 +492,18 @@ export default function DesignSystemPage() {
           </div>
         </Card>
         </div>
+      </section>
+
+      <section aria-labelledby="app-ui-title" className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <span>Controles de la app</span>
+          <h2 id="app-ui-title">app-ui: botones de icono, menús, hojas y avisos</h2>
+          <p>
+            Viven en <code>apps/web/app/components/app-ui</code> y no en <code>@pliegue/ui</code>:
+            la razón está en docs/design-system.md. Usan los mismos tokens y se revisan aquí igual.
+          </p>
+        </div>
+        <AppUiCatalog />
       </section>
 
       <section aria-labelledby="product-pattern-title" className={styles.section}>

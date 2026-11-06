@@ -59,6 +59,33 @@
   /* Menús, hojas y listas desplegables: flotan sobre la página, no sobre la tarjeta. */
   --pliegue-elevation-overlay: 0 1px 3px rgb(37 35 31 / 8%), 0 18px 44px -12px rgb(37 35 31 / 30%);
 
+  /* Superficies de la app (02.2b): hojas, menús, avisos y diálogos de app-ui, el dock de los
+     lectores y las portadas generadas. Iguales en claro y en oscuro: son sombras y velos sobre
+     lo que haya debajo, y la portada lleva su propio color. */
+  --pliegue-color-scrim: rgb(15 14 12 / 38%);
+  --pliegue-color-scrim-strong: rgb(15 14 12 / 42%);
+  --pliegue-elevation-sheet: -24px 0 60px rgb(0 0 0 / 14%);
+  --pliegue-elevation-sheet-bottom: 0 -18px 50px rgb(0 0 0 / 18%);
+  --pliegue-elevation-toast: 0 12px 32px rgb(0 0 0 / 22%);
+  --pliegue-elevation-dialog: 0 24px 64px rgb(15 14 12 / 28%);
+  --pliegue-elevation-dock: 0 16px 40px rgb(0 0 0 / 16%), 0 2px 6px rgb(0 0 0 / 6%);
+  --pliegue-elevation-thumb: 0 1px 4px rgb(0 0 0 / 25%);
+  --pliegue-elevation-cover: 0 1px 2px rgb(0 0 0 / 12%), 0 10px 24px -12px rgb(0 0 0 / 40%);
+  --pliegue-elevation-cover-hover: 0 1px 2px rgb(0 0 0 / 12%), 0 18px 32px -14px rgb(0 0 0 / 50%);
+  /* Portada generada: el color del formato, el brillo y el lomo, y lo que va encima. */
+  --pliegue-cover-spreadsheet: #4d6b59;
+  --pliegue-cover-plain-text: #9a6f22;
+  --pliegue-cover-image: #5a5a6e;
+  --pliegue-cover-sheen: rgb(255 255 255 / 14%);
+  --pliegue-cover-spine: rgb(0 0 0 / 18%);
+  --pliegue-cover-ink: rgb(255 255 255 / 92%);
+  --pliegue-cover-track: rgb(255 255 255 / 25%);
+  --pliegue-cover-fill: #fff;
+  /* La página de un PDF es blanca en los dos temas: lo que se pinta encima, también. */
+  --pliegue-page-paper: #fff;
+  --pliegue-page-ink: #1d1b18;
+  --pliegue-color-parallel-highlight: rgb(124 92 224 / 18%);
+
   --pliegue-font-brand: "Cormorant Garamond", Georgia, serif;
   --pliegue-font-reading: "Source Serif 4", Georgia, serif;
   --pliegue-font-ui: Inter, system-ui, sans-serif;

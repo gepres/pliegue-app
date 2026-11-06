@@ -1,0 +1,83 @@
+.row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.column {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.note {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+  padding: var(--pliegue-spacing-sm) 0;
+}
+
+.trigger {
+  align-items: center;
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-control);
+  border-radius: var(--pliegue-radius-full);
+  color: var(--pliegue-color-text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.875rem;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+.trigger:focus-visible {
+  outline: 3px solid var(--pliegue-color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* En escritorio la tarjeta va en fila: la rejilla salta a la línea de abajo, a todo lo ancho. En
+   el móvil va en columna y la rejilla se estira, como el resto. */
+.iconsCard {
+  flex-wrap: wrap;
+}
+
+/* En columna (como la deja el catálogo por debajo de 800 px), saltar de línea la mandaría a una
+   segunda columna, fuera de la tarjeta. */
+@media (max-width: 800px) {
+  .iconsCard {
+    flex-wrap: nowrap;
+  }
+}
+
+.icons {
+  flex: 1 1 100%;
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.icons li {
+  align-items: center;
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  color: var(--pliegue-color-icon-default, var(--pliegue-color-text-primary));
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: var(--pliegue-spacing-sm);
+}
+
+.icons code {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.6875rem;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
