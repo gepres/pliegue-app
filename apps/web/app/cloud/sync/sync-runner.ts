@@ -57,11 +57,24 @@ export interface CollectionCounts {
   waiting: number;
 }
 
+/** Un libro con algo guardado en la cuenta que no está en este equipo, con el nombre de su ficha. */
+export interface BookElsewhere {
+  authors: string[];
+  key: string;
+  title: string;
+}
+
 export interface SyncSummary {
   applied: number;
   /** Libros de este equipo que tienen algo guardado en la cuenta. */
   booksWithState: number;
   collections: Record<string, CollectionCounts>;
+  /**
+   * Libros con avance, notas, favorito o ficha en la cuenta que no están en este equipo. Se
+   * nombran los que tienen ficha sincronizada (si aquí se aceptan las fichas); el resto solo se
+   * cuenta: de un libro sin ficha la nube guarda la huella de su archivo, no su nombre.
+   */
+  elsewhere: { named: BookElsewhere[]; total: number };
   pulled: number;
   pushed: number;
 }
@@ -164,7 +177,14 @@ export async function runSync({
   const state = await stateStore.load();
   const since = state.cursor ? new Date(Date.parse(state.cursor) - pullOverlapMs).toISOString() : null;
   const rows = await remote.pull(since);
-  const summary: SyncSummary = { applied: 0, booksWithState: 0, collections: {}, pulled: rows.length, pushed: 0 };
+  const summary: SyncSummary = {
+    applied: 0,
+    booksWithState: 0,
+    collections: {},
+    elsewhere: { named: [], total: 0 },
+    pulled: rows.length,
+    pushed: 0,
+  };
 
   let cursor = state.cursor;
   for (const row of rows) {
@@ -185,6 +205,8 @@ export async function runSync({
   const next: SyncState = { base: {}, cursor, docIds: Object.fromEntries(docIds), pending: {} };
   const outgoing: OutgoingRow[] = [];
   const booksWithState = new Set<string>();
+  const elsewhere = new Set<string>();
+  const named = new Map<string, BookElsewhere>();
 
   for (const collection of collections) {
     const remoteEntries = toMap(state.pending[collection.name]);
@@ -232,12 +254,24 @@ export async function runSync({
       cloud: live.length,
       waiting,
     };
+    const describe = enabled(collection) ? collection.describe : undefined;
     for (const entry of live) {
-      if (entry.docKey && context.keys.documentByKey.has(entry.docKey)) booksWithState.add(entry.docKey);
+      if (!entry.docKey) continue;
+      if (context.keys.documentByKey.has(entry.docKey)) {
+        booksWithState.add(entry.docKey);
+        continue;
+      }
+      elsewhere.add(entry.docKey);
+      const book = describe && !named.has(entry.docKey) ? describe(entry.payload) : null;
+      if (book) named.set(entry.docKey, { ...book, key: entry.docKey });
     }
   }
 
   summary.booksWithState = booksWithState.size;
+  summary.elsewhere = {
+    named: [...named.values()].sort((left, right) => left.title.localeCompare(right.title, "es")),
+    total: elsewhere.size,
+  };
   summary.pushed = outgoing.length;
   onPlanned?.(summary);
 

@@ -51,6 +51,11 @@ export interface SyncContext {
 export interface SyncCollection {
   apply(entries: readonly SyncEntry[], context: SyncContext): Promise<void>;
   consent?: "catalogAi";
+  /**
+   * Título y autores del libro de un elemento, si lo dice. Con eso se nombra un libro que está
+   * en otro equipo y no en este (06.3); solo lo hacen las fichas, que ya viajan con permiso.
+   */
+  describe?(payload: unknown): { authors: string[]; title: string } | null;
   /** El documento de un elemento remoto, para saber si aquí se puede aplicar. */
   docKeyOf(key: string, payload: unknown): string | null;
   name: string;
@@ -187,6 +192,16 @@ const catalogAi: SyncCollection = {
     }
   },
   consent: "catalogAi",
+  describe(payload) {
+    if (!isRecord(payload) || !isRecord(payload.catalog)) return null;
+    const { authors, canonicalTitle } = payload.catalog;
+    const title = typeof canonicalTitle === "string" ? canonicalTitle.trim() : "";
+    if (!title) return null;
+    return {
+      authors: Array.isArray(authors) ? authors.filter((name): name is string => typeof name === "string" && name.trim() !== "") : [],
+      title,
+    };
+  },
   docKeyOf: (key) => key,
   name: "catalog-ai",
   snapshot(context) {
