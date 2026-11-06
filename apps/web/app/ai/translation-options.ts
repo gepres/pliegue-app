@@ -3,7 +3,8 @@
  * de la persona. Aquí están los datos de la comparativa de Ajustes y lo que cuesta cada opción,
  * calculado a partir de sus precios y no escrito a mano.
  *
- * Precios verificados el 29-sep-2026 en la documentación de cada proveedor. Calidad: WMT25, la
+ * Precios verificados el 29-sep-2026 en la documentación de cada proveedor y, los de las IA, de
+ * nuevo el 6-nov-2026 en Artificial Analysis (artificialanalysis.ai). Calidad: WMT25, la
  * evaluación humana de referencia de la traducción automática, puso a los LLM grandes en cabeza
  * —Gemini 2.5 Pro, en el grupo ganador de 14 de 15 pares; las traducciones humanas de referencia,
  * solo en 6—. Los modelos baratos de esas familias no se evaluaron allí: su calidad es una
@@ -153,8 +154,8 @@ export const translationOptions: readonly TranslationOption[] = [
     free: "No",
     id: "anthropic",
     label: "Claude",
-    model: "claude-haiku-4-5",
-    pricing: { input: 1, kind: "tokens", output: 5 },
+    model: "claude-haiku-5-5",
+    pricing: { input: 0.1, kind: "tokens", output: 0.5 },
     privacy: "Va a Anthropic",
     quality: "Muy buena",
     speed: "2-5 s por página",

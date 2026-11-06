@@ -37,19 +37,20 @@ export interface AiSettings {
 }
 
 /**
- * Modelos de partida, verificados contra la documentación de cada proveedor el 14 de agosto
- * de 2026. Catalogar es una tarea de mucha entrada y poca deliberación —un extracto por
- * documento, una ficha de vuelta—, así que en cada proveedor se elige su gama de trabajo
- * y no la más capaz.
+ * Modelos de partida, los más baratos de cada proveedor para catalogar y traducir (04.2b,
+ * decisión del dueño del 6-nov-2026). Precios e índice de calidad verificados ese día en
+ * Artificial Analysis (artificialanalysis.ai), en dólares por millón de tokens:
  *
- * - `gpt-5.6-luna` es el modelo que OpenAI destina a volumen alto y coste contenido.
- * - `claude-sonnet-5` sustituye a `claude-sonnet-4-6`, que seguía activo pero era de la
- *   generación anterior.
- * - `gemini-3.5-flash-lite` es el que Google recomienda para proyectos nuevos de alto volumen
- *   (29-sep-2026): la gama 2.5 ya solo la usan quienes la tenían. Tiene nivel gratuito.
- * - `qwen3:8b` está en la biblioteca de Ollama y admite salida estructurada por esquema, que
- *   es lo que exige el contrato de ficha. Ojo: eso vale para la instalación local; Ollama
- *   Cloud todavía no la admite.
+ * - `gpt-6-luna`: 0,10 / 0,50 (índice 28). Sustituye a `gpt-5.6-luna` (0,20 / 1,20, índice 24),
+ *   que la propia página da por obsoleto.
+ * - `claude-haiku-5-5`: 0,10 / 0,50 (índice 36). Sustituye a `claude-sonnet-5` al catalogar
+ *   (2 / 10) y a `claude-haiku-4-5` al traducir (1 / 5): para una ficha de un extracto o para
+ *   traducir basta, y cuesta de 10 a 20 veces menos.
+ * - `gemini-3.5-flash-lite`: 0,30 / 2,50 (índice 12). El Flash-Lite más reciente; tiene nivel
+ *   gratuito en AI Studio.
+ * - `qwen3:8b`: en el equipo y gratis. Admite salida estructurada por esquema, que es lo que
+ *   exige el contrato de ficha (en la instalación local; Ollama Cloud todavía no). Pesa unos
+ *   5 GB: va bien con 16 GB de memoria.
  *
  * Al revisarlos, confirma el identificador en la documentación vigente del proveedor —cambian
  * al publicar generaciones nuevas— y recuerda que un identificador retirado falla en la primera
@@ -61,30 +62,62 @@ export const defaultAiSettings: AiSettings = {
   concurrency: 2,
   maxExcerptCharacters: 12_000,
   models: {
-    anthropic: "claude-sonnet-5",
+    anthropic: "claude-haiku-5-5",
     gemini: "gemini-3.5-flash-lite",
     ollama: "qwen3:8b",
-    openai: "gpt-5.6-luna",
+    openai: "gpt-6-luna",
   },
   ollamaMode: "local",
   ollamaUrl: "http://localhost:11434",
   provider: "openai",
   schemaVersion: 1,
-  // Los de menor coste de cada proveedor, revisados el 29-sep-2026: con ellos un libro entero
-  // sale por céntimos (OpenAI, Gemini) o por un dólar (Claude Haiku).
+  // Los de menor coste de cada proveedor (6-nov-2026): con ellos un libro entero sale por
+  // céntimos.
   azureRegion: "",
   libreTranslateUrl: "https://libretranslate.com",
   translationProvider: "browser",
   translationModels: {
-    anthropic: "claude-haiku-4-5",
+    anthropic: "claude-haiku-5-5",
     gemini: "gemini-3.5-flash-lite",
     ollama: "qwen3:8b",
     openai: "gpt-6-luna",
   },
 };
 
-function cleanModel(value: unknown, fallback: string) {
-  return typeof value === "string" && value.trim() ? value.trim().slice(0, 120) : fallback;
+/**
+ * Modelos de partida anteriores. Quien sigue con uno de ellos no lo eligió: era el que venía.
+ * Se cambia por el de partida de ahora; quien eligió otro a mano lo conserva (04.2b).
+ */
+export const legacyDefaultModels: {
+  models: Partial<Record<AiProvider, readonly string[]>>;
+  translationModels: Partial<Record<AiProvider, readonly string[]>>;
+} = {
+  models: { anthropic: ["claude-sonnet-5"], openai: ["gpt-5.6-luna"] },
+  translationModels: { anthropic: ["claude-haiku-4-5"] },
+};
+
+/** Lo que `parseAiSettings` cambiaría de lo guardado: «antes → ahora», para avisar una vez. */
+export function legacyModelChanges(value: unknown) {
+  const changes: Array<{ from: string; kind: "models" | "translationModels"; provider: AiProvider; to: string }> = [];
+  if (!value || typeof value !== "object" || Array.isArray(value)) return changes;
+  const candidate = value as Record<string, unknown>;
+  for (const kind of ["models", "translationModels"] as const) {
+    const stored = candidate[kind];
+    if (!stored || typeof stored !== "object") continue;
+    for (const provider of aiProviders) {
+      const model = (stored as Record<string, unknown>)[provider];
+      if (typeof model === "string" && legacyDefaultModels[kind][provider]?.includes(model.trim())) {
+        changes.push({ from: model.trim(), kind, provider, to: defaultAiSettings[kind][provider] });
+      }
+    }
+  }
+  return changes;
+}
+
+function cleanModel(value: unknown, fallback: string, legacy: readonly string[] = []) {
+  const model = typeof value === "string" ? value.trim().slice(0, 120) : "";
+  // Un modelo de partida antiguo pasa al de ahora (04.2b).
+  return model && !legacy.includes(model) ? model : fallback;
 }
 
 export function normalizeOllamaUrl(value: unknown, mode: AiSettings["ollamaMode"]) {
@@ -130,10 +163,10 @@ export function parseAiSettings(value: unknown): AiSettings {
         ? Math.min(24_000, Math.max(4_000, Math.round(candidate.maxExcerptCharacters)))
         : defaultAiSettings.maxExcerptCharacters,
     models: {
-      anthropic: cleanModel(models.anthropic, defaultAiSettings.models.anthropic),
-      gemini: cleanModel(models.gemini, defaultAiSettings.models.gemini),
-      ollama: cleanModel(models.ollama, defaultAiSettings.models.ollama),
-      openai: cleanModel(models.openai, defaultAiSettings.models.openai),
+      anthropic: cleanModel(models.anthropic, defaultAiSettings.models.anthropic, legacyDefaultModels.models.anthropic),
+      gemini: cleanModel(models.gemini, defaultAiSettings.models.gemini, legacyDefaultModels.models.gemini),
+      ollama: cleanModel(models.ollama, defaultAiSettings.models.ollama, legacyDefaultModels.models.ollama),
+      openai: cleanModel(models.openai, defaultAiSettings.models.openai, legacyDefaultModels.models.openai),
     },
     ollamaMode,
     ollamaUrl: normalizeOllamaUrl(candidate.ollamaUrl, ollamaMode),
@@ -145,10 +178,26 @@ export function parseAiSettings(value: unknown): AiSettings {
       ? (candidate.translationProvider as TranslationProviderChoice)
       : "browser",
     translationModels: {
-      anthropic: cleanModel(translationModels.anthropic, defaultAiSettings.translationModels.anthropic),
-      gemini: cleanModel(translationModels.gemini, defaultAiSettings.translationModels.gemini),
-      ollama: cleanModel(translationModels.ollama, defaultAiSettings.translationModels.ollama),
-      openai: cleanModel(translationModels.openai, defaultAiSettings.translationModels.openai),
+      anthropic: cleanModel(
+        translationModels.anthropic,
+        defaultAiSettings.translationModels.anthropic,
+        legacyDefaultModels.translationModels.anthropic,
+      ),
+      gemini: cleanModel(
+        translationModels.gemini,
+        defaultAiSettings.translationModels.gemini,
+        legacyDefaultModels.translationModels.gemini,
+      ),
+      ollama: cleanModel(
+        translationModels.ollama,
+        defaultAiSettings.translationModels.ollama,
+        legacyDefaultModels.translationModels.ollama,
+      ),
+      openai: cleanModel(
+        translationModels.openai,
+        defaultAiSettings.translationModels.openai,
+        legacyDefaultModels.translationModels.openai,
+      ),
     },
   };
 }

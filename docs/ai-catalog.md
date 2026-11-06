@@ -80,6 +80,30 @@ Los ajustes no sensibles viven en la clave versionada `pliegue-ai-settings-v1` d
 `localStorage`. Las claves no entran en `localStorage`, IndexedDB, variables
 `NEXT_PUBLIC_`, repositorio o telemetría.
 
+## Modelos de partida (04.2b)
+
+Los más baratos de cada proveedor para catalogar y traducir (decisión del dueño del 6-nov-2026).
+Precios verificados ese día en [Artificial Analysis](https://artificialanalysis.ai/), en dólares
+por millón de tokens (entrada / salida), con su índice de inteligencia:
+
+| Proveedor | Modelo | Precio | Índice |
+| --- | --- | --- | --- |
+| OpenAI | `gpt-6-luna` | 0,10 / 0,50 | 28 |
+| Claude | `claude-haiku-5-5` | 0,10 / 0,50 | 36 |
+| Gemini | `gemini-3.5-flash-lite` | 0,30 / 2,50 | 12 |
+| Ollama | `qwen3:8b` | gratis, en el equipo | — |
+
+- **Antes eran** `gpt-5.6-luna` (0,20 / 1,20, obsoleto), `claude-sonnet-5` al catalogar y
+  `claude-haiku-4-5` al traducir (1 / 5).
+- **Migración:** quien sigue con un modelo de partida antiguo pasa al de ahora
+  (`legacyDefaultModels` en `ai-settings.ts`). Lo elegido a mano se conserva. Ajustes lo avisa
+  hasta que se guardan los ajustes («Entendido»).
+- **Ollama:** Ajustes recomienda `qwen3:8b` (unos 5,2 GB, mejor con 16 GB de memoria; con
+  menos, `qwen3:4b`). Comprueba con `/api/show` si el modelo elegido está y, si no, lo descarga
+  con `/api/pull` y su avance (`ai/ollama-pull.ts`). Si Ollama no responde, lo dice: hay que
+  abrirlo y permitir esta web (`OLLAMA_ORIGINS`).
+- La tabla de precios del presupuesto (04.6) trae estos precios y los de los modelos anteriores.
+
 ## Interfaz común (04.2)
 
 `apps/web/app/ai/adapters.ts` da un mismo contrato a los cuatro proveedores para tres

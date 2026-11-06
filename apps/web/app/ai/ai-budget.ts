@@ -128,9 +128,9 @@ export interface AiBudget {
 }
 
 /**
- * Precios de partida: los de la comparativa de traductores (`translation-options.ts`, verificados
- * el 29-sep-2026). De los modelos de catalogar que no están allí no hay precio verificado: quedan
- * sin precio, y Ajustes lo dice para que la persona lo ponga. Mejor eso que una cifra inventada.
+ * Precios de partida, verificados el 6-nov-2026 en Artificial Analysis (artificialanalysis.ai):
+ * los modelos de partida de ahora y los anteriores, que siguen en uso hasta que se migran. Un
+ * modelo que no está aquí queda sin precio, y Ajustes lo dice para que la persona lo ponga.
  */
 export const defaultAiBudget: AiBudget = {
   characterPrices: { azure: 10, deepl: 25 },
@@ -139,7 +139,10 @@ export const defaultAiBudget: AiBudget = {
   providers: {},
   tokenPrices: {
     "anthropic:claude-haiku-4-5": { input: 1, output: 5 },
+    "anthropic:claude-haiku-5-5": { input: 0.1, output: 0.5 },
+    "anthropic:claude-sonnet-5-5": { input: 2, output: 10 },
     "gemini:gemini-3.5-flash-lite": { input: 0.3, output: 2.5 },
+    "openai:gpt-5.6-luna": { input: 0.2, output: 1.2 },
     "openai:gpt-6-luna": { input: 0.1, output: 0.5 },
   },
 };

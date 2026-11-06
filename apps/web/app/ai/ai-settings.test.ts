@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  defaultAiSettings,
-  maxCatalogConcurrency,
-  normalizeAzureRegion,
-  normalizeOllamaUrl,
-  parseAiSettings,
-  translationProviderOf,
-} from "./ai-settings";
+import { parseAiSettings, defaultAiSettings, legacyModelChanges, maxCatalogConcurrency, normalizeAzureRegion, normalizeOllamaUrl, translationProviderOf } from "./ai-settings";
 
 describe("AI settings", () => {
   it("traduce con el navegador mientras no se elija una IA, y la IA puede ser otra que la de catalogar", () => {
@@ -29,7 +22,7 @@ describe("AI settings", () => {
 
   it("guarda aparte el modelo para traducir, con los más baratos por defecto", () => {
     expect(defaultAiSettings.translationModels).toEqual({
-      anthropic: "claude-haiku-4-5",
+      anthropic: "claude-haiku-5-5",
       gemini: "gemini-3.5-flash-lite",
       ollama: "qwen3:8b",
       openai: "gpt-6-luna",
@@ -41,6 +34,23 @@ describe("AI settings", () => {
     expect(parsed.translationModels.gemini).toBe("gemini-3.8-flash");
     expect(parsed.translationModels.openai).toBe("gpt-6-luna");
     expect(parsed.models.gemini).toBe("gemini-3.5-flash-lite");
+  });
+
+  it("quien sigue con un modelo de partida antiguo pasa al nuevo; lo elegido a mano se queda (04.2b)", () => {
+    const stored = {
+      models: { anthropic: "claude-sonnet-5", gemini: "gemini-3.8-flash", openai: "gpt-5.6-luna" },
+      provider: "openai",
+      translationModels: { anthropic: "claude-haiku-4-5", openai: "gpt-6-sol" },
+    };
+    const parsed = parseAiSettings(stored);
+    expect(parsed.models).toMatchObject({ anthropic: "claude-haiku-5-5", gemini: "gemini-3.8-flash", openai: "gpt-6-luna" });
+    expect(parsed.translationModels).toMatchObject({ anthropic: "claude-haiku-5-5", openai: "gpt-6-sol" });
+    expect(legacyModelChanges(stored)).toEqual([
+      { from: "gpt-5.6-luna", kind: "models", provider: "openai", to: "gpt-6-luna" },
+      { from: "claude-sonnet-5", kind: "models", provider: "anthropic", to: "claude-haiku-5-5" },
+      { from: "claude-haiku-4-5", kind: "translationModels", provider: "anthropic", to: "claude-haiku-5-5" },
+    ]);
+    expect(legacyModelChanges(parsed)).toEqual([]);
   });
 
   it("mantiene valores seguros por defecto", () => {

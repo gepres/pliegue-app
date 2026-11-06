@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-import { defaultAiSettings, parseAiSettings, type AiSettings } from "./ai-settings";
+import { defaultAiSettings, legacyModelChanges, parseAiSettings, type AiSettings } from "./ai-settings";
 
 const storageKey = "pliegue-ai-settings-v1";
 const changeEvent = "pliegue-ai-settings-change";
@@ -48,6 +48,18 @@ export function saveAiSettings(settings: AiSettings) {
     cachedSettings = parsed;
   }
   window.dispatchEvent(new Event(changeEvent));
+}
+
+/**
+ * Modelos de partida antiguos que siguen guardados (04.2b): ya se usan los nuevos, y Ajustes lo
+ * avisa hasta que se guarden los ajustes.
+ */
+export function storedLegacyModelChanges() {
+  try {
+    return legacyModelChanges(JSON.parse(window.localStorage.getItem(storageKey) ?? "null"));
+  } catch {
+    return [];
+  }
 }
 
 /** Los ajustes de ahora, fuera de React (el freno del presupuesto los consulta). */
