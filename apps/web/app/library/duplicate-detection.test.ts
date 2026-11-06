@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import type { LibraryDocument } from "./documents";
 import {
   containment,
   differenceHash,
   differentAuthors,
   differentVolumes,
+  duplicateItemOf,
   findDuplicatePairs,
   hammingDistance,
   normalizeWords,
@@ -65,6 +67,14 @@ describe("libros repetidos que no son el mismo archivo (03.6)", () => {
         ["title", "escaneo", "texto"],
       ]),
     );
+  });
+
+  it("las etiquetas de origen («Copia importada», «Carpeta vinculada») no cuentan como autor", () => {
+    const base = { availability: "available", format: "pdf", meta: "", tags: [], title: "La experiencia interna" } as const;
+    const scan = { ...base, author: "Carpeta vinculada · Libros", id: "escaneo", origin: "local", reference: { kind: "local-folder", relativePath: "a.pdf", sourceId: "s" } } as unknown as LibraryDocument;
+    const copy = { ...base, author: "Copia importada", id: "copia", origin: "local", reference: { kind: "local-copy", storageId: "c" } } as unknown as LibraryDocument;
+    const pairs = findDuplicatePairs([duplicateItemOf(scan, "", null), duplicateItemOf(copy, prose("experiencia"), null)]);
+    expect(pairs.map((pair) => [pair.reason, ...pair.ids])).toEqual([["title", "escaneo", "copia"]]);
   });
 
   it("los frenos: otro tomo, otro idioma, otro autor y las palabras de colección", () => {

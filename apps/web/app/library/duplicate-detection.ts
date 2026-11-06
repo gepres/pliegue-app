@@ -1,3 +1,5 @@
+import { documentDisplayTitle, documentLanguage, type LibraryDocument } from "./documents";
+
 /**
  * Libros repetidos que no son el mismo archivo (03.6): otro escaneo, otra edición, el EPUB y el
  * PDF del mismo libro, una copia en color y otra en grises. Los idénticos byte a byte ya se
@@ -31,6 +33,22 @@ export interface DuplicateItem {
   /** Texto del principio del libro (el del índice). */
   text?: string;
   title: string;
+}
+
+/**
+ * Lo que el detector necesita de un documento de la Biblioteca. La autoría sale solo de la
+ * ficha: `document.author` es una etiqueta («Copia importada», «Carpeta vinculada · Libros») y
+ * haría «autores distintos» a dos copias del mismo libro.
+ */
+export function duplicateItemOf(document: LibraryDocument, text: string, coverHash: string | null): DuplicateItem {
+  return {
+    authors: document.catalog?.authors ?? [],
+    coverHash,
+    id: document.id,
+    language: documentLanguage(document),
+    text,
+    title: documentDisplayTitle(document),
+  };
 }
 
 export interface DuplicatePair {

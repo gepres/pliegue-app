@@ -6,6 +6,7 @@ import { Button, Tag } from "@pliegue/ui";
 
 import {
   differenceHash,
+  duplicateItemOf,
   findDuplicatePairs,
   textSignature,
   type DuplicateItem,
@@ -18,7 +19,7 @@ import {
   unmarkDuplicate,
   useDuplicateDecisions,
 } from "../../library/duplicate-store";
-import { documentDisplayTitle, documentLanguage, type LibraryDocument } from "../../library/documents";
+import { documentDisplayTitle, type LibraryDocument } from "../../library/documents";
 import { Sheet } from "../app-ui/overlays";
 import styles from "./duplicate-finder.module.css";
 
@@ -116,14 +117,7 @@ export function DuplicateFinder({
           signatureCache.set(key, signature);
         }
         signatures.push(signature);
-        items.push({
-          authors: document.catalog?.authors?.length ? document.catalog.authors : document.author ? [document.author] : [],
-          coverHash: await coverHashOf(document.cover?.src),
-          id: document.id,
-          language: documentLanguage(document),
-          text,
-          title: documentDisplayTitle(document),
-        });
+        items.push(duplicateItemOf(document, text, await coverHashOf(document.cover?.src)));
         // De 25 en 25, cediendo el turno: con cientos de libros, la página no se congela.
         if (index % 25 === 24) {
           if (run !== runRef.current) return;
