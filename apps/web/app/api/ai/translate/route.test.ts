@@ -179,7 +179,38 @@ describe("ruta de traducción con DeepL (05.5)", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ message: "Quota exceeded" }, { status: 456 })));
     const quota = await POST(request({ model: undefined, provider: "deepl" }, freeKey));
     expect(quota.status).toBe(429);
-    expect((await quota.json()).error).toMatch(/DeepL rechazó la solicitud por límite de uso/);
+    // El cupo agotado no se arregla esperando: el navegador no lo reintenta (04.2).
+    expect(await quota.json()).toMatchObject({ error: expect.stringMatching(/DeepL rechazó la solicitud por cupo o saldo agotado/), retryable: false });
+  });
+
+  it("si el navegador cancela, se corta también la llamada al proveedor (04.2)", async () => {
+    const controller = new AbortController();
+    let providerSignal: AbortSignal | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            providerSignal = init.signal ?? undefined;
+            init.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+          }),
+      ),
+    );
+    const base = request({ model: undefined, provider: "deepl" }, freeKey);
+    const pending = POST(new Request(base, { signal: controller.signal }));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    controller.abort();
+    const response = await pending;
+    expect(providerSignal?.aborted).toBe(true);
+    expect(response.status).toBe(499);
+  });
+
+  it("un límite por minuto se devuelve con lo que hay que esperar, para que el navegador reintente (04.2)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ message: "Too many requests" }, { headers: { "retry-after": "9" }, status: 429 })));
+    const rate = await POST(request({ model: undefined, provider: "deepl" }, freeKey));
+    expect(rate.status).toBe(429);
+    expect(rate.headers.get("retry-after")).toBe("9");
+    expect(await rate.json()).toMatchObject({ error: expect.stringMatching(/por minuto/), retryAfter: 9, retryable: true });
   });
 
   it("LibreTranslate no pasa por el servidor de Pliegue", async () => {

@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       schemaName: "pliegue_document_catalog",
       system: catalogSystemPrompt,
       user: createCatalogPrompt(body.input!),
-    });
+    }, request.signal);
     // Una sola ficha plana, como la devolvió el modelo: el navegador lee de ella la parte
     // básica y la de la edición con los mismos lectores que usa con Ollama.
     return Response.json({

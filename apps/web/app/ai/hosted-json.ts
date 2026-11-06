@@ -34,11 +34,15 @@ const providerNames: Record<HostedAiProvider, string> = {
 
 /** Conserva la causa hasta el `catch` de la ruta, que es donde se elige el código de salida. */
 export class ProviderFailureError extends Error {
+  readonly retryable: boolean;
+  readonly retryAfter: number | null;
   readonly status: number;
 
   constructor(failure: ProviderFailure) {
     super(failure.message);
     this.name = "ProviderFailureError";
+    this.retryable = failure.retryable;
+    this.retryAfter = failure.retryAfter;
     this.status = failure.status;
   }
 }
@@ -74,7 +78,7 @@ async function callOpenAi(request: StructuredRequest, signal: AbortSignal) {
     output_text?: string;
   };
   if (!response.ok) {
-    throw new ProviderFailureError(classifyProviderFailure("openai", response.status, payload, request.model));
+    throw new ProviderFailureError(classifyProviderFailure("openai", response.status, payload, request.model, response.headers));
   }
   const text =
     payload.output_text ??
@@ -101,7 +105,7 @@ async function callAnthropic(request: StructuredRequest, signal: AbortSignal) {
   });
   const payload = (await readPayload(response)) as { content?: Array<{ text?: string; type?: string }> };
   if (!response.ok) {
-    throw new ProviderFailureError(classifyProviderFailure("anthropic", response.status, payload, request.model));
+    throw new ProviderFailureError(classifyProviderFailure("anthropic", response.status, payload, request.model, response.headers));
   }
   return { payload, text: payload.content?.find((item) => item.type === "text")?.text };
 }
@@ -127,7 +131,7 @@ async function callGemini(request: StructuredRequest, signal: AbortSignal) {
     candidates?: Array<{ content?: { parts?: Array<{ text?: string; thought?: boolean }> } }>;
   };
   if (!response.ok) {
-    throw new ProviderFailureError(classifyProviderFailure("gemini", response.status, payload, request.model));
+    throw new ProviderFailureError(classifyProviderFailure("gemini", response.status, payload, request.model, response.headers));
   }
   // Lo que el modelo piensa llega en partes marcadas con `thought`: no es la respuesta.
   const parts = payload.candidates?.[0]?.content?.parts ?? [];
@@ -140,11 +144,18 @@ async function callGemini(request: StructuredRequest, signal: AbortSignal) {
 
 const callers = { anthropic: callAnthropic, gemini: callGemini, openai: callOpenAi };
 
-export async function requestStructuredJson(request: StructuredRequest): Promise<StructuredResponse> {
-  const { payload, text } = await callers[request.provider](
-    request,
-    AbortSignal.timeout(request.timeoutMs ?? 60_000),
-  );
+/**
+ * El tiempo de espera, y además la señal de la petición del navegador si se pasa (04.2): si la
+ * persona detiene el análisis o la traducción, se corta también la llamada al proveedor y no
+ * se gastan tokens en una respuesta que ya nadie espera.
+ */
+export function providerSignal(timeoutMs: number, signal?: AbortSignal) {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
+
+export async function requestStructuredJson(request: StructuredRequest, signal?: AbortSignal): Promise<StructuredResponse> {
+  const { payload, text } = await callers[request.provider](request, providerSignal(request.timeoutMs ?? 60_000, signal));
   const name = providerNames[request.provider];
   if (!text) throw new Error(`${name} no devolvió contenido.`);
   try {
@@ -154,15 +165,27 @@ export async function requestStructuredJson(request: StructuredRequest): Promise
   }
 }
 
-/** La respuesta de una ruta cuando falla la llamada: la causa con su código, o 502/504. */
+/**
+ * La respuesta de una ruta cuando falla la llamada: la causa con su código, o 502/504. Lo que
+ * admite reintento lo dice (`retryable`) y, si el proveedor pidió esperar, con `Retry-After`:
+ * es el navegador quien espera y reintenta, no la función del servidor.
+ */
 export function providerErrorResponse(error: unknown) {
   if (error instanceof ProviderFailureError) {
-    return Response.json({ error: error.message }, { status: error.status });
+    return Response.json(
+      { error: error.message, retryable: error.retryable, ...(error.retryAfter !== null ? { retryAfter: error.retryAfter } : {}) },
+      { ...(error.retryAfter !== null ? { headers: { "retry-after": String(error.retryAfter) } } : {}), status: error.status },
+    );
+  }
+  // El navegador se fue (se detuvo el análisis o la traducción): no hay a quién contestar.
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return Response.json({ error: "Se canceló la solicitud." }, { status: 499 });
   }
   const timeout = error instanceof DOMException && error.name === "TimeoutError";
   const message = error instanceof Error ? error.message : "El proveedor no respondió.";
+  // Un tiempo agotado no se reintenta solo: ya costó uno o dos minutos, y quizá tokens.
   return Response.json(
-    { error: timeout ? "El proveedor agotó el tiempo de espera." : message },
+    { error: timeout ? "El proveedor agotó el tiempo de espera." : message, retryable: false },
     { status: timeout ? 504 : 502 },
   );
 }

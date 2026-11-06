@@ -7,6 +7,7 @@ import {
   looksLikeApiKey,
   ProviderFailureError,
   providerErrorResponse,
+  providerSignal,
   requestStructuredJson,
 } from "../../../ai/hosted-json";
 import { classifyProviderFailure } from "../../../ai/provider-error";
@@ -51,7 +52,7 @@ function azureLanguage(code: string) {
   return code === "zh" ? "zh-Hans" : code;
 }
 
-async function callDeepL(apiKey: string, source: string, target: string, passages: readonly string[]) {
+async function callDeepL(apiKey: string, source: string, target: string, passages: readonly string[], signal: AbortSignal) {
   const response = await fetch(`${deeplEndpoint(apiKey)}/v2/translate`, {
     body: JSON.stringify({
       source_lang: deeplLanguage(source, "source"),
@@ -60,7 +61,7 @@ async function callDeepL(apiKey: string, source: string, target: string, passage
     }),
     headers: deeplHeaders(apiKey),
     method: "POST",
-    signal: AbortSignal.timeout(60_000),
+    signal: providerSignal(60_000, signal),
   });
   let payload: unknown = {};
   try {
@@ -68,12 +69,12 @@ async function callDeepL(apiKey: string, source: string, target: string, passage
   } catch {
     payload = {};
   }
-  if (!response.ok) throw new ProviderFailureError(classifyProviderFailure("deepl", response.status, payload, ""));
+  if (!response.ok) throw new ProviderFailureError(classifyProviderFailure("deepl", response.status, payload, "", response.headers));
   const results = (payload as { translations?: { text?: unknown }[] }).translations ?? [];
   return results.map((result) => (typeof result.text === "string" ? result.text : ""));
 }
 
-async function callAzure(apiKey: string, region: string, source: string, target: string, passages: readonly string[]) {
+async function callAzure(apiKey: string, region: string, source: string, target: string, passages: readonly string[], signal: AbortSignal) {
   const url = new URL("https://api.cognitive.microsofttranslator.com/translate");
   url.searchParams.set("api-version", "3.0");
   url.searchParams.set("from", azureLanguage(source));
@@ -87,7 +88,7 @@ async function callAzure(apiKey: string, region: string, source: string, target:
       ...(region ? { "ocp-apim-subscription-region": region } : {}),
     },
     method: "POST",
-    signal: AbortSignal.timeout(60_000),
+    signal: providerSignal(60_000, signal),
   });
   let payload: unknown = {};
   try {
@@ -95,7 +96,7 @@ async function callAzure(apiKey: string, region: string, source: string, target:
   } catch {
     payload = {};
   }
-  if (!response.ok) throw new ProviderFailureError(classifyProviderFailure("azure", response.status, payload, ""));
+  if (!response.ok) throw new ProviderFailureError(classifyProviderFailure("azure", response.status, payload, "", response.headers));
   const results = Array.isArray(payload) ? (payload as { translations?: { text?: unknown }[] }[]) : [];
   return results.map((result) => {
     const text = result.translations?.[0]?.text;
@@ -139,7 +140,7 @@ export async function POST(request: Request) {
 
   if (body.provider === "azure") {
     try {
-      const translations = await callAzure(apiKey, normalizeAzureRegion(body.region), body.source, body.target, passages);
+      const translations = await callAzure(apiKey, normalizeAzureRegion(body.region), body.source, body.target, passages, request.signal);
       // Azure cobra por caracteres, no por tokens.
       return Response.json({ translations, usage: { characters, inputTokens: 0, outputTokens: 0 } });
     } catch (error) {
@@ -149,7 +150,7 @@ export async function POST(request: Request) {
 
   if (body.provider === "deepl") {
     try {
-      const translations = await callDeepL(apiKey, body.source, body.target, passages);
+      const translations = await callDeepL(apiKey, body.source, body.target, passages, request.signal);
       if (translations.length !== passages.length) {
         return Response.json({ error: "DeepL no devolvió una traducción por texto.", mismatch: true }, { status: 422 });
       }
@@ -171,7 +172,7 @@ export async function POST(request: Request) {
       system: translationSystemPrompt(body.source, body.target, cleanGlossary(body.glossary)),
       timeoutMs: 120_000,
       user: createTranslationPrompt(passages),
-    });
+    }, request.signal);
     // Si el modelo se saltó o juntó algún pasaje se avisa con 422: el navegador parte el lote.
     try {
       return Response.json({ translations: parseTranslations(json, passages.length), usage });

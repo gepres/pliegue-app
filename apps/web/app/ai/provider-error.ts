@@ -6,12 +6,20 @@ import type { AiProvider } from "./document-catalog";
  * fallan igual de pronto y, contados como «el proveedor rechazó la solicitud», llevan a revisar
  * la clave durante un rato antes de mirar el modelo.
  */
-export type ProviderFailureKind = "credential" | "model" | "permission" | "provider" | "quota";
+export type ProviderFailureKind = "credential" | "model" | "permission" | "provider" | "quota" | "rate";
 
 export interface ProviderFailure {
   kind: ProviderFailureKind;
   /** Texto ya redactado para la persona: nombra la causa con sus palabras. */
   message: string;
+  /**
+   * Volver a intentarlo puede salir bien (04.2): un límite por minuto («rate») o el proveedor
+   * saturado o caído un momento (500, 502, 503, 504, 529). Un cupo o saldo agotado, una clave o
+   * un modelo, no.
+   */
+  retryable: boolean;
+  /** Los segundos que el proveedor pide esperar, si lo dice; `null` si no. */
+  retryAfter: number | null;
   /** Código con el que responder al navegador, para no aplanar toda causa en un 502. */
   status: number;
 }
@@ -35,7 +43,48 @@ const statusByKind: Record<ProviderFailureKind, number> = {
   permission: 403,
   provider: 502,
   quota: 429,
+  rate: 429,
 };
+
+/** Un fallo pasajero del proveedor: saturado (Anthropic responde 529) o caído un momento. */
+const transientStatuses = new Set([500, 502, 503, 504, 529]);
+
+/**
+ * Cuánto pide esperar el proveedor, en segundos: la cabecera `retry-after` (segundos o fecha),
+ * `retry-after-ms` de OpenAI, o el `RetryInfo` que Gemini mete en los detalles («17s»).
+ */
+export function readRetryAfter(headers: Pick<Headers, "get"> | null | undefined, payload: unknown, now = Date.now()): number | null {
+  const milliseconds = Number(headers?.get("retry-after-ms"));
+  if (Number.isFinite(milliseconds) && milliseconds > 0) return Math.ceil(milliseconds / 1000);
+  const header = headers?.get("retry-after")?.trim();
+  if (header) {
+    const seconds = Number(header);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds);
+    const date = Date.parse(header);
+    if (Number.isFinite(date)) return Math.max(0, Math.ceil((date - now) / 1000));
+  }
+  const delay = geminiDetails(payload)
+    .map((detail) => (detail as { retryDelay?: unknown }).retryDelay)
+    .find((value): value is string => typeof value === "string");
+  const seconds = delay ? Number.parseFloat(delay) : Number.NaN;
+  return Number.isFinite(seconds) && seconds >= 0 ? Math.ceil(seconds) : null;
+}
+
+function geminiDetails(payload: unknown): unknown[] {
+  const details = (payload as { error?: { details?: unknown } } | null)?.error?.details;
+  return Array.isArray(details) ? details : [];
+}
+
+/** Gemini dice en los detalles qué cuota se agotó: la del día o del mes no se arregla esperando un minuto. */
+function geminiDailyQuota(payload: unknown) {
+  return geminiDetails(payload).some((detail) => {
+    const violations = (detail as { violations?: unknown }).violations;
+    return (
+      Array.isArray(violations) &&
+      violations.some((violation) => /per(day|month)/i.test(String((violation as { quotaId?: unknown }).quotaId ?? "")))
+    );
+  });
+}
 
 /** El detalle del fallo llega con forma distinta en cada proveedor; aquí se reduce a lo común. */
 function readDetail(payload: unknown) {
@@ -56,17 +105,21 @@ function readDetail(payload: unknown) {
   };
 }
 
-function kindOf(status: number, code: string, message: string): ProviderFailureKind {
+function kindOf(status: number, code: string, message: string, payload: unknown): ProviderFailureKind {
   // El código del proveedor manda sobre el estado: OpenAI ha devuelto «model_not_found»
   // acompañado tanto de 404 como de 400 según la ruta.
   if (code === "model_not_found" || code === "not_found_error") return "model";
   if (code === "invalid_api_key" || code === "authentication_error") return "credential";
-  // Anthropic responde 402 «billing_error» cuando la cuenta se queda sin saldo.
-  if (code === "insufficient_quota" || code === "rate_limit_error" || code === "billing_error") return "quota";
+  // Sin saldo o sin cupo: OpenAI «insufficient_quota»; Anthropic, 402 «billing_error».
+  if (code === "insufficient_quota" || code === "billing_error") return "quota";
+  // Demasiadas solicitudes por minuto: se arregla esperando (04.2).
+  if (code === "rate_limit_error" || code === "rate_limit_exceeded") return "rate";
   if (code === "permission_error") return "permission";
   // Gemini: nombres de gRPC. Una clave mal puesta llega como 400 «API key not valid».
   if (code === "UNAUTHENTICATED" || /api key not valid/i.test(message)) return "credential";
-  if (code === "RESOURCE_EXHAUSTED") return "quota";
+  // Gemini usa el mismo nombre para el límite por minuto y para la cuota del día: la distinguen
+  // los detalles. Sin ellos, se toma por límite por minuto, que es lo frecuente en el plan gratis.
+  if (code === "RESOURCE_EXHAUSTED") return geminiDailyQuota(payload) ? "quota" : "rate";
   if (code === "PERMISSION_DENIED") return "permission";
   if (code === "NOT_FOUND") return "model";
 
@@ -76,7 +129,7 @@ function kindOf(status: number, code: string, message: string): ProviderFailureK
   if (status === 401) return "credential";
   if (status === 403) return "permission";
   if (status === 404) return "model";
-  if (status === 429) return "quota";
+  if (status === 429) return "rate";
   return "provider";
 }
 
@@ -98,7 +151,9 @@ function describe(kind: ProviderFailureKind, provider: FailingProvider, model: s
     case "permission":
       return `Tu cuenta de ${name} no tiene acceso al modelo ${quoted}.`;
     case "quota":
-      return `${name} rechazó la solicitud por límite de uso o saldo agotado. Inténtalo más tarde.`;
+      return `${name} rechazó la solicitud por cupo o saldo agotado. Esperar unos segundos no lo arregla: revisa tu plan, o vuelve cuando se renueve el cupo.`;
+    case "rate":
+      return `${name} limita las solicitudes por minuto. Pliegue esperó y lo volvió a intentar; si sigue, analiza menos a la vez o inténtalo dentro de un minuto.`;
     default:
       return raw.slice(0, 280) || `${name} rechazó la solicitud.`;
   }
@@ -117,6 +172,7 @@ export function classifyProviderFailure(
   status: number,
   payload: unknown,
   model: string,
+  headers?: Pick<Headers, "get"> | null,
 ): ProviderFailure {
   const { code, message } = readDetail(payload);
   // Azure responde 403 cuando se acabó el cupo gratuito del mes: es cupo, no permiso. DeepL usa
@@ -128,6 +184,16 @@ export function classifyProviderFailure(
         ? "quota"
         : provider === "deepl" && status === 403
           ? "credential"
-          : kindOf(status, code, message);
-  return { kind, message: describe(kind, provider, model, message), status: statusByKind[kind] };
+          : code === "overloaded_error"
+            ? "provider"
+            : kindOf(status, code, message, payload);
+  const transient = kind === "provider" && (transientStatuses.has(status) || code === "overloaded_error");
+  return {
+    kind,
+    message: describe(kind, provider, model, message),
+    retryable: kind === "rate" || transient,
+    retryAfter: kind === "rate" || transient ? readRetryAfter(headers, payload) : null,
+    // Un fallo pasajero responde 503: el navegador lo reintenta, igual que un límite por minuto.
+    status: transient ? 503 : statusByKind[kind],
+  };
 }

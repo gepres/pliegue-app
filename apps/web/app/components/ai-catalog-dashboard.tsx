@@ -380,6 +380,11 @@ export function AiCatalogDashboard() {
                   }}
                 />
               </div>
+              {progress.waiting ? (
+                <p role="status">
+                  <strong>{progress.waiting}</strong>
+                </p>
+              ) : null}
               <p>
                 {progress.current ? `Analizando «${progress.current}». ` : ""}
                 {local

@@ -3,6 +3,7 @@ import type { OpenTranslator, TranslationEngine } from "../library/translation-e
 import { entriesForTexts, type GlossaryEntry } from "../library/translation-glossary";
 import { translationProviderOf, type AiSettings } from "./ai-settings";
 import { translationNeedsKey, unreachableServiceMessage, type TranslationProviderChoice } from "./translation-options";
+import { fetchWithRetry } from "./ai-retry";
 import { classifyProviderFailure } from "./provider-error";
 import {
   batchPassages,
@@ -60,19 +61,24 @@ function hostedRequest(settings: AiSettings, apiKey: string, pair: TranslationPa
   const model = translationModelOf(settings, provider);
   const extra = provider === "azure" ? { region: settings.azureRegion } : { model };
   return async (passages, signal, glossary) => {
-    const response = await fetch("/api/ai/translate", {
-      body: JSON.stringify({
-        ...extra,
-        ...(glossary?.length ? { glossary } : {}),
-        passages,
-        provider,
-        source: pair.source,
-        target: pair.target,
-      }),
-      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-      method: "POST",
-      ...(signal ? { signal } : {}),
-    });
+    // Un límite por minuto o un proveedor saturado se reintentan solos (04.2); «Detener» corta
+    // también la espera.
+    const response = await fetchWithRetry(
+      "/api/ai/translate",
+      {
+        body: JSON.stringify({
+          ...extra,
+          ...(glossary?.length ? { glossary } : {}),
+          passages,
+          provider,
+          source: pair.source,
+          target: pair.target,
+        }),
+        headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+        method: "POST",
+      },
+      signal ? { signal } : {},
+    );
     const payload = await readJson(response);
     if (response.status === 422 && payload.mismatch) {
       throw new TranslationCountError(passages.length, null);
@@ -96,25 +102,29 @@ function libreTranslateRequest(settings: AiSettings, apiKey: string, pair: Trans
   return async (passages, signal) => {
     let response: Response;
     try {
-      response = await fetch(endpoint, {
-        body: JSON.stringify({
-          format: "text",
-          q: passages,
-          source: pair.source,
-          target: pair.target,
-          ...(apiKey ? { api_key: apiKey } : {}),
-        }),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-        ...(signal ? { signal } : {}),
-      });
+      // libretranslate.com limita por minuto (429): se espera y se reintenta como con las IA.
+      response = await fetchWithRetry(
+        endpoint,
+        {
+          body: JSON.stringify({
+            format: "text",
+            q: passages,
+            source: pair.source,
+            target: pair.target,
+            ...(apiKey ? { api_key: apiKey } : {}),
+          }),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+        },
+        signal ? { signal } : {},
+      );
     } catch (error) {
       if (signal?.aborted) throw error;
       throw new Error(unreachableServiceMessage("LibreTranslate", settings.libreTranslateUrl));
     }
     const payload = (await readJson(response)) as { error?: unknown; translatedText?: unknown };
     if (!response.ok) {
-      throw new Error(classifyProviderFailure("libretranslate", response.status, payload, "").message);
+      throw new Error(classifyProviderFailure("libretranslate", response.status, payload, "", response.headers).message);
     }
     const translated = Array.isArray(payload.translatedText) ? payload.translatedText : [payload.translatedText];
     if (translated.length !== passages.length || translated.some((text) => typeof text !== "string")) {

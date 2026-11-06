@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchWithRetry, type RetryWait } from "./ai-retry";
 import type { AiSettings } from "./ai-settings";
 import {
   catalogSystemPrompt,
@@ -35,25 +36,37 @@ async function readJson(response: Response): Promise<CatalogApiResponse> {
   }
 }
 
+/** Detener el análisis y saber cuándo se espera para reintentar (04.2). */
+export interface CatalogRequestOptions {
+  onWait?: (wait: RetryWait) => void;
+  signal?: AbortSignal;
+}
+
 async function requestHostedProvider(
   input: CatalogDocumentInput,
   settings: AiSettings,
   apiKey: string,
+  { onWait, signal }: CatalogRequestOptions,
 ) {
   if (!apiKey) throw new Error("Añade la API key para esta sesión antes de analizar.");
 
-  const response = await fetch("/api/ai/catalog", {
-    body: JSON.stringify({
-      input,
-      model: settings.models[settings.provider],
-      provider: settings.provider,
-    }),
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
+  // Un límite por minuto o un proveedor saturado se reintentan solos, esperando lo que pidan.
+  const response = await fetchWithRetry(
+    "/api/ai/catalog",
+    {
+      body: JSON.stringify({
+        input,
+        model: settings.models[settings.provider],
+        provider: settings.provider,
+      }),
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      method: "POST",
     },
-    method: "POST",
-  });
+    { ...(onWait ? { onWait } : {}), ...(signal ? { signal } : {}) },
+  );
   const payload = await readJson(response);
   if (!response.ok) throw new Error(payload.error || "El proveedor no pudo analizar el archivo.");
   return {
@@ -63,12 +76,13 @@ async function requestHostedProvider(
   };
 }
 
-async function requestOllama(input: CatalogDocumentInput, settings: AiSettings) {
+async function requestOllama(input: CatalogDocumentInput, settings: AiSettings, signal?: AbortSignal) {
   const endpoint = `${settings.ollamaUrl.replace(/\/$/, "")}/api/chat`;
   let response: Response;
 
   try {
     response = await fetch(endpoint, {
+      ...(signal ? { signal } : {}),
       body: JSON.stringify({
         format: documentCatalogJsonSchema,
         messages: [
@@ -120,8 +134,9 @@ export function requestCatalogFromProvider(
   input: CatalogDocumentInput,
   settings: AiSettings,
   apiKey: string,
+  options: CatalogRequestOptions = {},
 ): Promise<CatalogProviderResult> {
   return settings.provider === "ollama"
-    ? requestOllama(input, settings)
-    : requestHostedProvider(input, settings, apiKey);
+    ? requestOllama(input, settings, options.signal)
+    : requestHostedProvider(input, settings, apiKey, options);
 }
