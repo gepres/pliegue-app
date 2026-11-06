@@ -34,6 +34,10 @@ import { Skeleton, SkeletonGroup, SkeletonText } from "./app-ui/skeleton";
 import { UnifyNames } from "./ai/unify-names";
 import dash from "./ai-catalog-dashboard.module.css";
 import styles from "../(workspace)/app/workspace.module.css";
+import { budgetProviderNames } from "../ai/ai-budget";
+import { providerPlace } from "../library/sensitivity";
+import { documentSensitivity, hasConsent } from "../library/sensitivity-store";
+import { confirmPersonalSend } from "./ai/sensitive-consent";
 
 const providerNames: Record<AiProvider, string> = {
   anthropic: "Anthropic",
@@ -78,6 +82,12 @@ function describeSummary(summary: Awaited<ReturnType<typeof analyzeDocumentCatal
   return [
     summary.budgetStop ?? (summary.stopped ? "Detenido" : ""),
     summary.analyzed ? `${plural(summary.analyzed, "catalogado")}` : "",
+    summary.keptLocal.confidential
+      ? `${summary.keptLocal.confidential} ${summary.keptLocal.confidential === 1 ? "confidencial" : "confidenciales"} sin enviar: solo se catalogan con Ollama en este equipo`
+      : "",
+    summary.keptLocal.personal
+      ? `${summary.keptLocal.personal} ${summary.keptLocal.personal === 1 ? "personal" : "personales"} sin enviar: no diste permiso`
+      : "",
     summary.needsContent ? `${summary.needsContent} sin texto que leer` : "",
     summary.failed ? `${summary.failed} con error: el motivo, en «Por qué fallaron»` : "",
   ]
@@ -179,6 +189,14 @@ export function AiCatalogDashboard() {
   );
 
   async function analyzePending() {
+    // Los personales que van a salir del equipo por primera vez: se pregunta una vez (04.3).
+    if (providerPlace(settings.provider, settings) === "cloud") {
+      const done = new Set(catalogs.records.filter((record) => record.status === "analyzed").map((record) => record.documentId));
+      const personal = documents.filter(
+        (document) => !done.has(document.id) && documentSensitivity(document) === "personal" && !hasConsent(document.id, "catalog"),
+      );
+      await confirmPersonalSend(personal, "catalog", budgetProviderNames[settings.provider] ?? settings.provider);
+    }
     setAnalyzing(true);
     setProgress(null);
     setStatus("");

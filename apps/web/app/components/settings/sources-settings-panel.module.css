@@ -206,3 +206,21 @@
     justify-self: start;
   }
 }
+
+/* ---- Sensibilidad (04.3) ---- */
+
+.levels {
+  color: var(--pliegue-color-text-secondary);
+  display: grid;
+  font-size: 0.875rem;
+  gap: 2px;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 44rem;
+  padding-left: 1.1rem;
+}
+
+.levels strong {
+  color: var(--pliegue-color-text-primary);
+  font-weight: 600;
+}

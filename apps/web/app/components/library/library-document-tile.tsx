@@ -8,10 +8,13 @@ import type { DocumentWorkType } from "../../ai/document-catalog";
 import { documentLanguage, type LibraryDocument } from "../../library/documents";
 import { languageLabel } from "../../library/language";
 import { useReadingProgress } from "../../library/reading-progress-store";
+import { sensitivityNames } from "../../library/sensitivity";
+import { useDocumentSensitivity, useSensitivityMarks } from "../../library/sensitivity-store";
 import { IconButton } from "../app-ui/controls";
 import { Icon, type IconName } from "../app-ui/icons";
 import { MenuItem, MenuSeparator, Popover } from "../app-ui/overlays";
 import styles from "./library.module.css";
+import { pickSensitivity } from "./sensitivity-picker";
 
 export type LibraryView = "grid" | "list";
 
@@ -177,6 +180,9 @@ export function LibraryDocumentTile({
     </span>
   );
 
+  const sensitivity = useDocumentSensitivity(document);
+  const ownSensitivity = Boolean(useSensitivityMarks().documents[document.id]);
+
   return (
     <article
       aria-label={title}
@@ -236,6 +242,12 @@ export function LibraryDocumentTile({
           {duplicate ? (
             <span className={styles.tileDuplicate} title={`Copia de ${document.organization?.duplicateOf}`}>
               Duplicado
+            </span>
+          ) : null}
+          {sensitivity === "personal" || sensitivity === "confidencial" ? (
+            // Lo que no sale del equipo, o no sin preguntar, se ve en la tarjeta (04.3).
+            <span className={styles.tileSensitive} data-level={sensitivity}>
+              {sensitivityNames[sensitivity]}
             </span>
           ) : null}
         </p>
@@ -325,6 +337,15 @@ export function LibraryDocumentTile({
                   }}
                 />
               ) : null}
+              <MenuItem
+                description={ownSensitivity ? "Marcada en este libro" : "La de su fuente"}
+                icon="info"
+                label={`Sensibilidad: ${sensitivityNames[sensitivity]}`}
+                onSelect={() => {
+                  close();
+                  pickSensitivity(document);
+                }}
+              />
               {actions.download ? (
                 <MenuItem
                   icon="download"
