@@ -102,7 +102,9 @@ await page.screenshot(`${work}/3-gemini.png`);
 // ---- Móvil y oscuro -------------------------------------------------------------------------------
 await page.viewport(390, 844, { mobile: true, dpr: 2 });
 await page.theme("dark");
-await page.sleep(400);
+// El panel de Ajustes entra deslizándose al pasar al móvil: se mide ya quieto (hasta 4 s), no a
+// medio camino. Un desborde de verdad sigue ahí y la prueba falla igual.
+await page.waitFor(`document.documentElement.scrollWidth - document.documentElement.clientWidth <= 0`, { timeout: 4000 }).catch(() => {});
 const overflow = await page.eval(`document.documentElement.scrollWidth - document.documentElement.clientWidth`);
 t.check("en el móvil las etiquetas no desbordan", overflow <= 0, `${overflow}px`);
 await page.eval(`document.querySelector("[aria-label='Capacidades del modelo']")?.scrollIntoView({ block: "center" }), true`);
