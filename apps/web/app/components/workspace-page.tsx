@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { Card, Tag, cx } from "@pliegue/ui";
 
+import { Skeleton, SkeletonGroup, SkeletonText } from "./app-ui/skeleton";
 import styles from "./workspace-page.module.css";
 
 export function PageHeader({
@@ -37,18 +38,53 @@ export function PageHeader({
 export function MetricCard({
   detail,
   label,
+  loading = false,
   value,
 }: {
   detail: string;
   label: string;
+  /** Mientras llegan los datos: la cifra y su detalle, como esqueleto (no «—» ni un 0 que salta). */
+  loading?: boolean;
   value: string;
 }) {
   return (
-    <Card className={styles.metricCard}>
+    <Card aria-busy={loading || undefined} className={styles.metricCard}>
       <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
+      {loading ? (
+        <>
+          <strong>
+            <Skeleton height="1em" width="2.2ch" />
+          </strong>
+          <small>
+            <SkeletonText lastWidth="75%" lines={1} />
+          </small>
+        </>
+      ) : (
+        <>
+          <strong>{value}</strong>
+          <small>{detail}</small>
+        </>
+      )}
     </Card>
+  );
+}
+
+/** La forma de una `DocumentCard` mientras se recuperan los documentos. */
+export function DocumentCardSkeletons({ className, count = 3, label }: { className?: string | undefined; count?: number; label: string }) {
+  return (
+    <SkeletonGroup as="section" className={className} label={label}>
+      {Array.from({ length: count }, (_, index) => (
+        <Card className={styles.documentCard} key={index}>
+          <Skeleton height="0.6875rem" width="38%" />
+          <Skeleton height="1.5rem" width="72%" />
+          <SkeletonText lastWidth="55%" lines={2} />
+          <span className={styles.skeletonActions}>
+            <Skeleton height="1.5rem" radius={999} width="5.5rem" />
+            <Skeleton height="2rem" radius={999} width="4.5rem" />
+          </span>
+        </Card>
+      ))}
+    </SkeletonGroup>
   );
 }
 

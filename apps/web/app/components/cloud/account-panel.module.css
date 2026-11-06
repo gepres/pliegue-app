@@ -438,3 +438,11 @@
   margin: 0;
   padding: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
 }
+
+/* Mientras se comprueba si hay sesión (`account.status === "loading"`). */
+.sessionSkeleton {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  justify-items: start;
+  max-width: 32rem;
+}

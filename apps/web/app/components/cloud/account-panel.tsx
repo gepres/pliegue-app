@@ -25,6 +25,7 @@ import { accountDeletionConfirmation } from "../../library-access/account-server
 import { describeChanges } from "../../cloud/sync/sync-activity";
 import { confirmAction, type ConfirmOptions } from "../app-ui/confirm-dialog";
 import { Icon } from "../app-ui/icons";
+import { Skeleton, SkeletonGroup, SkeletonText } from "../app-ui/skeleton";
 import styles from "./account-panel.module.css";
 import { SyncDetails } from "./sync-details";
 
@@ -484,7 +485,11 @@ export function AccountPanel() {
           Esta instalación no tiene la nube configurada: Pliegue funciona solo en local.
         </p>
       ) : account.status === "loading" ? (
-        <p className={styles.note}>Comprobando la sesión…</p>
+        // Vale para quien tiene sesión y para quien no: dos líneas y un botón.
+        <SkeletonGroup className={styles.sessionSkeleton} label="Comprobando la sesión">
+          <SkeletonText lastWidth="45%" lines={2} />
+          <Skeleton height="2.5rem" radius={999} width="11rem" />
+        </SkeletonGroup>
       ) : account.status === "signed-in" && account.userId ? (
         <>
           <SignedIn email={account.email} provider={account.provider} userId={account.userId} />

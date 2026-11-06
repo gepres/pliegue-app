@@ -43,6 +43,7 @@ import { Popover } from "./app-ui/overlays";
 import type { OutlineItem } from "./reader/outline";
 import { ParallelBlocks } from "./reader/parallel-blocks";
 import { useReadingPlace } from "./reader/reading-place";
+import { SkeletonGroup, SkeletonPage } from "./app-ui/skeleton";
 import styles from "./pdf-reader.module.css";
 
 type PdfDocument = Awaited<ReturnType<typeof openPdfDocument>>["document"];
@@ -1719,9 +1720,9 @@ export function PdfReader({
           tabIndex={0}
         >
           {state.status === "loading" ? (
-            <p className={styles.loading} role="status">
-              Preparando el documento en este dispositivo…
-            </p>
+            <SkeletonGroup label="Preparando el documento en este dispositivo">
+              <SkeletonPage />
+            </SkeletonGroup>
           ) : mode === "reading" ? (
             <PdfReadingView
               document={state.document}

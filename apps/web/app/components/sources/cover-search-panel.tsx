@@ -15,6 +15,7 @@ import {
 } from "../../library/fetched-cover-store";
 import { coverQueryFor, findOpenLibraryCover, needsCover, type CoverQuery } from "../../library/open-library-covers";
 import { confirmAction } from "../app-ui/confirm-dialog";
+import { Skeleton } from "../app-ui/skeleton";
 import styles from "../../(workspace)/app/workspace.module.css";
 import panel from "./cover-search-panel.module.css";
 
@@ -159,7 +160,7 @@ export function CoverSearchPanel({ documents }: { documents: readonly LibraryDoc
           Para los libros sin portada, o con solo la primera página del PDF, Pliegue puede buscarla en Open Library por
           ISBN o por título y autor. Solo se busca cuando lo pides, y antes se te dice qué se envía.{" "}
           {fetched.status !== "ready"
-            ? "Cargando…"
+            ? <Skeleton label="Cargando…" shape="inline" width="16ch" />
             : `${plural(missing.length, "libro necesita", "libros necesitan")} portada${
                 foundCount ? ` · ${plural(foundCount, "traída", "traídas")} de Open Library` : ""
               }.`}

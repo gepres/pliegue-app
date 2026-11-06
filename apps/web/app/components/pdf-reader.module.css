@@ -46,7 +46,6 @@
   outline-offset: -3px;
 }
 
-.loading,
 .failure {
   color: var(--pliegue-color-text-secondary);
   font-size: 0.875rem;

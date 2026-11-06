@@ -12,6 +12,7 @@ import { useLinkedFolders } from "../library/local-folder-store";
 import { useImportedDocuments } from "../library/local-library-store";
 import { useReadingProgressEntries } from "../library/reading-progress-store";
 import styles from "../(workspace)/app/workspace.module.css";
+import { Skeleton, SkeletonGroup, SkeletonText } from "./app-ui/skeleton";
 import { FirstSteps } from "./guide/first-steps";
 import { DocumentCard, MetricCard, PageHeader } from "./workspace-page";
 
@@ -96,21 +97,24 @@ export function WorkspaceDashboard() {
         title="Tu biblioteca de trabajo"
       />
 
-      <section aria-label="Resumen real del área" className={styles.metricGrid}>
+      <section aria-busy={loading || undefined} aria-label="Resumen real del área" className={styles.metricGrid}>
         <MetricCard
           detail={`${linkedFiles.documents.length} archivos · ${linkedFolders.documents.length} en carpetas · ${importedLibrary.documents.length} copias heredadas`}
           label="Documentos"
-          value={loading ? "—" : String(documents.length)}
+          loading={loading}
+          value={String(documents.length)}
         />
         <MetricCard
           detail="Guardados en este dispositivo"
           label="Favoritos"
-          value={loading ? "—" : String(activeFavorites)}
+          loading={loading}
+          value={String(activeFavorites)}
         />
         <MetricCard
           detail="Con una posición local para retomar"
           label="En lectura"
-          value={loading ? "—" : String(activeReadings)}
+          loading={loading}
+          value={String(activeReadings)}
         />
       </section>
 
@@ -123,11 +127,18 @@ export function WorkspaceDashboard() {
           <p>{storageError}</p>
         </Card>
       ) : loading ? (
-        <Card aria-live="polite" className={styles.emptyState} role="status" tone="subtle">
-          <Tag>Biblioteca local</Tag>
-          <h2>Recuperando tus documentos…</h2>
-          <p>Consultamos IndexedDB y los permisos guardados en este navegador.</p>
-        </Card>
+        // La forma de «Retomar lectura» mientras se leen IndexedDB y los permisos guardados.
+        <SkeletonGroup label="Recuperando tus documentos">
+          <Card className={styles.continueCard}>
+            <div>
+              <Skeleton height="1.5rem" radius={999} width="8rem" />
+              <Skeleton className={styles.skeletonHeading} height="clamp(2rem, 5vw, 3.25rem)" width="70%" />
+              <SkeletonText lastWidth="45%" lines={3} />
+              <Skeleton className={styles.skeletonButton} height="2.75rem" radius={999} width="10rem" />
+            </div>
+            <Skeleton className={styles.bookCoverSkeleton} height="auto" radius="var(--pliegue-radius-sm)" />
+          </Card>
+        </SkeletonGroup>
       ) : resumeDocument && resumeProgress ? (
         <Card as="section" className={styles.continueCard}>
           <div>

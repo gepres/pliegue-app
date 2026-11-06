@@ -23,6 +23,7 @@ import { Icon } from "../app-ui/icons";
 import { Popover } from "../app-ui/overlays";
 import { LibraryDocumentTile, workTypeLabels, type LibraryView } from "../library/library-document-tile";
 import { categoryChipLimit, sortLabels, usePhoneWidth } from "../library/library-view-options";
+import { Skeleton, SkeletonGroup } from "../app-ui/skeleton";
 import libraryStyles from "../library/library.module.css";
 import styles from "./general-library.module.css";
 
@@ -183,9 +184,21 @@ export function GeneralLibraryView({
     return (
       <section className={styles.state}>
         {state.status === "loading" ? (
-          <p role="status">
-            Leyendo la biblioteca…{state.progress ? ` ${plural(state.progress, "carpeta", "carpetas")}` : ""}
-          </p>
+          <>
+            <p role="status">
+              Leyendo la biblioteca…{state.progress ? ` ${plural(state.progress, "carpeta", "carpetas")}` : ""}
+            </p>
+            {/* Los libros que llegarán: decorativo, el progreso ya lo dice el texto. */}
+            <SkeletonGroup as="ul" className={cx(styles.books, styles.booksSkeleton)}>
+              {Array.from({ length: 8 }, (_, index) => (
+                <li className={styles.bookSkeleton} key={index}>
+                  <Skeleton className={styles.bookSkeletonCover} height="auto" radius="var(--pliegue-radius-md)" />
+                  <Skeleton shape="text" width="85%" />
+                  <Skeleton shape="text" width="55%" />
+                </li>
+              ))}
+            </SkeletonGroup>
+          </>
         ) : (
           <>
             <p role="alert">{state.error}</p>

@@ -30,6 +30,7 @@ import { Icon } from "./app-ui/icons";
 import { downloadCatalogTemplate } from "./catalog-template-download";
 import { workTypeLabels } from "./library/library-document-tile";
 import { StaleIndexNotice } from "./stale-index-notice";
+import { Skeleton, SkeletonGroup, SkeletonText } from "./app-ui/skeleton";
 import { UnifyNames } from "./ai/unify-names";
 import dash from "./ai-catalog-dashboard.module.css";
 import styles from "../(workspace)/app/workspace.module.css";
@@ -116,7 +117,9 @@ export function AiCatalogDashboard() {
   const secrets = useAiSessionSecrets();
   // Las fichas importadas entran en el recuento igual que las del modelo: si no, el panel
   // presenta como pendiente un corpus ya catalogado a mano e invita a pagar por analizarlo.
-  const { allDocuments: documents, catalogs } = useLibraryDocuments();
+  const { allDocuments: documents, catalogs, loading: libraryLoading } = useLibraryDocuments();
+  // Hasta que se leen la biblioteca y las fichas, las cifras serían ceros que luego saltan.
+  const metricsLoading = libraryLoading || catalogs.status === "idle" || catalogs.status === "loading";
   const [analyzing, setAnalyzing] = useState(false);
   const [progress, setProgress] = useState<CatalogAnalysisProgress | null>(null);
   const [status, setStatus] = useState("");
@@ -211,40 +214,64 @@ export function AiCatalogDashboard() {
 
   return (
     <>
-      <section aria-label="Estado del catálogo" className={styles.catalogMetricGrid}>
+      <section aria-busy={metricsLoading || undefined} aria-label="Estado del catálogo" className={styles.catalogMetricGrid}>
         <Card className={styles.catalogMetric}>
           <span>Documentos</span>
-          <strong>{documents.length}</strong>
+          <strong>{metricsLoading ? <Skeleton height="1em" width="2.2ch" /> : documents.length}</strong>
           <small>
-            {withText.length} con texto que la IA puede leer
-            {scanned ? ` · ${scanned} escaneados: se lee con OCR su principio` : ""}
+            {metricsLoading ? (
+              <SkeletonText lastWidth="80%" lines={1} />
+            ) : (
+              <>
+                {withText.length} con texto que la IA puede leer
+                {scanned ? ` · ${scanned} escaneados: se lee con OCR su principio` : ""}
+              </>
+            )}
           </small>
         </Card>
         <Card className={styles.catalogMetric}>
           <span>Con ficha</span>
-          <strong>{catalogued}</strong>
+          <strong>{metricsLoading ? <Skeleton height="1em" width="2.2ch" /> : catalogued}</strong>
           <small>
-            {documents.length ? Math.round((catalogued / documents.length) * 100) : 0}% de la
-            biblioteca{fromImport ? ` · ${fromImport} importada${fromImport === 1 ? "" : "s"}` : ""}
+            {metricsLoading ? (
+              <SkeletonText lastWidth="80%" lines={1} />
+            ) : (
+              <>
+                {documents.length ? Math.round((catalogued / documents.length) * 100) : 0}% de la
+                biblioteca{fromImport ? ` · ${fromImport} importada${fromImport === 1 ? "" : "s"}` : ""}
+              </>
+            )}
           </small>
         </Card>
         <Card className={styles.catalogMetric}>
           <span>Con categoría</span>
-          <strong>{withCategory}</strong>
+          <strong>{metricsLoading ? <Skeleton height="1em" width="2.2ch" /> : withCategory}</strong>
           <small>
-            {catalogued > withCategory
-              ? `${plural(catalogued - withCategory, "ficha")} sin categoría`
-              : catalogued
-                ? "Ordenan los filtros de la Biblioteca"
-                : "Se rellena al catalogar"}
+            {metricsLoading ? (
+              <SkeletonText lastWidth="80%" lines={1} />
+            ) : (
+              <>
+                {catalogued > withCategory
+                  ? `${plural(catalogued - withCategory, "ficha")} sin categoría`
+                  : catalogued
+                    ? "Ordenan los filtros de la Biblioteca"
+                    : "Se rellena al catalogar"}
+              </>
+            )}
           </small>
         </Card>
         <Card className={styles.catalogMetric}>
           <span>Sin texto</span>
-          <strong>{withoutText}</strong>
+          <strong>{metricsLoading ? <Skeleton height="1em" width="2.2ch" /> : withoutText}</strong>
           <small>
-            Imágenes y archivos sin texto que leer
-            {staleIndex ? ` · ${staleIndex} solo necesitan reindexarse` : ""}
+            {metricsLoading ? (
+              <SkeletonText lastWidth="80%" lines={1} />
+            ) : (
+              <>
+                Imágenes y archivos sin texto que leer
+                {staleIndex ? ` · ${staleIndex} solo necesitan reindexarse` : ""}
+              </>
+            )}
           </small>
         </Card>
       </section>
@@ -441,7 +468,25 @@ export function AiCatalogDashboard() {
             Ver la Biblioteca
           </Link>
         </header>
-        {recent.length ? (
+        {metricsLoading ? (
+          <SkeletonGroup as="ul" className={dash.records} label="Cargando las fichas">
+            {Array.from({ length: 4 }, (_, index) => (
+              <li key={index}>
+                <div className={dash.recordMain}>
+                  <Skeleton shape="text" width="70%" />
+                  <Skeleton shape="text" width="45%" />
+                </div>
+                <div className={dash.recordCategory}>
+                  <Skeleton shape="text" width="60%" />
+                </div>
+                <div className={dash.recordFacts}>
+                  <Skeleton shape="text" width="50%" />
+                </div>
+                <Skeleton height="1.5rem" radius={999} width="5.5rem" />
+              </li>
+            ))}
+          </SkeletonGroup>
+        ) : recent.length ? (
           <ul className={dash.records}>
             {recent.map(({ document, record }) => {
               const catalog = record.catalog;

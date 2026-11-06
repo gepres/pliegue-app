@@ -14,7 +14,7 @@ import {
 } from "../library/local-folder-store";
 import { useImportedDocuments } from "../library/local-library-store";
 import styles from "../(workspace)/app/workspace.module.css";
-import { DocumentCard, PageHeader } from "./workspace-page";
+import { DocumentCard, DocumentCardSkeletons, PageHeader } from "./workspace-page";
 
 export function ReaderStart() {
   const importedLibrary = useImportedDocuments();
@@ -136,10 +136,7 @@ export function ReaderStart() {
           ))}
         </section>
       ) : loading ? (
-        <Card aria-live="polite" className={styles.emptyState} role="status" tone="subtle">
-          <Tag>Preparando</Tag>
-          <h2>Recuperando tu Biblioteca…</h2>
-        </Card>
+        <DocumentCardSkeletons className={styles.documentGrid} label="Recuperando tu Biblioteca" />
       ) : storageError ? (
         <Card className={styles.emptyState} role="alert" tone="subtle">
           <Tag>Almacenamiento no disponible</Tag>

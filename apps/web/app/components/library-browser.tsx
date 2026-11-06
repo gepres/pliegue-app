@@ -44,6 +44,7 @@ import { copiesLabel } from "../library/book-copies";
 import { copyReleaseNote, releaseCopies } from "../library/book-copies-store";
 import { publicConfig } from "../config/public-config";
 import { IconButton, Segmented, Toast } from "./app-ui/controls";
+import { Skeleton, SkeletonGroup } from "./app-ui/skeleton";
 import { Icon } from "./app-ui/icons";
 import { MenuItem, MenuSeparator, Popover } from "./app-ui/overlays";
 import {
@@ -510,9 +511,16 @@ export function LibraryBrowser() {
         <div>
           <h1>Biblioteca</h1>
           <p>
-            {allDocuments.length} documento{allDocuments.length === 1 ? "" : "s"} ·{" "}
-            {linkedFiles.documents.length + linkedFolders.documents.length} vinculados ·{" "}
-            {importedLibrary.documents.length} copias
+            {libraryLoading ? (
+              // Sin «0 documentos» que luego salta a la cifra de verdad.
+              <Skeleton label="Contando documentos…" shape="inline" width="22ch" />
+            ) : (
+              <>
+                {allDocuments.length} documento{allDocuments.length === 1 ? "" : "s"} ·{" "}
+                {linkedFiles.documents.length + linkedFolders.documents.length} vinculados ·{" "}
+                {importedLibrary.documents.length} copias
+              </>
+            )}
           </p>
         </div>
         <div className={libraryStyles.headerActions}>
@@ -1020,7 +1028,7 @@ export function LibraryBrowser() {
           className={libraryStyles.resultCount}
           role="status"
         >
-          {filteredDocuments.length} de {allDocuments.length}
+          {libraryLoading ? <Skeleton label="Contando…" shape="inline" width="5ch" /> : `${filteredDocuments.length} de ${allDocuments.length}`}
         </span>
       </div>
 
@@ -1031,11 +1039,22 @@ export function LibraryBrowser() {
           <p>{storageError}</p>
         </Card>
       ) : libraryLoading ? (
-        <section aria-busy="true" aria-label="Cargando documentos" className={libraryStyles.grid}>
-          {Array.from({ length: 6 }, (_, index) => (
-            <div className={libraryStyles.skeleton} key={index} />
+        // La forma de las tarjetas (o de las filas, en la lista) mientras se lee la biblioteca.
+        <SkeletonGroup
+          as="section"
+          className={view === "grid" ? libraryStyles.grid : libraryStyles.list}
+          label="Cargando documentos"
+        >
+          {Array.from({ length: view === "grid" ? 8 : 6 }, (_, index) => (
+            <div className={cx(libraryStyles.skeletonTile, view !== "grid" && libraryStyles.skeletonRow)} key={index}>
+              <Skeleton className={libraryStyles.skeletonCover} height="auto" radius="var(--pliegue-radius-md)" />
+              <span className={libraryStyles.skeletonBody}>
+                <Skeleton shape="text" width="85%" />
+                <Skeleton shape="text" width="55%" />
+              </span>
+            </div>
           ))}
-        </section>
+        </SkeletonGroup>
       ) : filteredDocuments.length ? (
         <section
           aria-label="Documentos de la biblioteca"

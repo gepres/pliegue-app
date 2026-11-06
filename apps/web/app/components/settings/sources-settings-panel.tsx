@@ -13,6 +13,7 @@ import { useImportedDocuments } from "../../library/local-library-store";
 import { protectStorage, readStorageState, type StorageState } from "../../library/storage-protection";
 import { Icon } from "../app-ui/icons";
 import { describeDrive, folderPermission, formatBytes, summarizeFiles } from "./sources-summary";
+import { SkeletonText } from "../app-ui/skeleton";
 import styles from "./sources-settings-panel.module.css";
 
 const sourcesPage = "/app/biblioteca/fuentes";
@@ -104,7 +105,13 @@ function LocationsSection() {
             <Icon name="folder" size={18} />
             <div className={styles.locationText}>
               <strong>Carpetas de este equipo</strong>
-              <small>{folders.status === "ready" ? "Ninguna vinculada todavía." : "Cargando…"}</small>
+              <small>
+                {folders.status === "ready" ? (
+                  "Ninguna vinculada todavía."
+                ) : (
+                  <SkeletonText label="Cargando…" lastWidth="55%" lines={1} />
+                )}
+              </small>
             </div>
             <Link className={styles.action} href={sourcesPage}>
               Vincular una carpeta

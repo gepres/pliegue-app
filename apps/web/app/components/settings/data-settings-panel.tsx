@@ -30,6 +30,7 @@ import { confirmAction } from "../app-ui/confirm-dialog";
 import { Icon } from "../app-ui/icons";
 import { downloadBlob } from "../postcard/postcard-share";
 import { formatBytes } from "./sources-summary";
+import { SkeletonText } from "../app-ui/skeleton";
 import styles from "./data-settings-panel.module.css";
 
 const plural = (count: number, one: string, many: string) => `${count.toLocaleString("es")} ${count === 1 ? one : many}`;
@@ -279,7 +280,7 @@ function ExportSection() {
             <strong>Notas y resaltados en Markdown</strong>
             <small>
               {annotations.status !== "ready"
-                ? "Cargando…"
+                ? <SkeletonText label="Cargando…" lastWidth="70%" lines={1} />
                 : count
                   ? `${plural(count, "marca", "marcas")} en ${plural(books, "libro", "libros")}, con su cita y su página. Se abre en cualquier editor u Obsidian.`
                   : "Todavía no hay notas ni resaltados."}
@@ -295,7 +296,7 @@ function ExportSection() {
             <strong>Copias importadas, en un ZIP</strong>
             <small>
               {imported.status !== "ready"
-                ? "Cargando…"
+                ? <SkeletonText label="Cargando…" lastWidth="70%" lines={1} />
                 : copies
                   ? `${plural(copies, "copia", "copias")}, ${formatBytes(copiesBytes)}: los archivos que importaste a este navegador, tal cual. Lo vinculado ya está en tu disco y lo de Drive, en Drive.`
                   : "No hay copias importadas: lo vinculado sigue en tu disco y lo de Drive, en Drive."}

@@ -110,6 +110,14 @@
   overflow-wrap: anywhere;
 }
 
+.skeletonActions {
+  align-items: center;
+  display: flex;
+  gap: var(--pliegue-spacing-sm);
+  justify-content: space-between;
+  margin-top: auto;
+}
+
 .documentCard p {
   color: var(--pliegue-color-text-secondary);
   line-height: 1.5;
