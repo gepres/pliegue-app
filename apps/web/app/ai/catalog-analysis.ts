@@ -1,6 +1,8 @@
 "use client";
 
-import type { LibraryDocument } from "../library/documents";
+import { readDocumentFile } from "../library/document-file";
+import { documentLanguage, type LibraryDocument } from "../library/documents";
+import { readScannedExcerpt } from "../library/ocr-pdf";
 import { readImportedCatalogRecords } from "../library/imported-catalog-store";
 import { AuthorIndex, authorKey } from "./author-names";
 import { groundCatalogExtras } from "./catalog-grounding";
@@ -32,6 +34,23 @@ const providerLabels: Record<AiSettings["provider"], string> = {
 };
 
 const providerLabel = (settings: AiSettings) => providerLabels[settings.provider];
+
+/**
+ * Un PDF escaneado: sin capa de texto, pero se puede leer con OCR el principio para hacer su
+ * ficha (03.4, decisión del dueño del 6-nov). Un índice de versión anterior también sale sin
+ * texto, y no es un escaneo: ese se arregla reindexando.
+ */
+export function isScannedPdf(document: Pick<LibraryDocument, "format" | "indexStatus" | "searchText">) {
+  return document.format === "pdf" && document.indexStatus === "metadata-only" && !document.searchText?.trim();
+}
+
+/** Lo que guardaba el análisis antes de leer escaneos: esas fichas vuelven a la cola. */
+const needsOcrBefore = "Este archivo no tiene texto local: una imagen o un PDF escaneado requiere OCR antes del análisis semántico.";
+
+/** Con texto que mandar, o un escaneo cuyo principio se puede leer con OCR. */
+export function catalogable(document: LibraryDocument) {
+  return Boolean(document.searchText?.trim()) || isScannedPdf(document);
+}
 
 /**
  * Documentos por bloque. La cola se recorre en tramos para que entre uno y otro el navegador
@@ -141,6 +160,8 @@ export function catalogQueueReason(
   if (!options.force && document.catalogSource === "import" && document.catalog) return null;
   if (!record) return "new";
   if (options.force) return "changed";
+  // Un escaneo que se quedó «sin texto» antes de que el catálogo supiera leerlo con OCR.
+  if (record.status === "needs-content" && record.error === needsOcrBefore && isScannedPdf(document)) return "new";
 
   const fingerprint = createCatalogInputFingerprint(
     document,
@@ -166,7 +187,7 @@ export function countCatalogPending(
   const recordsById = new Map(records.map((record) => [record.documentId, record]));
   return documents.filter(
     (document) =>
-      Boolean(document.searchText?.trim()) &&
+      catalogable(document) &&
       catalogQueueReason(document, recordsById.get(document.id), settings, { retryErrors: true }) !== null,
   ).length;
 }
@@ -334,13 +355,45 @@ async function runCatalogAnalysis(
       model,
       settings.maxExcerptCharacters,
     );
-    const input = createCatalogDocumentInput(
+    let input = createCatalogDocumentInput(
       document,
       settings.maxExcerptCharacters,
       authorIndex.names,
       categoryIndex.entries,
     );
     progress.current = document.title;
+
+    // Un escaneo: se lee con OCR su principio, en el equipo, para hacer la ficha (03.4). La
+    // huella sigue siendo la del documento, no la de lo leído: así no vuelve a la cola cada vez.
+    if (!input.excerpt && isScannedPdf(document)) {
+      progress.waiting = `Leyendo con OCR el principio de «${document.title}», en tu equipo…`;
+      publish();
+      try {
+        const blob = await readDocumentFile(document);
+        if (!blob) {
+          throw new Error("No se pudo abrir el archivo para leerlo con OCR. Ábrelo una vez en el lector (para dar permiso o conectar Drive) y vuelve a catalogar.");
+        }
+        const text = await readScannedExcerpt(blob, { documentId: document.id, language: documentLanguage(document) }, signal ? { signal } : {});
+        input = createCatalogDocumentInput({ ...document, searchText: text }, settings.maxExcerptCharacters, authorIndex.names, categoryIndex.entries);
+      } catch (error) {
+        progress.waiting = null;
+        if (signal?.aborted) return;
+        await saveDocumentCatalogRecord(createRecord(document, settings, fingerprint, "error", { error: errorMessage(error) }));
+        progress.failed += 1;
+        return;
+      }
+      progress.waiting = null;
+      publish();
+      if (!input.excerpt) {
+        await saveDocumentCatalogRecord(
+          createRecord(document, settings, fingerprint, "needs-content", {
+            error: "El escaneo no tiene texto legible en sus primeras páginas: es una imagen, una portada o una lámina.",
+          }),
+        );
+        progress.needsContent += 1;
+        return;
+      }
+    }
 
     if (!input.excerpt) {
       await saveDocumentCatalogRecord(

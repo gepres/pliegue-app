@@ -53,6 +53,13 @@ const baseFilters = {
 };
 
 describe("filterDocuments", () => {
+  it("busca también en lo leído con OCR de un escaneo, que vive aparte (03.4)", () => {
+    const filters = { ...baseFilters, query: "abeja X38" };
+    expect(filterDocuments(testDocuments, filters)).toEqual([]);
+    const ocr = new Map([["sistemas-aprenden", "La abeja X38 sintió un intenso deseo de seguir escuchando."]]);
+    expect(filterDocuments(testDocuments, filters, ocr).map((document) => document.id)).toEqual(["sistemas-aprenden"]);
+  });
+
   it("busca sin distinguir tildes ni mayúsculas", () => {
     const result = filterDocuments(testDocuments, {
       ...baseFilters,

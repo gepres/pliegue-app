@@ -38,6 +38,7 @@ import {
   removeImportedCopy,
 } from "../library/local-library-store";
 import { clearReadingProgress } from "../library/reading-progress-store";
+import { readOcrSearchTexts } from "../library/ocr-page-store";
 import { useLibraryDocuments } from "../library/use-library-documents";
 import { copiesLabel } from "../library/book-copies";
 import { copyReleaseNote, releaseCopies } from "../library/book-copies-store";
@@ -232,6 +233,7 @@ export function LibraryBrowser() {
     }
   }
   const favoriteIds = new Set(favorites);
+  const ocrTexts = useOcrSearchTexts();
   const facets = catalogFacets(allDocuments);
   const organization = organizationFacets(allDocuments);
   const subcategoryOptions = category === "all" ? [] : organization.subcategoriesOf(category);
@@ -252,7 +254,7 @@ export function LibraryBrowser() {
       series,
       subcategory,
       workType,
-    }),
+    }, ocrTexts),
     sort,
   );
   const duplicateCount = allDocuments.filter((document) => document.organization?.duplicateOf).length;
@@ -1129,4 +1131,24 @@ export function LibraryBrowser() {
       <Toast message={toast?.text ?? null} nonce={toast?.nonce ?? 0} />
     </>
   );
+}
+
+/**
+ * Lo leído con OCR de los escaneos, para buscarlo (03.4). Se carga al abrir la biblioteca: lo
+ * que se lea después en el lector entra la próxima vez que se vuelva a ella.
+ */
+function useOcrSearchTexts() {
+  const [texts, setTexts] = useState<ReadonlyMap<string, string>>(() => new Map());
+  useEffect(() => {
+    let active = true;
+    readOcrSearchTexts()
+      .then((loaded) => {
+        if (active) setTexts(loaded);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+  return texts;
 }

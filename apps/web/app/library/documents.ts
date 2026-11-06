@@ -119,9 +119,14 @@ export function documentDisplayTitle(document: LibraryDocument) {
   return document.catalog?.canonicalTitle ?? document.title;
 }
 
+/**
+ * `extraText`: texto que buscar además del del documento. Hoy, lo leído con OCR de un escaneo
+ * (03.4), que vive aparte y no en su índice.
+ */
 export function filterDocuments(
   documents: readonly LibraryDocument[],
   filters: DocumentFilters,
+  extraText?: ReadonlyMap<string, string>,
 ) {
   const query = normalizeSearchText(filters.query.trim());
 
@@ -208,6 +213,7 @@ export function filterDocuments(
         document.author,
         ...document.tags,
         document.searchText ?? "",
+        extraText?.get(document.id) ?? "",
         document.catalog?.canonicalTitle ?? "",
         ...(document.catalog?.authors ?? []),
         ...(document.catalog?.genres ?? []),

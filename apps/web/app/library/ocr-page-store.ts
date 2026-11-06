@@ -124,3 +124,19 @@ export async function removeDocumentsOcr(documentIds: readonly string[]) {
     return keys.length;
   });
 }
+
+/**
+ * Lo leído con OCR de cada documento, todo junto, para buscarlo (03.4): un PDF escaneado no tiene
+ * texto en su índice, pero las páginas que ya se leyeron al abrirlo, traducirlo o catalogarlo sí
+ * se pueden buscar. Decisión del dueño (6-nov): se busca en lo leído; no se lee el libro entero.
+ */
+export async function readOcrSearchTexts(): Promise<Map<string, string>> {
+  const texts = new Map<string, string>();
+  if (!available()) return texts;
+  const records = await withStore("readonly", (store) => requestResult(store.getAll() as IDBRequest<OcrPageRecord[]>));
+  for (const record of records.sort((a, b) => a.page - b.page)) {
+    const text = record.layout.blocks.map((block) => block.text).join(" ");
+    if (text) texts.set(record.documentId, `${texts.get(record.documentId) ?? ""} ${text}`.trim());
+  }
+  return texts;
+}

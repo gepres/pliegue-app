@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { LibraryDocument } from "../library/documents";
 import { defaultAiSettings, providerModel } from "./ai-settings";
-import { catalogQueueReason } from "./catalog-analysis";
+import { catalogable, catalogQueueReason, countCatalogPending, isScannedPdf } from "./catalog-analysis";
 import { createCatalogInputFingerprint, type DocumentCatalogRecord } from "./document-catalog";
 
 const document: LibraryDocument = {
@@ -75,5 +75,31 @@ describe("cola del catálogo con IA", () => {
     };
     expect(catalogQueueReason(imported, undefined, settings)).toBeNull();
     expect(catalogQueueReason(imported, undefined, settings, { force: true })).toBe("new");
+  });
+});
+
+describe("escaneos en el catálogo (03.4)", () => {
+  const scan: LibraryDocument = { ...document, id: "escaneo", indexStatus: "metadata-only", searchText: "", title: "La experiencia interna" };
+  const oldNeeds = record({
+    documentId: scan.id,
+    error: "Este archivo no tiene texto local: una imagen o un PDF escaneado requiere OCR antes del análisis semántico.",
+    inputFingerprint: createCatalogInputFingerprint(scan, settings.provider, providerModel(settings), settings.maxExcerptCharacters),
+    status: "needs-content",
+  });
+
+  it("un PDF sin capa de texto es un escaneo que se puede catalogar; una imagen o un índice viejo, no", () => {
+    expect(isScannedPdf(scan)).toBe(true);
+    expect(catalogable(scan)).toBe(true);
+    expect(catalogable({ ...scan, format: "image" })).toBe(false);
+    expect(isScannedPdf({ ...scan, indexStatus: "pending" })).toBe(false);
+    expect(isScannedPdf(document)).toBe(false);
+  });
+
+  it("los escaneos que se quedaron «sin texto» antes de leer con OCR vuelven a la cola; los ya leídos sin texto legible, no", () => {
+    expect(catalogQueueReason(scan, oldNeeds, settings)).toBe("new");
+    expect(catalogQueueReason(scan, { ...oldNeeds, error: "El escaneo no tiene texto legible en sus primeras páginas: es una imagen, una portada o una lámina." }, settings)).toBeNull();
+    // Una vez catalogado con lo leído, su huella es la del documento: no vuelve a la cola.
+    expect(catalogQueueReason(scan, { ...oldNeeds, error: null, status: "analyzed" }, settings)).toBeNull();
+    expect(countCatalogPending([document, scan], [oldNeeds], settings)).toBe(2);
   });
 });
