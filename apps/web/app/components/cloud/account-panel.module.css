@@ -398,3 +398,43 @@
     animation: none;
   }
 }
+
+/* ---- Borrar la cuenta (02.4) ----
+   Abajo del todo y separado por un filete: no se pulsa de pasada. El botón es secundario;
+   el peligro lo dice el aviso, que pide confirmación con el tono de borrar. */
+
+.dangerZone {
+  align-items: center;
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
+  justify-content: space-between;
+  padding-top: var(--pliegue-spacing-md);
+}
+
+.dangerZone > div {
+  display: grid;
+  gap: 2px;
+}
+
+.dangerZone small {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+}
+
+.dangerError {
+  color: var(--pliegue-color-status-danger);
+  flex-basis: 100%;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.deletedNotice {
+  background: var(--pliegue-color-bg-subtle);
+  border-radius: var(--pliegue-radius-sm);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+  padding: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
+}
