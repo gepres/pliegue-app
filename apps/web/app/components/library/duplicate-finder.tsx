@@ -94,11 +94,14 @@ export function DuplicateFinder({
   const runRef = useRef(0);
   const byId = new Map(documents.map((document) => [document.id, document]));
   const marks = decisions.records.flatMap((record) => (record.kind === "mark" ? [record] : []));
+  const marked = new Set(marks.map((mark) => mark.documentId));
 
   async function run() {
     const run = (runRef.current += 1);
-    // Fuera las copias ya marcadas (en el índice o aquí): ya está decidido cuál se conserva.
-    const candidates = documents.filter((document) => !document.organization?.duplicateOf);
+    // Fuera las copias marcadas en el índice JSON: ya está decidido cuál se conserva. Las
+    // marcadas aquí sí se comparan, y sus parejas se esconden al pintar: así «Deshacer» las
+    // devuelve sin volver a buscar.
+    const candidates = documents.filter((document) => !document.organization?.duplicateOf || marked.has(document.id));
     setSearch({ done: 0, status: "working", total: candidates.length });
     try {
       const items: DuplicateItem[] = [];
@@ -142,7 +145,6 @@ export function DuplicateFinder({
   }, [open]);
 
   const dismissed = new Set(decisions.records.flatMap((record) => (record.kind === "dismiss" ? [pairKey(record.ids[0], record.ids[1])] : [])));
-  const marked = new Set(marks.flatMap((mark) => [mark.documentId]));
   const pairs =
     search.status === "ready"
       ? search.pairs.filter(
