@@ -91,7 +91,7 @@ import {
 } from "../library/local-reader-state";
 import { useReadingFilter } from "../preferences/reading-filter-store";
 import { PdfReader, type PdfLayoutBlock, type PdfPageTranslationView, type PdfReaderProps } from "./pdf-reader";
-import { blockHasText, isTextualBlock, type StructuredDocumentBlock, type StructuredDocumentSection } from "../library/structured-document-extractor";
+import { blockHasText, isTextualBlock, largeArchiveBytes, type StructuredDocumentBlock, type StructuredDocumentSection } from "../library/structured-document-extractor";
 import { ParallelBlocks } from "./reader/parallel-blocks";
 import { useParallelLink } from "./reader/parallel-link";
 import { useReadingPlace } from "./reader/reading-place";
@@ -256,6 +256,12 @@ function StructuredPreview({
           {preview.sections.length} {preview.sections.length === 1 ? "sección" : "secciones"}
         </span>
       </div>
+      {preview.bytes && preview.bytes > largeArchiveBytes ? (
+        <p className={styles.truncationNote} role="note">
+          Libro grande ({(preview.bytes / 1024 / 1024).toLocaleString("es", { maximumFractionDigits: 1 })} MB): en un
+          móvil con poca memoria puede ir lento.
+        </p>
+      ) : null}
       {preview.truncated ? (
         <p className={styles.truncationNote} role="status">
           Esta vista alcanzó un límite de seguridad o extensión. Mostramos el contenido

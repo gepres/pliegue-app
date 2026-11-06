@@ -1,6 +1,12 @@
 import type { DocumentFormat } from "./documents";
 
-export const maxArchiveInputBytes = 50 * 1024 * 1024;
+/**
+ * Hasta 150 MB (decisión del dueño, 6-nov): un EPUB ilustrado como «Paisajes peruanos» pesa
+ * 91,6 MB por sus fotos. Por encima de `largeArchiveBytes` el lector avisa de que puede ir lento
+ * en un móvil con poca memoria.
+ */
+export const maxArchiveInputBytes = 150 * 1024 * 1024;
+export const largeArchiveBytes = 50 * 1024 * 1024;
 export const maxArchiveEntryBytes = 5 * 1024 * 1024;
 export const maxArchiveOutputBytes = 16 * 1024 * 1024;
 export const maxStructuredTextCharacters = 1_000_000;
@@ -20,6 +26,91 @@ const maxSelectedEntries = 800;
 const maxSpreadsheetColumns = 64;
 const maxSpreadsheetRows = 1_000;
 
+/** Un tramo de un párrafo con su formato. */
+export interface InlineRun {
+  bold?: true;
+  italic?: true;
+  text: string;
+}
+
+/**
+ * Marcas de formato que viajan dentro del texto mientras se normaliza: caracteres de uso
+ * privado, que ni son espacio ni etiqueta, así que la normalización los deja en su sitio. Al
+ * final se quitan y dicen dónde empieza y acaba cada tramo.
+ */
+const italicOn = String.fromCharCode(0xe000);
+const italicOff = String.fromCharCode(0xe001);
+const boldOn = String.fromCharCode(0xe002);
+const boldOff = String.fromCharCode(0xe003);
+
+/**
+ * Los tramos de un texto con marcas, si al quitarlas queda exactamente `expected` (el texto que
+ * ya se calculó sin ellas). Si no casa, o no hay formato, nada: el párrafo se pinta como siempre.
+ */
+export function inlineRuns(marked: string, expected: string, prefix = ""): InlineRun[] | undefined {
+  const runs: InlineRun[] = prefix ? [{ text: prefix }] : [];
+  let bold = 0;
+  let italic = 0;
+  let buffer = "";
+  let styled = false;
+  const flush = () => {
+    if (!buffer) return;
+    const run: InlineRun = { text: buffer };
+    if (bold > 0) run.bold = true;
+    if (italic > 0) run.italic = true;
+    if (run.bold || run.italic) styled = true;
+    const last = runs[runs.length - 1];
+    if (last && Boolean(last.bold) === Boolean(run.bold) && Boolean(last.italic) === Boolean(run.italic)) last.text += buffer;
+    else runs.push(run);
+    buffer = "";
+  };
+  for (const character of marked) {
+    if (character === italicOn || character === italicOff || character === boldOn || character === boldOff) {
+      flush();
+      if (character === italicOn) italic += 1;
+      else if (character === italicOff) italic = Math.max(0, italic - 1);
+      else if (character === boldOn) bold += 1;
+      else bold = Math.max(0, bold - 1);
+    } else {
+      buffer += character;
+    }
+  }
+  flush();
+  if (!styled) return undefined;
+  return runs.map((run) => run.text).join("") === `${prefix}${expected}` ? runs : undefined;
+}
+
+/** El HTML de un párrafo de EPUB con las marcas de su cursiva y su negrita (em, i, strong, b). */
+function markHtmlFormatting(html: string) {
+  // El espacio de dentro de la etiqueta se saca fuera: así la marca queda pegada al texto y la
+  // normalización de espacios da lo mismo que sin ella.
+  return html
+    .replaceAll(/<(?:em|i|cite)\b[^>]*>(\s*)/gi, (_, space: string) => `${space}${italicOn}`)
+    .replaceAll(/(\s*)<\/(?:em|i|cite)\s*>/gi, (_, space: string) => `${italicOff}${space}`)
+    .replaceAll(/<(?:strong|b)\b[^>]*>(\s*)/gi, (_, space: string) => `${space}${boldOn}`)
+    .replaceAll(/(\s*)<\/(?:strong|b)\s*>/gi, (_, space: string) => `${boldOff}${space}`);
+}
+
+/** Un párrafo de DOCX con las marcas de su negrita y su cursiva, run a run (`w:b`, `w:i`). */
+function markDocxFormatting(paragraph: string) {
+  return paragraph.replaceAll(/<w:r\b[^>]*>[\s\S]*?<\/w:r\s*>/gi, (run) => {
+    const properties = run.match(/<w:rPr\b[\s\S]*?<\/w:rPr\s*>/i)?.[0] ?? "";
+    const on = (tag: string) => {
+      const element = properties.match(new RegExp(`<w:${tag}\\b[^>]*>`, "i"))?.[0];
+      if (!element) return false;
+      const value = attributeValue(element, "w:val");
+      return value === null || !/^(?:0|false|off|none)$/i.test(value);
+    };
+    const bold = on("b");
+    const italic = on("i");
+    if (!bold && !italic) return run;
+    const open = `${bold ? boldOn : ""}${italic ? italicOn : ""}`;
+    const close = `${italic ? italicOff : ""}${bold ? boldOff : ""}`;
+    // Cada texto del run, entre sus marcas: `extractTextElements` solo lee los <w:t>.
+    return run.replaceAll(/(<(?:[\w-]+:)?t\b[^>]*>)([\s\S]*?)(<\/(?:[\w-]+:)?t\s*>)/gi, (_, start: string, text: string, end: string) => `${start}${open}${text}${close}${end}`);
+  });
+}
+
 export type StructuredDocumentFormat = Extract<
   DocumentFormat,
   "docx" | "epub" | "pptx" | "xlsx"
@@ -27,8 +118,14 @@ export type StructuredDocumentFormat = Extract<
 
 export type StructuredDocumentBlock =
   | { kind: "heading"; level: number; text: string }
-  /** `caption`: el pie de la figura que va justo antes (03.5b), con su propio estilo. */
-  | { caption?: boolean; kind: "paragraph"; text: string }
+  /**
+   * `caption`: el pie de la figura que va justo antes (03.5b), con su propio estilo.
+   * `runs`: el mismo `text`, en tramos con su negrita y su cursiva (05.1). Solo es adorno del
+   * original: `text` no cambia, así que la búsqueda, las anclas y la traducción guardada siguen
+   * igual, y quien pinta usa los tramos solo si unidos dan exactamente `text` (una traducción,
+   * no).
+   */
+  | { caption?: boolean; kind: "paragraph"; runs?: InlineRun[]; text: string }
   | { kind: "table"; rows: string[][] }
   /**
    * Una ilustración de un EPUB o un DOCX (05.1). Lleva el archivo, no una URL: la extracción
@@ -141,18 +238,34 @@ function attributeValue(tag: string, name: string) {
   return match?.[2] ? decodeXmlEntities(match[2]) : null;
 }
 
+/**
+ * El texto de un trozo (`<w:t>`, `<a:t>`) sin recortar sus bordes: Word parte la frase en trozos
+ * cada vez que cambia el formato, y el espacio entre «la» e «Historia» suele ir al borde de uno
+ * de ellos. Recortado, salía «laHistoria». Se recorta el párrafo entero, al final.
+ */
+function normalizeRunText(value: string) {
+  return decodeXmlEntities(value.replaceAll(/<[^>]+>/g, ""))
+    .replaceAll(/\r/g, "")
+    .replaceAll(/[\f\v ]+/g, " ");
+}
+
 function extractTextElements(fragment: string) {
   const parts: string[] = [];
   const tokenPattern =
     /<(?:[\w-]+:)?t\b[^>]*>([\s\S]*?)<\/(?:[\w-]+:)?t\s*>|<(?:[\w-]+:)?(?:br|tab)\b[^>]*\/?\s*>/gi;
 
   for (const match of fragment.matchAll(tokenPattern)) {
-    if (match[1] !== undefined) parts.push(normalizeText(match[1]));
+    if (match[1] !== undefined) parts.push(normalizeRunText(match[1]));
     else if (/tab/i.test(match[0])) parts.push("\t");
     else parts.push("\n");
   }
 
-  return parts.join("").replaceAll(/\t+/g, "\t").trim();
+  return parts
+    .join("")
+    .replaceAll(/ {2,}/g, " ")
+    .replaceAll(/ *\n */g, "\n")
+    .replaceAll(/\t+/g, "\t")
+    .trim();
 }
 
 function normalizeArchiveName(name: string) {
@@ -181,7 +294,7 @@ async function readArchive(
   blob: Blob,
 ): Promise<ArchiveEntries> {
   if (blob.size > maxArchiveInputBytes) {
-    throw new Error("El archivo supera el límite de 50 MB para extracción local.");
+    throw new Error("El archivo supera el límite de 150 MB para extracción local.");
   }
 
   const [{ unzip }, buffer] = await Promise.all([
@@ -376,9 +489,12 @@ function extractDocx(entries: Map<string, string>, images: ReadonlyMap<string, U
         text,
       });
     } else {
+      const bullet = /<w:numPr\b/i.test(paragraph) ? "• " : "";
+      const runs = inlineRuns(extractTextElements(markDocxFormatting(paragraph)), text);
       blocks.push({
         kind: "paragraph",
-        text: /<w:numPr\b/i.test(paragraph) ? `• ${text}` : text,
+        ...(runs ? { runs: bullet ? [{ text: bullet }, ...runs] : runs } : {}),
+        text: `${bullet}${text}`,
       });
     }
   }
@@ -578,10 +694,15 @@ function extractHtmlBlocks(html: string, path = "", images: ReadonlyMap<string, 
 
     if (tag.startsWith("h")) {
       blocks.push({ kind: "heading", level: Number.parseInt(tag.slice(1), 10), text });
-    } else if (tag === "figcaption") {
-      blocks.push({ caption: true, kind: "paragraph", text });
     } else {
-      blocks.push({ kind: "paragraph", text: tag === "li" ? `• ${text}` : text });
+      const bullet = tag === "li" ? "• " : "";
+      const runs = inlineRuns(normalizeText(markHtmlFormatting(match[2] ?? "")), text, bullet);
+      blocks.push({
+        ...(tag === "figcaption" ? { caption: true } : {}),
+        kind: "paragraph",
+        ...(runs ? { runs } : {}),
+        text: `${bullet}${text}`,
+      });
     }
   }
 
