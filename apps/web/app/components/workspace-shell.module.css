@@ -153,6 +153,8 @@
   border-radius: var(--pliegue-radius-sm);
   color: inherit;
   display: flex;
+  /* Ocupa lo que deja el botón de plegar y no más: un correo largo no se mete debajo de él. */
+  flex: 1 1 auto;
   gap: var(--pliegue-spacing-sm);
   min-width: 0;
   padding: 4px var(--pliegue-spacing-xs);
@@ -192,10 +194,22 @@
   white-space: nowrap;
 }
 
+/* En un renglón; lo que no cabe se corta con «…» en lugar de salirse del carril. */
+.areaText strong,
+.areaText small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .areaText small {
   color: var(--pliegue-color-text-secondary);
   font-size: 0.6875rem;
   white-space: nowrap;
+}
+
+/* El correo, que es lo que se busca con la vista, en el tono principal. */
+.areaText .areaEmail {
+  color: var(--pliegue-color-text-primary);
 }
 
 /* Plegada: solo iconos, centrados en el carril. */
