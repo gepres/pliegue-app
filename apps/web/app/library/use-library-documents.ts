@@ -8,6 +8,7 @@ import { useCopyGroups } from "./book-copies-store";
 import { applyImportedCatalogs } from "./catalog-import";
 import { applyDocumentCatalogs } from "./documents";
 import { useDriveLibrary } from "./drive-library-store";
+import { applyDuplicateMarks, useDuplicateDecisions } from "./duplicate-store";
 import { applyFetchedCovers, useFetchedCovers } from "./fetched-cover-store";
 import { useImportedCatalogs } from "./imported-catalog-store";
 import { useLinkedFiles } from "./local-file-reference-store";
@@ -32,6 +33,7 @@ export function useLibraryDocuments() {
   const importedCatalogs = useImportedCatalogs();
   const fetchedCovers = useFetchedCovers();
   const copyGroups = useCopyGroups();
+  const duplicateDecisions = useDuplicateDecisions();
 
   const rawDocuments = useMemo(
     () => [
@@ -47,13 +49,18 @@ export function useLibraryDocuments() {
   // El orden importa: la ficha importada se aplica después para que prevalezca sobre la que
   // dedujo el modelo, que es lo que espera quien acaba de corregirla a mano. Las portadas de
   // Open Library van en medio: llenan lo que falta, pero no pisan la del índice JSON.
+  // Las marcas de duplicado que la persona hace en la app van al final: son más recientes que
+  // las del índice JSON (03.6).
   const allDocuments = useMemo(
     () =>
-      applyImportedCatalogs(
-        applyFetchedCovers(applyDocumentCatalogs(baseDocuments, catalogs.records), fetchedCovers.records),
-        importedCatalogs.records,
+      applyDuplicateMarks(
+        applyImportedCatalogs(
+          applyFetchedCovers(applyDocumentCatalogs(baseDocuments, catalogs.records), fetchedCovers.records),
+          importedCatalogs.records,
+        ),
+        duplicateDecisions.records,
       ),
-    [baseDocuments, catalogs.records, fetchedCovers.records, importedCatalogs.records],
+    [baseDocuments, catalogs.records, duplicateDecisions.records, fetchedCovers.records, importedCatalogs.records],
   );
 
   return {
