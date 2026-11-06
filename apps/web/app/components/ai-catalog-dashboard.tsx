@@ -17,7 +17,6 @@ import {
   catalogBatchSize,
   catalogQueueReason,
   isScannedPdf,
-  reconcileStoredNames,
   stopCatalogAnalysis,
   type CatalogAnalysisProgress,
   type CatalogQueueReason,
@@ -31,6 +30,7 @@ import { Icon } from "./app-ui/icons";
 import { downloadCatalogTemplate } from "./catalog-template-download";
 import { workTypeLabels } from "./library/library-document-tile";
 import { StaleIndexNotice } from "./stale-index-notice";
+import { UnifyNames } from "./ai/unify-names";
 import dash from "./ai-catalog-dashboard.module.css";
 import styles from "../(workspace)/app/workspace.module.css";
 
@@ -119,7 +119,6 @@ export function AiCatalogDashboard() {
   const { allDocuments: documents, catalogs } = useLibraryDocuments();
   const [analyzing, setAnalyzing] = useState(false);
   const [progress, setProgress] = useState<CatalogAnalysisProgress | null>(null);
-  const [reconciling, setReconciling] = useState(false);
   const [status, setStatus] = useState("");
 
   const recordsById = useMemo(
@@ -200,27 +199,6 @@ export function AiCatalogDashboard() {
       setStatus(error instanceof Error ? error.message : "No fue posible iniciar el análisis.");
     } finally {
       setAnalyzing(false);
-    }
-  }
-
-  async function unifyNames() {
-    setReconciling(true);
-
-    try {
-      const result = await reconcileStoredNames();
-      const changes = [...result.merged, ...result.mergedCategories];
-      setStatus(
-        result.updated
-          ? `${plural(result.updated, "ficha")} con el nombre unificado: ${changes
-              .slice(0, 3)
-              .map(({ from, to }) => `«${from}» → «${to}»`)
-              .join(", ")}${changes.length > 3 ? " y otras" : ""}.`
-          : `Sin variantes que unificar en ${plural(result.reviewed, "ficha")}.`,
-      );
-    } catch {
-      setStatus("No fue posible revisar los nombres de las fichas.");
-    } finally {
-      setReconciling(false);
     }
   }
 
@@ -442,18 +420,15 @@ export function AiCatalogDashboard() {
             <p>
               Junta las variantes de un mismo autor («J. L. Borges» y «Jorge Luis Borges») y de
               una misma categoría («Filosofia» y «Filosofía») en todas las fichas, para que el
-              filtro no las muestre dos veces. Se hace sola al terminar de catalogar; no envía
-              nada a la IA.
+              filtro no las muestre dos veces. Antes de aplicarse enseña cada unión y en qué
+              fichas cae; no envía nada a la IA.
             </p>
             <div className={dash.toolActions}>
-              <Button
-                disabled={reconciling || analyzing || !catalogs.records.length}
-                onClick={() => void unifyNames()}
-                size="sm"
-                variant="secondary"
-              >
-                {reconciling ? "Revisando…" : "Unificar ahora"}
-              </Button>
+              <UnifyNames
+                disabled={analyzing || !catalogs.records.length}
+                onStatus={setStatus}
+                records={catalogs.records}
+              />
             </div>
           </Card>
         </div>
