@@ -4,6 +4,8 @@ import { entriesForTexts, type GlossaryEntry } from "../library/translation-glos
 import { translationProviderOf, type AiSettings } from "./ai-settings";
 import { translationNeedsKey, unreachableServiceMessage, type TranslationProviderChoice } from "./translation-options";
 import { fetchWithRetry } from "./ai-retry";
+import { recordAiUsage } from "./ai-usage-store";
+import { readCatalogUsage } from "./document-catalog";
 import { classifyProviderFailure } from "./provider-error";
 import {
   batchPassages,
@@ -86,7 +88,16 @@ function hostedRequest(settings: AiSettings, apiKey: string, pair: TranslationPa
     if (!response.ok) {
       throw new Error(typeof payload.error === "string" ? payload.error : "El proveedor no pudo traducir.");
     }
-    return parseTranslations(payload, passages.length);
+    const translations = parseTranslations(payload, passages.length);
+    // Lo que dice la ruta que se gastó: tokens en las IA, caracteres en DeepL y Azure (04.6).
+    const usage = (payload.usage ?? {}) as Record<string, unknown>;
+    const count = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+    recordAiUsage(provider, model, {
+      characters: count(usage.characters),
+      inputTokens: count(usage.inputTokens),
+      outputTokens: count(usage.outputTokens),
+    });
+    return translations;
   };
 }
 
@@ -130,6 +141,7 @@ function libreTranslateRequest(settings: AiSettings, apiKey: string, pair: Trans
     if (translated.length !== passages.length || translated.some((text) => typeof text !== "string")) {
       throw new TranslationCountError(passages.length, null);
     }
+    recordAiUsage("libretranslate", null, { characters: passages.reduce((sum, text) => sum + text.length, 0) });
     return translated as string[];
   };
 }
@@ -172,7 +184,10 @@ function ollamaRequest(settings: AiSettings, pair: TranslationPair): RequestBatc
     } catch {
       throw new Error("Ollama no devolvió el JSON esperado.");
     }
-    return parseTranslations(parsed, passages.length);
+    const translations = parseTranslations(parsed, passages.length);
+    // En el equipo, gratis: se cuenta para verlo, no para el límite.
+    recordAiUsage("ollama", model, readCatalogUsage(payload));
+    return translations;
   };
 }
 

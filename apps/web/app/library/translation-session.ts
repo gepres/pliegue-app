@@ -30,6 +30,11 @@ export interface TranslationStorage {
 }
 
 export interface TranslationSessionOptions<Block extends { text: string }> {
+  /**
+   * Antes de pedir una unidad al traductor; si lanza, la sesión se para ahí (04.6: el tope del
+   * presupuesto). Va antes de la unidad y no dentro: lo que está en marcha termina entero.
+   */
+  gate?: () => void;
   /** El glosario vigente del libro; se lee al traducir cada unidad. */
   glossary?: () => readonly GlossaryEntry[];
   loadUnit: (unit: number) => Promise<SourceUnit<Block>>;
@@ -43,6 +48,8 @@ export interface TranslationSessionOptions<Block extends { text: string }> {
 }
 
 export interface TranslationSnapshot {
+  /** Se paró por el tope del presupuesto de IA: se puede seguir con este libro a conciencia. */
+  budget: boolean;
   /** Unidades traducidas del libro, guardadas en el dispositivo. */
   done: number;
   error: string | null;
@@ -74,6 +81,7 @@ export class TranslationSession<Block extends { text: string }> {
   private whole = false;
   private working: number | null = null;
   private error: string | null = null;
+  private budget = false;
   private snapshot: TranslationSnapshot;
 
   constructor(private readonly options: TranslationSessionOptions<Block>) {
@@ -141,6 +149,7 @@ export class TranslationSession<Block extends { text: string }> {
     this.failed.clear();
     this.consecutiveFailures = 0;
     this.error = null;
+    this.budget = false;
     this.publish();
     void this.pump();
   }
@@ -169,10 +178,13 @@ export class TranslationSession<Block extends { text: string }> {
 
   private buildSnapshot(version: number): TranslationSnapshot {
     return {
+      budget: this.budget,
       done: this.storedIds.size,
       error: this.error,
       failed: new Set(this.failed),
-      pending: this.plan(),
+      // Parada (un error o el tope del presupuesto), no hay nada en cola: si no, el lector decía
+      // «Traduciendo esta sección…» en las que no se iban a traducir.
+      pending: this.error === null ? this.plan() : [],
       percent: translationPercent(this.storedIds.size, this.options.unitCount),
       version,
       whole: this.whole,
@@ -218,6 +230,7 @@ export class TranslationSession<Block extends { text: string }> {
       const missing = texts.flatMap((_, index) => (sameShape && stored[index]?.hash === expected[index] ? [] : [index]));
       let translated = sameShape ? stored : [];
       if (missing.length > 0) {
+        this.options.gate?.();
         const fresh = await translateBlocks(translator, missing.map((index) => texts[index] ?? ""), this.abort.signal, glossary);
         translated = texts.map((_, index) => {
           const position = missing.indexOf(index);
@@ -233,6 +246,12 @@ export class TranslationSession<Block extends { text: string }> {
     } catch (error) {
       if (this.abort.signal.aborted) return;
       this.failed.add(unit);
+      // El tope del presupuesto para en seco: insistir no cambia nada.
+      if (error instanceof Error && error.name === "BudgetExceededError") {
+        this.error = error.message;
+        this.budget = true;
+        return;
+      }
       this.consecutiveFailures += 1;
       if (this.consecutiveFailures >= maxConsecutiveFailures) {
         this.error = error instanceof Error && error.message ? error.message : "El traductor dejó de responder.";

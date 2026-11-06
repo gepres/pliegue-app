@@ -104,7 +104,8 @@ export const emptyCatalogUsage: CatalogUsage = { inputTokens: 0, outputTokens: 0
 
 /**
  * Cada proveedor nombra sus contadores de otra forma y los coloca donde quiere: OpenAI y
- * Anthropic bajo `usage`, Gemini bajo `usageMetadata`, Ollama en la raíz de la respuesta. Se buscan en ambos sitios para no
+ * Anthropic bajo `usage`, Gemini bajo `usageMetadata`, Ollama en la raíz de la respuesta; las rutas
+ * de Pliegue lo devuelven ya normalizado (`inputTokens`, `outputTokens`). Se buscan en ambos sitios para no
  * repetir esta lógica en cada adaptador. Un proveedor que no informe deja el consumo en cero,
  * que es preferible a estimarlo y presentar un número inventado como si fuera medido.
  */
@@ -122,10 +123,10 @@ export function readCatalogUsage(source: unknown): CatalogUsage {
   };
 
   return {
-    inputTokens: read("input_tokens", "prompt_tokens", "promptTokenCount", "prompt_eval_count"),
+    inputTokens: read("input_tokens", "prompt_tokens", "promptTokenCount", "prompt_eval_count", "inputTokens"),
     // Gemini cuenta aparte lo que piensa, y también se factura como salida.
     outputTokens:
-      read("output_tokens", "completion_tokens", "candidatesTokenCount", "eval_count") +
+      read("output_tokens", "completion_tokens", "candidatesTokenCount", "eval_count", "outputTokens") +
       read("thoughtsTokenCount"),
   };
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AiSettingsPanel } from "../../../components/ai-settings-panel";
+import { AiBudgetPanel } from "../../../components/ai/ai-budget-panel";
 import { AccountPanel } from "../../../components/cloud/account-panel";
 import { InstallAppCard } from "../../../components/pwa/install-app";
 import { PreferencesPanel } from "../../../components/preferences-panel";
@@ -46,7 +47,12 @@ export default function SettingsPage() {
           label: "Espacio de trabajo",
         },
         {
-          content: <AiSettingsPanel />,
+          content: (
+            <div className={styles.settingsStack}>
+              <AiSettingsPanel />
+              <AiBudgetPanel />
+            </div>
+          ),
           description: "Proveedor, clave, catálogo y traducción",
           icon: "sparkles",
           id: "ia",

@@ -50,6 +50,11 @@ export function saveAiSettings(settings: AiSettings) {
   window.dispatchEvent(new Event(changeEvent));
 }
 
+/** Los ajustes de ahora, fuera de React (el freno del presupuesto los consulta). */
+export function currentAiSettings() {
+  return typeof window === "undefined" ? defaultAiSettings : readSettings();
+}
+
 export function useAiSettings() {
   return useSyncExternalStore(subscribe, readSettings, () => defaultAiSettings);
 }

@@ -11,7 +11,9 @@ import {
   trimTranslations,
 } from "../../library/translation-store";
 import { currentAccount } from "../account-store";
+import { deviceId } from "../device-id";
 import { cloudClient } from "../supabase-client";
+import { aiUsageCollection } from "./ai-usage-collection";
 import { syncCollections, type LocalSnapshot, type SyncCollection } from "./collections";
 import { indexLibraryKeys, type LibraryKeys } from "./document-key";
 import {
@@ -181,24 +183,12 @@ export function readLocalSource() {
   return readLocal?.() ?? null;
 }
 
-function deviceId() {
-  const key = "pliegue-device-id";
-  try {
-    const existing = window.localStorage.getItem(key);
-    if (existing) return existing;
-    const created = crypto.randomUUID();
-    window.localStorage.setItem(key, created);
-    return created;
-  } catch {
-    return "sin-almacenamiento";
-  }
-}
 
 /* ---- Traducciones en la cuenta (06.3) ------------------------------------------------------- */
 
 /** El índice de lo que hay en la nube, como una colección más de `sync_items`. */
 const translationFiles: SyncCollection = translationFilesCollection();
-const collections: readonly SyncCollection[] = [...syncCollections, translationFiles];
+const collections: readonly SyncCollection[] = [...syncCollections, translationFiles, aiUsageCollection(deviceId)];
 
 /**
  * Traducciones escritas aquí desde la última vuelta. `null`: hay que revisarlas todas (la

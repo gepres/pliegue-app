@@ -23,6 +23,14 @@ describe("lectura del consumo", () => {
     });
   });
 
+  it("lee el consumo ya normalizado que devuelve la ruta de Pliegue (/api/ai/catalog)", () => {
+    // Antes salía 0: el panel decía «0 tokens» con OpenAI, Claude y Gemini (04.6).
+    expect(readCatalogUsage({ catalog: {}, usage: { inputTokens: 1200, outputTokens: 340 } })).toEqual({
+      inputTokens: 1200,
+      outputTokens: 340,
+    });
+  });
+
   it("lee los contadores que Ollama deja en la raíz de la respuesta", () => {
     expect(readCatalogUsage({ eval_count: 210, prompt_eval_count: 900 })).toEqual({
       inputTokens: 900,

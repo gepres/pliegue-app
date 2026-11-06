@@ -1,0 +1,190 @@
+/* Ajustes → IA: gasto y presupuesto (04.6). */
+.panel {
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+  /* Sin esto, una tabla con campos ensancha la columna y la página se sale en el móvil. */
+  grid-template-columns: minmax(0, 1fr);
+  margin-bottom: var(--pliegue-spacing-lg);
+}
+
+.intro,
+.block,
+.form {
+  min-width: 0;
+}
+
+.limits input {
+  min-width: 0;
+  width: 100%;
+}
+
+.intro h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.intro p {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.55;
+  margin: var(--pliegue-spacing-xs) 0 0;
+  max-width: 48rem;
+}
+
+.block {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.block h3 {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1.125rem;
+  margin: 0;
+}
+
+.form {
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+}
+
+.note {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 48rem;
+}
+
+.usage,
+.limits {
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  max-width: 40rem;
+  width: 100%;
+}
+
+.usage th,
+.usage td,
+.limits th,
+.limits td {
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  padding: 6px 8px 6px 0;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.usage thead th,
+.limits thead th {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.usage td,
+.usage tfoot th {
+  font-variant-numeric: tabular-nums;
+}
+
+.usage tfoot th,
+.usage tfoot td {
+  border-bottom: 0;
+  font-weight: 600;
+}
+
+/* Cerca del tope, la fila lo dice con una marca a la izquierda, no solo con color. */
+.usage tr[data-level="warn"] th::before,
+.usage tr[data-level="over"] th::before {
+  content: "● ";
+}
+
+.usage tr[data-level="warn"] th::before {
+  color: var(--pliegue-color-accent-warm);
+}
+
+.usage tr[data-level="over"] th,
+.usage tr[data-level="over"] td {
+  color: var(--pliegue-color-status-danger);
+}
+
+.limits th[scope="row"] {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.limits td {
+  min-width: 7rem;
+}
+
+.caption {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  padding-bottom: 4px;
+  text-align: left;
+}
+
+.pair {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  /* `min(…, 100%)`: en una columna estrecha, una sola columna en vez de dos que no caben. */
+  grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+  max-width: 40rem;
+  min-width: 0;
+}
+
+.alert {
+  border-left: 3px solid var(--pliegue-color-accent-warm);
+  font-size: 0.9375rem;
+  margin: 0;
+  padding: 4px 0 4px var(--pliegue-spacing-sm);
+}
+
+.alert[data-level="over"] {
+  border-left-color: var(--pliegue-color-status-danger);
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-md);
+}
+
+/* En el móvil, las tablas de límites y precios se apilan: nombre arriba, campos debajo. */
+@media (max-width: 560px) {
+  .limits thead {
+    display: none;
+  }
+
+  /* Como tabla, los campos la ensanchaban más que la pantalla: en bloque, se ajusta. */
+  .limits,
+  .limits tbody,
+  .limits caption {
+    display: block;
+  }
+
+  .limits td[colspan] {
+    grid-column: 1 / -1;
+  }
+
+  .limits tr {
+    border-bottom: 1px solid var(--pliegue-color-border-default);
+    display: grid;
+    gap: 4px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    padding: 6px 0;
+  }
+
+  .limits th[scope="row"] {
+    border: 0;
+    grid-column: 1 / -1;
+  }
+
+  .limits td {
+    border: 0;
+    min-width: 0;
+  }
+}

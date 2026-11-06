@@ -10,6 +10,7 @@ import {
   translationTargets,
   type TranslationPair,
 } from "../../library/translation";
+import { allowOverBudget } from "../../ai/ai-usage-store";
 import type { TranslationSnapshot } from "../../library/translation-session";
 import { Segmented } from "../app-ui/controls";
 import type { TranslationView } from "./translation-view";
@@ -250,7 +251,23 @@ export function TranslationPanel({
                 </button>
               </p>
             ) : null}
-            {snapshot.error ? (
+            {snapshot.budget ? (
+              <div className={styles.budgetActions}>
+                <Button
+                  onClick={() => {
+                    allowOverBudget(documentId);
+                    onRetry();
+                  }}
+                  size="sm"
+                  variant="secondary"
+                >
+                  Seguir con este libro
+                </Button>
+                <Link className={styles.inlineAction} href="/app/ajustes#ia">
+                  Cambiar el límite
+                </Link>
+              </div>
+            ) : snapshot.error ? (
               <Button onClick={onRetry} size="sm" variant="secondary">
                 Reintentar
               </Button>

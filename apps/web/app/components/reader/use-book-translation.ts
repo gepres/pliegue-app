@@ -9,6 +9,7 @@ import {
   type SourceUnit,
   type TranslationSnapshot,
 } from "../../library/translation-session";
+import { assertWithinBudget } from "../../ai/ai-usage-store";
 import { useBookGlossary } from "../../library/translation-glossary-store";
 import {
   clearTranslation,
@@ -43,6 +44,7 @@ export type TranslationPhase =
   | { kind: "error"; message: string };
 
 const idleSnapshot: TranslationSnapshot = {
+  budget: false,
   done: 0,
   error: null,
   failed: new Set(),
@@ -205,8 +207,11 @@ export function useBookTranslation<Block extends { text: string }>({
           translator.destroy();
           return;
         }
+        // «Tu IA» cuenta para el presupuesto del mes (04.6); el traductor del navegador, no.
+        const budgetProvider = chosen.id.startsWith("ai:") ? (chosen.id.split(":")[1] ?? null) : null;
         setSession(
           new TranslationSession<Block>({
+            ...(budgetProvider ? { gate: () => assertWithinBudget(budgetProvider, documentId) } : {}),
             glossary: () => glossaryRef.current,
             loadUnit: (unit) => loadRef.current(unit),
             pagesAhead,
