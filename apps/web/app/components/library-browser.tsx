@@ -511,9 +511,16 @@ export function LibraryBrowser() {
         <div>
           <h1>Biblioteca</h1>
           <p>
-            {allDocuments.length} documento{allDocuments.length === 1 ? "" : "s"} ·{" "}
-            {linkedFiles.documents.length + linkedFolders.documents.length} vinculados ·{" "}
-            {importedLibrary.documents.length} copias
+            {libraryLoading ? (
+              // Sin «0 documentos» que luego salta a la cifra de verdad.
+              <Skeleton label="Contando documentos…" shape="inline" width="22ch" />
+            ) : (
+              <>
+                {allDocuments.length} documento{allDocuments.length === 1 ? "" : "s"} ·{" "}
+                {linkedFiles.documents.length + linkedFolders.documents.length} vinculados ·{" "}
+                {importedLibrary.documents.length} copias
+              </>
+            )}
           </p>
         </div>
         <div className={libraryStyles.headerActions}>
@@ -1021,7 +1028,7 @@ export function LibraryBrowser() {
           className={libraryStyles.resultCount}
           role="status"
         >
-          {filteredDocuments.length} de {allDocuments.length}
+          {libraryLoading ? <Skeleton label="Contando…" shape="inline" width="5ch" /> : `${filteredDocuments.length} de ${allDocuments.length}`}
         </span>
       </div>
 
