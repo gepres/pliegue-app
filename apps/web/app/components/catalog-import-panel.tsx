@@ -12,6 +12,7 @@ import {
   matchImportedCatalogs,
   parseCatalogImportFile,
 } from "../library/catalog-import";
+import { previewCatalogImport, type CatalogImportPreview } from "../library/catalog-import-preview";
 import {
   catalogExampleFileName,
   catalogImportJsonSchema,
@@ -30,6 +31,7 @@ import {
   useImportedCatalogs,
 } from "../library/imported-catalog-store";
 import styles from "../(workspace)/app/workspace.module.css";
+import changeStyles from "./catalog-import-panel.module.css";
 
 const dialectLabels: Record<CatalogImportParseResult["dialect"], string> = {
   "csl-json": "CSL-JSON · Zotero",
@@ -38,8 +40,12 @@ const dialectLabels: Record<CatalogImportParseResult["dialect"], string> = {
   "schema-org": "schema.org · JSON-LD",
 };
 
+/** Libros que se enseñan en la lista de cambios; el resto se cuenta. */
+const changesShown = 40;
+
 interface ImportPreview {
   categories: number;
+  changes: CatalogImportPreview;
   covers: number;
   dialect: CatalogImportParseResult["dialect"];
   fileName: string;
@@ -104,6 +110,8 @@ export function CatalogImportPanel({ documents }: { documents: readonly LibraryD
       const { byDocumentId, pending } = matchImportedCatalogs(documents, records);
 
       setPreview({
+        // Libro a libro, qué dato pasa de qué a qué: la vista previa de un cambio masivo (03.6).
+        changes: previewCatalogImport(documents, records),
         categories: new Set(
           records
             .map((record) => record.organization?.category?.toLocaleLowerCase("es"))
@@ -120,7 +128,7 @@ export function CatalogImportPanel({ documents }: { documents: readonly LibraryD
       });
       setStatus(
         records.length
-          ? "Revisa el resumen y confirma para escribir las fichas en este dispositivo."
+          ? "Revisa qué cambia en cada libro y confirma para escribir las fichas en este dispositivo."
           : "El archivo se leyó, pero ninguna entrada trae el nombre del archivo al que pertenece.",
       );
     } catch (error) {
@@ -281,6 +289,39 @@ export function CatalogImportPanel({ documents }: { documents: readonly LibraryD
               : ""}
           </p>
 
+          {preview.changes.changed.length ? (
+            <details className={changeStyles.changes} open={preview.changes.changed.length <= 12}>
+              <summary>
+                Qué cambia en tu biblioteca: {preview.changes.changed.length} libro
+                {preview.changes.changed.length === 1 ? "" : "s"}
+                {preview.changes.unchanged
+                  ? ` · ${preview.changes.unchanged} se queda${preview.changes.unchanged === 1 ? "" : "n"} igual`
+                  : ""}
+              </summary>
+              <ul aria-label="Cambios por libro">
+                {preview.changes.changed.slice(0, changesShown).map((change) => (
+                  <li key={change.documentId}>
+                    <strong>{change.title}</strong>
+                    <dl>
+                      {change.changes.map((field) => (
+                        <div key={field.label}>
+                          <dt>{field.label}</dt>
+                          <dd>
+                            <s>{field.from}</s> → {field.to}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </li>
+                ))}
+              </ul>
+              {preview.changes.changed.length > changesShown ? (
+                <p>Y {preview.changes.changed.length - changesShown} libros más con cambios.</p>
+              ) : null}
+            </details>
+          ) : preview.matched ? (
+            <p className={changeStyles.same}>Los libros con ficha en el archivo ya están así: no cambia nada.</p>
+          ) : null}
           {preview.issues.length ? (
             <ul aria-label="Entradas descartadas" className={styles.folderSourceList}>
               {preview.issues.slice(0, 8).map((issue) => (

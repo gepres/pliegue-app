@@ -1,0 +1,75 @@
+.changes {
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  margin: var(--pliegue-spacing-sm) 0;
+  padding: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
+}
+
+.changes summary {
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.changes ul {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  list-style: none;
+  margin: var(--pliegue-spacing-sm) 0 0;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.changes li {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: 4px;
+  padding-top: var(--pliegue-spacing-sm);
+}
+
+.changes li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.changes li strong {
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.changes dl {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.changes dl div {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+}
+
+.changes dt {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.75rem;
+}
+
+.changes dd {
+  font-size: 0.8125rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.changes dd s {
+  color: var(--pliegue-color-text-secondary);
+}
+
+.changes p,
+.same {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  margin: 0;
+}

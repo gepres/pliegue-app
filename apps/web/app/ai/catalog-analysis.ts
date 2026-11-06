@@ -4,7 +4,7 @@ import { readDocumentFile } from "../library/document-file";
 import { documentLanguage, type LibraryDocument } from "../library/documents";
 import { readScannedExcerpt } from "../library/ocr-pdf";
 import { readImportedCatalogRecords } from "../library/imported-catalog-store";
-import { AuthorIndex, authorKey } from "./author-names";
+import { AuthorIndex } from "./author-names";
 import { groundCatalogExtras } from "./catalog-grounding";
 import { CategoryIndex, spanishCategory } from "./category-names";
 import { providerModel, type AiSettings } from "./ai-settings";
@@ -199,27 +199,40 @@ function yieldToBrowser() {
   });
 }
 
-export interface NameReconciliationResult {
-  /** Variantes de autor unidas: «J. Grinberg» → «Jacobo Grinberg». */
-  merged: Array<{ from: string; to: string }>;
-  /** Variantes de categoría unidas: «Filosofia» → «Filosofía». */
-  mergedCategories: Array<{ from: string; to: string }>;
-  reviewed: number;
-  updated: number;
+export type NameRenameKind = "author" | "category";
+
+/** Una unión: «J. L. Borges» → «Jorge Luis Borges», y en qué fichas cae. */
+export interface NameMerge {
+  documentIds: string[];
+  from: string;
+  /** Clave con la que se acepta o se deja fuera al aplicar: `author:J. L. Borges`. */
+  key: string;
+  kind: NameRenameKind;
+  titles: string[];
+  to: string;
 }
 
+/** Lo que cambiaría unificar, sin escribir nada: la vista previa de «Unificar nombres» (03.6). */
+export interface NameReconciliationPlan {
+  /** Cada ficha que cambiaría, tal como estaba al calcular el plan. */
+  base: DocumentCatalogRecord[];
+  merges: NameMerge[];
+  reviewed: number;
+}
+
+export const nameMergeKey = (kind: NameRenameKind, from: string) => `${kind}:${from}`;
+
 /**
- * Unifica las grafías de autor y de categoría en las fichas ya guardadas. Se ejecuta al
- * terminar un análisis y también puede lanzarse sola: arregla un catálogo heredado sin gastar
- * una sola llamada al proveedor, que es justo lo que hacía falta cuando el mismo autor figuraba
- * tres veces. Las categorías toman la grafía de las fichas importadas, que eligió la persona.
+ * Qué grafías de autor y de categoría se unificarían en las fichas guardadas. Arregla un
+ * catálogo heredado sin gastar una sola llamada al proveedor, que es justo lo que hacía falta
+ * cuando el mismo autor figuraba tres veces. Las categorías toman la grafía de las fichas
+ * importadas, que eligió la persona. No escribe: lo aplica `applyNameReconciliation` con las
+ * uniones que la persona acepte en la vista previa.
  */
-export async function reconcileStoredNames(): Promise<NameReconciliationResult> {
+export async function planNameReconciliation(): Promise<NameReconciliationPlan> {
   const records = await readDocumentCatalogRecords();
   const index = new AuthorIndex();
   const categories = new CategoryIndex();
-  const merged = new Map<string, string>();
-  const mergedCategories = new Map<string, string>();
 
   // Primera pasada: fijar la forma canónica de cada nombre viendo el catálogo entero.
   for (const record of await readImportedCatalogRecords().catch(() => [])) {
@@ -230,46 +243,84 @@ export async function reconcileStoredNames(): Promise<NameReconciliationResult> 
     categories.add(record.extras?.category, record.extras?.subcategory);
   }
 
-  let updated = 0;
+  const merges = new Map<string, NameMerge>();
+  const base: DocumentCatalogRecord[] = [];
+  const note = (record: DocumentCatalogRecord, kind: NameRenameKind, from: string, to: string) => {
+    const key = nameMergeKey(kind, from);
+    const merge = merges.get(key) ?? { documentIds: [], from, key, kind, titles: [], to };
+    if (!merge.documentIds.includes(record.documentId)) {
+      merge.documentIds.push(record.documentId);
+      merge.titles.push(record.catalog?.canonicalTitle ?? record.documentId);
+    }
+    merges.set(key, merge);
+  };
+
   for (const record of records) {
     if (!record.catalog) continue;
-    const authors = record.catalog.authors;
-    const canonical = authors.map((author) => index.resolve(author));
-    for (const [position, author] of authors.entries()) {
-      const destino = canonical[position] as string;
-      if (authorKey(destino) !== authorKey(author)) merged.set(author, destino);
+    let changed = false;
+    for (const author of record.catalog.authors) {
+      const canonical = index.resolve(author);
+      if (canonical === author) continue;
+      // Solo la mayúscula o una tilde también se corrige, aunque la clave sea la misma.
+      note(record, "author", author, canonical);
+      changed = true;
     }
-
     const extras = record.extras;
     const organization = categories.add(extras?.category, extras?.subcategory);
-    if (extras?.category && organization.category !== extras.category) {
-      mergedCategories.set(extras.category, organization.category ?? extras.category);
+    if (extras?.category && organization.category && organization.category !== extras.category) {
+      note(record, "category", extras.category, organization.category);
+      changed = true;
     }
-    if (extras?.subcategory && organization.subcategory !== extras.subcategory) {
-      mergedCategories.set(extras.subcategory, organization.subcategory ?? extras.subcategory);
+    if (extras?.subcategory && organization.subcategory && organization.subcategory !== extras.subcategory) {
+      note(record, "category", extras.subcategory, organization.subcategory);
+      changed = true;
     }
-
-    const authorsChanged = canonical.some((author, position) => author !== authors[position]);
-    const categoriesChanged = Boolean(
-      extras &&
-        (organization.category !== extras.category || organization.subcategory !== extras.subcategory),
-    );
-    if (!authorsChanged && !categoriesChanged) continue;
-
-    await saveDocumentCatalogRecord({
-      ...record,
-      catalog: { ...record.catalog, authors: canonical },
-      ...(extras ? { extras: { ...extras, ...organization } } : {}),
-    });
-    updated += 1;
+    if (changed) base.push(record);
   }
 
   return {
-    merged: [...merged].map(([from, to]) => ({ from, to })),
-    mergedCategories: [...mergedCategories].map(([from, to]) => ({ from, to })),
+    base,
+    merges: [...merges.values()].sort((left, right) => right.documentIds.length - left.documentIds.length || left.from.localeCompare(right.from, "es")),
     reviewed: records.length,
-    updated,
   };
+}
+
+/**
+ * Aplica las uniones aceptadas (todas, si no se dice). Una ficha que cambió después de la
+ * vista previa —se volvió a catalogar— se deja como está: lo que se aceptó era otra cosa.
+ */
+export async function applyNameReconciliation(plan: NameReconciliationPlan, accepted?: ReadonlySet<string>) {
+  const renames = new Map(plan.merges.filter((merge) => !accepted || accepted.has(merge.key)).map((merge) => [merge.key, merge.to]));
+  const current = new Map((await readDocumentCatalogRecords()).map((record) => [record.documentId, record]));
+  let updated = 0;
+  let skipped = 0;
+  for (const record of plan.base) {
+    const now = current.get(record.documentId);
+    if (!now || JSON.stringify(now) !== JSON.stringify(record)) {
+      skipped += 1;
+      continue;
+    }
+    if (!record.catalog) continue;
+    const rename = (kind: NameRenameKind, name: string | null | undefined) =>
+      name ? (renames.get(nameMergeKey(kind, name)) ?? name) : name;
+    const authors = record.catalog.authors.map((author) => rename("author", author) as string);
+    const extras = record.extras;
+    const organization = extras
+      ? { category: rename("category", extras.category) ?? null, subcategory: rename("category", extras.subcategory) ?? null }
+      : null;
+    const authorsChanged = authors.some((author, position) => author !== record.catalog!.authors[position]);
+    const categoriesChanged = Boolean(
+      extras && organization && (organization.category !== extras.category || organization.subcategory !== extras.subcategory),
+    );
+    if (!authorsChanged && !categoriesChanged) continue;
+    await saveDocumentCatalogRecord({
+      ...record,
+      catalog: { ...record.catalog, authors },
+      ...(extras && organization ? { extras: { ...extras, ...organization } } : {}),
+    });
+    updated += 1;
+  }
+  return { skipped, updated };
 }
 
 async function runCatalogAnalysis(
@@ -496,8 +547,8 @@ async function runCatalogAnalysis(
   if (stopRequested) progress.stopped = true;
   progress.current = null;
 
-  // Solo merece la pena repasar lo guardado si este lote llegó a escribir algo.
-  if (progress.analyzed) await reconcileStoredNames();
+  // Unificar nombres ya no se hace solo al terminar (03.6): toca muchas fichas de golpe, así que
+  // el panel de IA lo propone con su vista previa y lo aplica la persona.
 
   publish();
   return progress;
