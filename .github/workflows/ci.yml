@@ -32,7 +32,6 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://pliegue-e2e.supabase.co
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_e2e
-      E2E_WORK: ${{ runner.temp }}/pliegue-e2e
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -54,7 +53,10 @@ jobs:
           done
           cat "$RUNNER_TEMP/next.log"
           exit 1
+      # `runner.temp` solo existe dentro de los pasos, no en el `env` del job.
       - run: pnpm --filter @pliegue/web e2e
+        env:
+          E2E_WORK: ${{ runner.temp }}/pliegue-e2e
       - name: Capturas y registro si algo falla
         if: failure()
         uses: actions/upload-artifact@v4
