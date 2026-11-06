@@ -157,6 +157,22 @@ describe("límite por minuto frente a cupo agotado (04.2)", () => {
     expect(dailyFailure.message).toMatch(/limit: 20/);
   });
 
+  it("Gemini sin crédito prepagado: 429 RESOURCE_EXHAUSTED, pero es saldo y no se reintenta (lo vio el dueño, 6-nov)", () => {
+    const depleted = {
+      error: {
+        code: 429,
+        message: "Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing. Learn more at https://ai.google.dev/gemini-api/docs/billing",
+        status: "RESOURCE_EXHAUSTED",
+      },
+    };
+    const failure = classifyProviderFailure("gemini", 429, depleted, "gemini-3.5-flash-lite");
+    expect(failure).toMatchObject({ kind: "quota", retryAfter: null, retryable: false, status: 429 });
+    expect(failure.message).toMatch(/se quedó sin crédito prepagado: esperar no lo arregla/);
+    expect(failure.message).toMatch(/Detalle del proveedor: «Your prepayment credits are depleted/);
+    // Lo mismo con otro proveedor que hable de saldo en el texto.
+    expect(classifyProviderFailure("openai", 429, { error: { message: "Your credit balance is too low to access the API." } }, "m").kind).toBe("quota");
+  });
+
   it("Gemini por minuto, con la espera solo en el texto («Please retry in 17.37s»)", () => {
     const perMinute = {
       error: {

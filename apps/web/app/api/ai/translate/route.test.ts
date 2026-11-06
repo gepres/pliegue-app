@@ -183,6 +183,13 @@ describe("ruta de traducción con DeepL (05.5)", () => {
     expect(await quota.json()).toMatchObject({ error: expect.stringMatching(/DeepL rechazó la solicitud por cupo o saldo agotado/), retryable: false });
   });
 
+  it("si se corta la conexión con el proveedor («fetch failed»), lo dice con su causa y deja reintentar (6-nov)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed", { cause: { code: "ECONNRESET" } })));
+    const response = await POST(request({ model: undefined, provider: "deepl" }, freeKey));
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({ error: expect.stringMatching(/Se cortó la conexión .* \(ECONNRESET\)/), retryable: true });
+  });
+
   it("si el navegador cancela, se corta también la llamada al proveedor (04.2)", async () => {
     const controller = new AbortController();
     let providerSignal: AbortSignal | undefined;

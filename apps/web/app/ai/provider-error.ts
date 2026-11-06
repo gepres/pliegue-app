@@ -92,6 +92,15 @@ function quotaDetail(raw: string) {
 /** Gemini sin cupo gratis para el modelo: «limit: 0». Esperar no sirve, ni hoy ni mañana. */
 const zeroLimit = (message: string) => /\blimit:\s*0\b/i.test(message);
 
+/**
+ * Sin saldo: «Your prepayment credits are depleted» (Gemini con facturación de prepago y el
+ * crédito a cero), «insufficient balance», «billing»… Esperar no sirve: hay que recargar.
+ */
+const outOfCredit = (message: string) =>
+  /prepayment credits? (are|is) depleted|credits? (are|is) depleted|insufficient (balance|credit|funds)|credit balance is too low|billing (account|details)? ?(is |are )?(disabled|required|not active)/i.test(
+    message,
+  );
+
 function geminiDetails(payload: unknown): unknown[] {
   const details = (payload as { error?: { details?: unknown } } | null)?.error?.details;
   return Array.isArray(details) ? details : [];
@@ -134,6 +143,10 @@ function kindOf(status: number, code: string, message: string, payload: unknown)
   if (code === "invalid_api_key" || code === "authentication_error") return "credential";
   // Sin saldo o sin cupo: OpenAI «insufficient_quota»; Anthropic, 402 «billing_error».
   if (code === "insufficient_quota" || code === "billing_error") return "quota";
+  // El texto manda sobre el código cuando habla de dinero: Gemini responde 429
+  // RESOURCE_EXHAUSTED con «Your prepayment credits are depleted» (lo vio el dueño, 6-nov), y
+  // reintentar no lo arregla.
+  if (outOfCredit(message)) return "quota";
   // Demasiadas solicitudes por minuto: se arregla esperando (04.2).
   if (code === "rate_limit_error" || code === "rate_limit_exceeded") return "rate";
   if (code === "permission_error") return "permission";
@@ -179,6 +192,9 @@ function describe(kind: ProviderFailureKind, provider: FailingProvider, model: s
       }
       if (daily) {
         return `Se agotó el cupo diario de Gemini para el modelo ${quoted}: se renueva a medianoche, hora del Pacífico. Hasta entonces, elige otro modelo en Ajustes → IA.${quotaDetail(raw)}`;
+      }
+      if (provider === "gemini" && outOfCredit(raw)) {
+        return `Tu proyecto de Gemini se quedó sin crédito prepagado: esperar no lo arregla. Recárgalo en Google AI Studio (Facturación) o usa una clave de un proyecto sin facturación, con el plan gratis.${quotaDetail(raw)}`;
       }
       return `${name} rechazó la solicitud por cupo o saldo agotado. Esperar unos segundos no lo arregla: revisa tu plan, o vuelve cuando se renueve el cupo.${quotaDetail(raw)}`;
     case "rate":
