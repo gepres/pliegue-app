@@ -91,7 +91,7 @@ import {
 } from "../library/local-reader-state";
 import { useReadingFilter } from "../preferences/reading-filter-store";
 import { PdfReader, type PdfLayoutBlock, type PdfPageTranslationView, type PdfReaderProps } from "./pdf-reader";
-import { blockHasText, type StructuredDocumentBlock, type StructuredDocumentSection } from "../library/structured-document-extractor";
+import { blockHasText, isTextualBlock, type StructuredDocumentBlock, type StructuredDocumentSection } from "../library/structured-document-extractor";
 import { ParallelBlocks } from "./reader/parallel-blocks";
 import { useParallelLink } from "./reader/parallel-link";
 import { useReadingPlace } from "./reader/reading-place";
@@ -272,21 +272,27 @@ function StructuredPreview({
         {preview.sections.map((section, sectionIndex) => {
           const headingId = `extracted-${section.id}`;
           const view = translation?.get(sectionIndex + 1);
-          const texts = view && !view.pending && view.texts?.length === section.blocks.length ? view.texts : null;
+          // La traducción va por los bloques que no son imagen, como antes de que se vieran: así
+          // casa con la guardada entonces. Las imágenes se quedan en su sitio, sin traducir.
+          const textual = section.blocks.filter(isTextualBlock);
+          const texts = view && !view.pending && view.texts?.length === textual.length ? view.texts : null;
+          let nextText = 0;
           const blocks = texts
-            ? section.blocks.map<StructuredDocumentBlock>((block, index) =>
-                blockHasText(block) ? { ...block, text: texts[index] || block.text } : block,
-              )
+            ? section.blocks.map<StructuredDocumentBlock>((block) => {
+                if (!isTextualBlock(block)) return block;
+                const text = texts[nextText++];
+                return blockHasText(block) ? { ...block, text: text || block.text } : block;
+              })
             : section.blocks;
           // Sin título propio, la sección se nombra solo por su número: «Sección 3» dos veces
-          // no dice más. Y el bloque que ya es el título no se vuelve a pintar debajo.
+          // no dice más. Y el bloque que ya es el título no se vuelve a pintar debajo, aunque
+          // vaya detrás de una imagen (una portada o un adorno).
           const untitled = section.title === section.label;
-          const titleIndex = section.blocks.findIndex(
-            (block) => (block.kind === "heading" || block.kind === "paragraph") && block.text.trim() === section.title.trim(),
-          );
+          const titleIndex = textual.findIndex((block) => blockHasText(block) && block.text.trim() === section.title.trim());
           const translatedTitle = texts && titleIndex >= 0 ? texts[titleIndex] || null : null;
           const title = translatedTitle ?? section.title;
-          const [, ...rest] = blocks;
+          const titleBlock = titleIndex === 0 ? section.blocks.findIndex(isTextualBlock) : -1;
+          const withoutTitle = <T,>(list: readonly T[]) => (titleBlock >= 0 ? list.filter((_, index) => index !== titleBlock) : list);
 
           if (sideBySide) {
             // El título del original manda; su traducción va debajo, enlazada como un bloque más.
@@ -320,12 +326,12 @@ function StructuredPreview({
                 <ParallelBlocks
                   anchorOffset={titleIndex === 0 ? 1 : 0}
                   anchorPrefix={`s${sectionIndex + 1}`}
-                  blocks={titleIndex === 0 ? section.blocks.slice(1) : section.blocks}
+                  blocks={withoutTitle(section.blocks)}
                   keyPrefix={`sec:${section.id}`}
                   language={view?.language}
                   pending={Boolean(view?.pending)}
                   sectionTitle={section.title}
-                  translations={texts ? (titleIndex === 0 ? rest : blocks) : null}
+                  translations={texts ? withoutTitle(blocks) : null}
                 />
               </section>
             );
@@ -351,7 +357,7 @@ function StructuredPreview({
               <ExtractedBlocks
                 anchorOffset={titleIndex === 0 ? 1 : 0}
                 anchorPrefix={`s${sectionIndex + 1}`}
-                blocks={titleIndex === 0 ? rest : blocks}
+                blocks={withoutTitle(blocks)}
                 sectionTitle={section.title}
               />
             </section>
@@ -1058,8 +1064,9 @@ export function LocalReaderShell({
       if (!isPdf) {
         const section = structuredSections?.[unit - 1];
         if (!section) throw new Error("Esa sección ya no está en el documento.");
-        // Las tablas y las imágenes se dejan como están: no hay texto que traducir.
-        return { blocks: section.blocks.map((block) => ({ text: blockHasText(block) ? block.text : "" })) };
+        // Las tablas se dejan como están: sus cifras y celdas no se tocan. Las imágenes ni
+        // cuentan: así la traducción guardada antes de que se vieran sigue casando.
+        return { blocks: section.blocks.filter(isTextualBlock).map((block) => ({ text: blockHasText(block) ? block.text : "" })) };
       }
       const tools = regionToolsRef.current;
       if (!tools) throw new Error("El visor del PDF aún no está listo.");

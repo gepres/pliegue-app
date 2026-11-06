@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 
-import { blockHasText, type StructuredDocumentBlock } from "../../library/structured-document-extractor";
+import { blockHasText, textualAnchors, type StructuredDocumentBlock } from "../../library/structured-document-extractor";
 import { ExtractedBlock, insertsAt, type BlockInsert } from "../extracted-blocks";
 import extracted from "../extracted-blocks.module.css";
 import styles from "./parallel-blocks.module.css";
@@ -48,6 +48,7 @@ export function ParallelBlocks({
   const rows = Math.max(1, blocks.length + (inserts?.length ?? 0));
   const gaps = inserts?.map((insert) => ({ ...insert, node: <div aria-hidden="true" className={styles.cell} /> }));
   const span = { gridRow: `1 / span ${rows}` };
+  const anchors = textualAnchors(blocks);
 
   return (
     <div className={styles.parallel} style={{ gridTemplateRows: `repeat(${rows}, auto)` }}>
@@ -62,7 +63,7 @@ export function ParallelBlocks({
             {insertsAt(inserts, index, blocks.length)}
             <div className={styles.cell} {...linkProps(block, `${keyPrefix}:${index}`, "source")}>
               <ExtractedBlock
-                anchor={anchorPrefix ? `${anchorPrefix}:${index + anchorOffset}` : undefined}
+                anchor={anchorPrefix && anchors[index] !== null ? `${anchorPrefix}:${(anchors[index] ?? 0) + anchorOffset}` : undefined}
                 block={block}
                 sectionTitle={sectionTitle}
               />

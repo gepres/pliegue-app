@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, type ReactNode } from "react";
 
-import type { StructuredDocumentBlock } from "../library/structured-document-extractor";
+import { textualAnchors, type StructuredDocumentBlock } from "../library/structured-document-extractor";
 import { readingAnchorProps } from "./reader/reading-anchor";
 import styles from "./extracted-blocks.module.css";
 
@@ -129,13 +129,14 @@ export function ExtractedBlocks({
   inserts?: readonly BlockInsert[] | undefined;
   sectionTitle: string;
 }) {
+  const anchors = textualAnchors(blocks);
   return (
     <div className={styles.blocks}>
       {blocks.map((block, index) => (
         <Fragment key={`${sectionTitle}-${block.kind}-${index}`}>
           {insertsAt(inserts, index, blocks.length)}
           <ExtractedBlock
-            anchor={anchorPrefix ? `${anchorPrefix}:${index + anchorOffset}` : undefined}
+            anchor={anchorPrefix && anchors[index] !== null ? `${anchorPrefix}:${(anchors[index] ?? 0) + anchorOffset}` : undefined}
             block={block}
             sectionTitle={sectionTitle}
           />

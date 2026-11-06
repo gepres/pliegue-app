@@ -11,6 +11,11 @@ const maxArchiveImages = 400;
 const maxArchiveImageBytes = 48 * 1024 * 1024;
 /** Por debajo de esto suele ser un adorno o un píxel de relleno, no una ilustración. */
 const minArchiveImageBytes = 600;
+/**
+ * Una imagen dentro de un párrafo con texto suele ser un glifo, una capitular o un icono: solo
+ * se saca como figura si pesa como una ilustración.
+ */
+const minInlineImageBytes = 16 * 1024;
 const maxSelectedEntries = 800;
 const maxSpreadsheetColumns = 64;
 const maxSpreadsheetRows = 1_000;
@@ -31,6 +36,25 @@ export type StructuredDocumentBlock =
    * No se traduce; su `alt` entra en el índice como texto que se puede buscar.
    */
   | { alt: string; image: Blob; kind: "image" };
+
+/**
+ * Los bloques que cuentan para las anclas de lectura y para la traducción: todos menos las
+ * imágenes. Así un libro que ya se leía o se tradujo antes de que se vieran sus imágenes
+ * conserva su punto de lectura y su traducción guardada: los índices no se mueven.
+ */
+export function isTextualBlock(block: StructuredDocumentBlock) {
+  return block.kind !== "image";
+}
+
+/**
+ * El número de ancla de cada bloque: su posición contando solo los que no son imagen (`null` en
+ * las imágenes). Así el punto de lectura guardado antes de que se vieran las imágenes de un
+ * libro sigue apuntando al mismo párrafo.
+ */
+export function textualAnchors(blocks: readonly StructuredDocumentBlock[]) {
+  let next = 0;
+  return blocks.map((block) => (isTextualBlock(block) ? next++ : null));
+}
 
 /** Los bloques que llevan texto: los que se traducen. */
 export function blockHasText(block: StructuredDocumentBlock): block is Extract<StructuredDocumentBlock, { text: string }> {
@@ -284,7 +308,7 @@ function resolveArchivePath(basePath: string, relativePath: string) {
  * La imagen que hay en `path` dentro del ZIP, como Blob con su tipo. `null` si no está, si no
  * es de mapa de bits o si apunta fuera (`http:`, `data:`): un libro no pide nada a internet.
  */
-function archiveImage(images: ReadonlyMap<string, Uint8Array>, path: string | null) {
+function archiveImage(images: ReadonlyMap<string, Uint8Array>, path: string | null, minBytes = 0) {
   if (!path || /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(path)) return null;
   const normalized = normalizeArchiveName(path);
   if (!normalized) return null;
@@ -294,8 +318,21 @@ function archiveImage(images: ReadonlyMap<string, Uint8Array>, path: string | nu
     for (const [name, value] of images) if (name.toLocaleLowerCase("en") === lower) data = value;
   }
   const type = imageTypeOf(normalized);
-  return data && type ? new Blob([data.slice()], { type }) : null;
+  if (!data || !type || data.byteLength < minBytes) return null;
+  // Una imagen que el libro usa varias veces (un adorno, un logo) se copia una sola vez.
+  let blobs = imageBlobs.get(images);
+  if (!blobs) imageBlobs.set(images, (blobs = new Map()));
+  const known = blobs.get(normalized);
+  if (known) return known;
+  const blob = new Blob([data.slice()], { type });
+  blobs.set(normalized, blob);
+  return blob;
 }
+
+const imageBlobs = new WeakMap<ReadonlyMap<string, Uint8Array>, Map<string, Blob>>();
+
+/** Word escribe solo este texto cuando nadie describió la imagen: no describe nada. */
+const generatedAltText = /(descripci[oó]n generada autom[aá]ticamente|description automatically generated)/i;
 
 function extractDocx(entries: Map<string, string>, images: ReadonlyMap<string, Uint8Array>): StructuredDocumentSection[] {
   const xml = findEntry(entries, "word/document.xml");
@@ -314,11 +351,16 @@ function extractDocx(entries: Map<string, string>, images: ReadonlyMap<string, U
 
   for (const match of xml.matchAll(/<w:p\b[\s\S]*?<\/w:p\s*>/gi)) {
     const paragraph = match[0];
-    const alt = normalizeText(attributeValue(paragraph.match(/<wp:docPr\b[^>]*>/i)?.[0] ?? "", "descr") ?? "");
-    for (const reference of paragraph.matchAll(/<a:blip\b[^>]*>|<v:imagedata\b[^>]*>/gi)) {
-      const relation = attributeValue(reference[0], "r:embed") ?? attributeValue(reference[0], "r:id");
-      const image = archiveImage(images, relation ? (relationships.get(relation) ?? null) : null);
-      if (image) blocks.push({ alt, image, kind: "image" });
+    // Word guarda a veces la misma imagen dos veces: en DrawingML y, de respaldo, en VML.
+    const drawings = paragraph.replaceAll(/<mc:Fallback\b[\s\S]*?<\/mc:Fallback\s*>/gi, "");
+    for (const drawing of drawings.matchAll(/<w:drawing\b[\s\S]*?<\/w:drawing\s*>|<w:pict\b[\s\S]*?<\/w:pict\s*>/gi)) {
+      const description = normalizeText(attributeValue(drawing[0].match(/<wp:docPr\b[^>]*>/i)?.[0] ?? "", "descr") ?? "");
+      const alt = generatedAltText.test(description) ? "" : description;
+      for (const reference of drawing[0].matchAll(/<a:blip\b[^>]*>|<v:imagedata\b[^>]*>/gi)) {
+        const relation = attributeValue(reference[0], "r:embed") ?? attributeValue(reference[0], "r:id");
+        const image = archiveImage(images, relation ? (relationships.get(relation) ?? null) : null);
+        if (image) blocks.push({ alt, image, kind: "image" });
+      }
     }
     const text = extractTextElements(paragraph);
     if (!text) continue;
@@ -506,14 +548,14 @@ function extractHtmlBlocks(html: string, path = "", images: ReadonlyMap<string, 
   let previousText = "";
   let previousImage = "";
 
-  const pushImages = (fragment: string) => {
+  const pushImages = (fragment: string, minBytes = 0) => {
     for (const imageTag of fragment.matchAll(/<img\b[^>]*>/gi)) {
       const source = attributeValue(imageTag[0], "src") ?? "";
       // Lo de fuera (`http:`, `data:`) no se pide: `archiveImage` lo descarta.
       const resolved = /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(source) ? source : resolveArchivePath(path, source);
       // La misma imagen dos veces seguidas (un adorno repetido) se ve una.
       if (!source || resolved === previousImage) continue;
-      const image = archiveImage(images, resolved);
+      const image = archiveImage(images, resolved, minBytes);
       if (!image) continue;
       previousImage = resolved;
       blocks.push({ alt: normalizeText(attributeValue(imageTag[0], "alt") ?? ""), image, kind: "image" });
@@ -528,8 +570,8 @@ function extractHtmlBlocks(html: string, path = "", images: ReadonlyMap<string, 
       continue;
     }
     const tag = match[1].toLocaleLowerCase("en");
-    pushImages(match[2] ?? "");
     const text = normalizeText(match[2] ?? "");
+    pushImages(match[2] ?? "", text ? minInlineImageBytes : 0);
     if (!text || text === previousText) continue;
     previousText = text;
     previousImage = "";
@@ -618,7 +660,7 @@ function extractEpub(entries: Map<string, string>, images: ReadonlyMap<string, U
  * interno («una_trenza_de_hierba_sagrada-2») no le dice nada a quien lee.
  */
 function leadingTitle(blocks: readonly StructuredDocumentBlock[]) {
-  const first = blocks[0];
+  const first = blocks.find(isTextualBlock);
   if (first?.kind !== "paragraph") return null;
   const text = first.text.trim();
   if (!text || text.length > 80 || text.split(/\s+/).length > 10) return null;
