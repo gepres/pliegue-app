@@ -81,3 +81,85 @@
   overflow-wrap: anywhere;
   text-align: center;
 }
+
+/* Tarjetas con una muestra grande: el texto arriba y la muestra debajo, a todo lo ancho. */
+.stackedCard {
+  flex-wrap: wrap;
+}
+
+.stackedCard > .column {
+  flex: 1 1 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 800px) {
+  .stackedCard {
+    flex-wrap: nowrap;
+  }
+}
+
+.skeletonGrid {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+
+.skeletonSample {
+  border: 1px dashed var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  min-width: 0;
+  padding: var(--pliegue-spacing-md);
+}
+
+.skeletonSample > small {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.skeletonRow {
+  align-items: center;
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.avatar {
+  align-items: center;
+  background: var(--pliegue-color-bg-subtle);
+  border-radius: 50%;
+  display: inline-flex;
+  font-weight: 600;
+  height: 2.5rem;
+  justify-content: center;
+  width: 2.5rem;
+}
+
+.pagePreview {
+  background: var(--pliegue-color-bg-canvas);
+  border-radius: var(--pliegue-radius-md);
+  max-height: 22rem;
+  overflow: hidden;
+}
+
+.headerSample {
+  border: 1px dashed var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  padding: var(--pliegue-spacing-md);
+}
+
+.documentGrid {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+
+/* El esqueleto de la tarjeta, como una celda más de la rejilla. */
+.documentSkeletons {
+  display: contents;
+}
