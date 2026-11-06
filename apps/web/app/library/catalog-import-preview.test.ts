@@ -6,7 +6,8 @@ import type { LibraryDocument } from "./documents";
 
 const document = (id: string, fileName: string, extra: Partial<LibraryDocument> = {}) =>
   ({
-    author: "",
+    // Lo que lleva de verdad una copia importada: una etiqueta, no un autor.
+    author: "Copia importada",
     availability: "available",
     format: "pdf",
     id,

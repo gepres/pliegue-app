@@ -30,10 +30,8 @@ export const noValue = "—";
 
 const fields: ReadonlyArray<{ label: string; read: (document: LibraryDocument) => string }> = [
   { label: "Título", read: documentDisplayTitle },
-  {
-    label: "Autoría",
-    read: (document) => (document.catalog?.authors?.length ? document.catalog.authors : document.author ? [document.author] : []).join(", "),
-  },
+  // Solo la ficha: `document.author` de una copia importada es la etiqueta «Copia importada».
+  { label: "Autoría", read: (document) => (document.catalog?.authors ?? []).join(", ") },
   {
     label: "Categoría",
     read: (document) => [document.organization?.category, document.organization?.subcategory].filter(Boolean).join(" › "),
