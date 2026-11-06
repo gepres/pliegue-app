@@ -161,8 +161,8 @@
 }
 
 .parallelBox[data-parallel-active="true"] {
-  background: rgb(124 92 224 / 18%);
-  box-shadow: 0 0 0 2px rgb(124 92 224 / 18%);
+  background: var(--pliegue-color-parallel-highlight);
+  box-shadow: 0 0 0 2px var(--pliegue-color-parallel-highlight);
   mix-blend-mode: multiply;
 }
 
@@ -317,9 +317,7 @@
   border: 1px solid var(--pliegue-color-border-default);
   border-radius: 18px;
   bottom: calc(14px + env(safe-area-inset-bottom));
-  box-shadow:
-    0 16px 40px rgb(0 0 0 / 16%),
-    0 2px 6px rgb(0 0 0 / 6%);
+  box-shadow: var(--pliegue-elevation-dock);
   display: grid;
   gap: 2px;
   left: 50%;
@@ -375,7 +373,7 @@
   background: var(--pliegue-color-bg-surface);
   border: 2px solid var(--pliegue-color-action-primary);
   border-radius: 50%;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 25%);
+  box-shadow: var(--pliegue-elevation-thumb);
   height: 16px;
   width: 16px;
 }
@@ -595,7 +593,7 @@
 .cropBox {
   border: 2px dashed var(--pliegue-color-action-primary);
   border-radius: 3px;
-  box-shadow: 0 0 0 100vmax rgb(18 16 13 / 38%);
+  box-shadow: 0 0 0 100vmax var(--pliegue-color-scrim);
   pointer-events: none;
   position: absolute;
   z-index: 3;
@@ -647,10 +645,10 @@
 }
 
 .translationBlock {
-  background: #fff;
+  background: var(--pliegue-page-paper);
   /* Unos píxeles más de papel alrededor: los rasgos del original asoman por los bordes. */
-  box-shadow: 0 0 0 2px #fff;
-  color: #1d1b18;
+  box-shadow: 0 0 0 2px var(--pliegue-page-paper);
+  color: var(--pliegue-page-ink);
   font-family: var(--pliegue-reader-font-family, var(--pliegue-font-reading, serif));
   hyphens: auto;
   margin: 0;
