@@ -23,7 +23,7 @@ import { useOwnSharedLibrary } from "../../cloud/shared-library-store";
 import { cloudClient } from "../../cloud/supabase-client";
 import { accountDeletionConfirmation } from "../../library-access/account-server";
 import { describeChanges } from "../../cloud/sync/sync-activity";
-import { confirmAction } from "../app-ui/confirm-dialog";
+import { confirmAction, type ConfirmOptions } from "../app-ui/confirm-dialog";
 import { Icon } from "../app-ui/icons";
 import styles from "./account-panel.module.css";
 import { SyncDetails } from "./sync-details";
@@ -40,6 +40,33 @@ const syncedItems = [
 const neverSynced = "Nunca se suben tus archivos, su texto, las claves de IA ni el acceso a tus carpetas.";
 
 const resendSeconds = 60;
+
+/**
+ * Juntar este equipo con la cuenta mezcla dos ámbitos —lo que vive solo aquí y lo sincronizado—,
+ * así que se vuelve a pedir permiso cada vez que se empieza o se reanuda (03.6, decisión del
+ * 6-nov): qué se junta, qué sube, qué no sube nunca y cómo volver a separarlos.
+ */
+function joinConsent(catalogAi: boolean): ConfirmOptions {
+  return {
+    confirmLabel: "Juntar y sincronizar",
+    description:
+      "Lo que tienes en este equipo se junta con lo que ya hay en tu cuenta y, desde ahora, se sincroniza con tus otros equipos. Nada se borra al juntarlos.",
+    details: [...syncedItems, ...(catalogAi ? ["Fichas hechas por la IA: autor, categoría, editorial, sinopsis…"] : [])],
+    icon: "cloud",
+    note: `${neverSynced} Para volver a separarlos, pausa la sincronización en este equipo: lo de aquí se queda aquí.`,
+    title: "¿Juntar este equipo con tu cuenta?",
+  };
+}
+
+/** Subir las fichas de la IA con la sincronización ya en marcha amplía lo que sale: se pregunta. */
+const catalogAiConsent: ConfirmOptions = {
+  confirmLabel: "Subir las fichas de la IA",
+  description: "Las fichas que la IA hizo en este equipo se suben a tu cuenta y llegan a tus otros equipos.",
+  details: ["Autor, título y año", "Categoría, subcategoría, géneros y temas", "Editorial, serie, ISBN y sinopsis"],
+  icon: "cloud",
+  note: "Son derivados de tus libros: el texto de los libros no se sube. Puedes volver a apagarlo cuando quieras.",
+  title: "¿Sincronizar también las fichas de la IA?",
+};
 
 function formatAgo(iso: string | null, now: number) {
   if (!iso) return "todavía no";
@@ -201,6 +228,13 @@ function SignInForm({ linkError }: { linkError: string | null }) {
 
 function SyncConsent({ userId }: { userId: string }) {
   const choices = useSyncChoices(userId);
+
+  async function changeCatalogAi(next: boolean) {
+    // Apagarlo no saca nada nuevo; encenderlo mientras se sincroniza, sí.
+    if (next && choices.enabled && !(await confirmAction(catalogAiConsent))) return;
+    setSyncChoices(userId, { catalogAi: next });
+  }
+
   return (
     <div className={styles.consent}>
       <h3>Qué se sincroniza</h3>
@@ -216,7 +250,7 @@ function SyncConsent({ userId }: { userId: string }) {
         checked={choices.catalogAi}
         description="Autor, categoría, editorial, sinopsis… Son derivados de tus libros: solo se suben si lo aceptas."
         label="Fichas hechas por la IA"
-        onChange={(event) => setSyncChoices(userId, { catalogAi: event.target.checked })}
+        onChange={(event) => void changeCatalogAi(event.target.checked)}
       />
       <p className={styles.note}>{neverSynced} Las traducciones guardadas llegarán en el siguiente paso.</p>
     </div>
@@ -233,6 +267,10 @@ function SignedIn({ email, provider, userId }: { email: string | null; provider:
     const timer = window.setInterval(() => setNow(Date.now()), 5_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  async function join() {
+    if (await confirmAction(joinConsent(choices.catalogAi))) setSyncChoices(userId, { enabled: true });
+  }
 
   async function leave() {
     const confirmed = await confirmAction({
@@ -318,10 +356,11 @@ function SignedIn({ email, provider, userId }: { email: string | null; provider:
         <>
           <SyncConsent userId={userId} />
           <div className={styles.row}>
-            <Button onClick={() => setSyncChoices(userId, { enabled: true })}>Empezar a sincronizar</Button>
+            <Button onClick={() => void join()}>Empezar a sincronizar</Button>
           </div>
           <p className={styles.note}>
-            Lo que ya tienes en este equipo se suma a lo de la cuenta: nada se borra al empezar.
+            Lo que ya tienes en este equipo se suma a lo de la cuenta: nada se borra al empezar. Antes
+            de juntarlos te diremos qué sube.
           </p>
         </>
       )}
