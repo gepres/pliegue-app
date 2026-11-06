@@ -38,7 +38,11 @@ browser.on((m) => {
   if (request.url.includes("/api/ai/catalog")) {
     calls.catalog += 1;
     const title = /"title":"([^"]+)"/.exec(request.postData ?? "")?.[1] ?? "Libro";
-    return reply({ catalog: { authors: ["Autora de Prueba"], canonicalTitle: title, confidence: 0.9, genres: [], language: "en", publicationYear: null, summary: "Un resumen.", topics: [], workType: "book" }, usage: { inputTokens: 100_000, outputTokens: 20_000 } });
+    const answer = () => reply({ catalog: { authors: ["Autora de Prueba"], canonicalTitle: title, confidence: 0.9, genres: [], language: "en", publicationYear: null, summary: "Un resumen.", topics: [], workType: "book" }, usage: { inputTokens: 100_000, outputTokens: 20_000 } });
+    // La tercera ficha tarda: el aviso del 88 % se pinta antes de que llegue el del tope, que lo
+    // sustituiría en el mismo fotograma (en el CI se perdía).
+    if (calls.catalog === 3) return void setTimeout(answer, 1500);
+    return answer();
   }
   calls.translate += 1;
   return reply({ translations: (body.passages ?? []).map((text) => `[ES] ${text}`), usage: { inputTokens: 1000, outputTokens: 1000 } });
