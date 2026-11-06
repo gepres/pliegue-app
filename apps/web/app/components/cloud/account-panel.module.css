@@ -303,6 +303,33 @@
   color: var(--pliegue-color-text-secondary);
 }
 
+/* Libros de otros equipos: el título en cursiva, como se cita un libro, y el autor debajo. */
+.elsewhere {
+  display: grid;
+  font-size: 0.9375rem;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  max-width: 34rem;
+  padding: 0;
+}
+
+.elsewhere li {
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  padding: 4px 0;
+}
+
+.elsewhere cite {
+  font-family: var(--pliegue-font-reading);
+  overflow-wrap: anywhere;
+}
+
+.elsewhere small {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+}
+
 .activity {
   display: grid;
   font-size: 0.875rem;

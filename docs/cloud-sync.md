@@ -32,6 +32,17 @@ SHA-256 de esa identidad, no el nombre. Un favorito, una nota o una ficha de un 
 equipo no tiene se guarda aparte y se aplica cuando ese libro aparezca; su ausencia nunca se
 toma por un borrado.
 
+## Libros que están en otro equipo
+
+Ajustes → Cuenta, en «En tus otros equipos», cuenta los libros con avance, notas, favorito o
+ficha en la cuenta que no están en este equipo. No se sube nada nuevo para eso:
+
+- Se **nombran** (título y autores, en orden alfabético) los que tienen ficha de la IA
+  sincronizada, y solo si en este equipo se aceptaron las fichas. Hasta 12; el resto se cuenta.
+- Los demás solo se **cuentan**: de ellos la nube guarda la huella del archivo, no su nombre.
+- Sale de la última vuelta (`SyncSummary.elsewhere`, en `sync-runner.ts`): lo pendiente de cada
+  colección cuyo libro no está aquí. La ficha la lee `describe` de la colección `catalog-ai`.
+
 ## Cómo sincroniza
 
 Cada almacén guarda su estado actual, no un registro de cambios, así que el motor hace una

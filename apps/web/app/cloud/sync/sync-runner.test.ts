@@ -254,6 +254,82 @@ describe("recuento de lo que hay en la cuenta (06.3c)", () => {
   });
 });
 
+describe("libros que están en otro equipo (06.3)", () => {
+  /** Una colección de fichas como «catalog-ai»: nombra el libro con su título y autores. */
+  function catalogCollection(): SyncCollection {
+    return {
+      apply: async () => undefined,
+      describe: (payload) => {
+        const catalog = (payload as { catalog?: { authors: string[]; canonicalTitle: string | null } } | null)?.catalog;
+        return catalog?.canonicalTitle ? { authors: catalog.authors, title: catalog.canonicalTitle } : null;
+      },
+      docKeyOf: (key) => key,
+      name: "catalog-ai",
+      snapshot: () => new Map(),
+    };
+  }
+
+  async function seeded() {
+    const cloud = memoryCloud();
+    const pc = device([book("pc-1", "Morel.pdf"), book("pc-2", "Ficciones.pdf"), book("pc-3", "Rayuela.pdf"), book("pc-4", "Pedro Páramo.pdf")]);
+    for (const id of ["pc-1", "pc-2", "pc-3", "pc-4"]) pc.favorites.add(id);
+    await pc.sync(cloud, "2026-11-06T12:00:00.000Z");
+    const keys = await indexLibraryKeys(pc.documents);
+    const ficha = (id: string, title: string, authors: string[]) => ({
+      collection: "catalog-ai",
+      deleted: false,
+      item_key: keys.keyById.get(id)!,
+      payload: { catalog: { authors, canonicalTitle: title } },
+      server_updated_at: "2026-11-06T12:00:30.000Z",
+      updated_at: "2026-11-06T12:00:30.000Z",
+    });
+    for (const row of [ficha("pc-1", "La invención de Morel", ["Adolfo Bioy Casares"]), ficha("pc-4", "Pedro Páramo", ["Juan Rulfo"]), ficha("pc-2", "Ficciones", ["Jorge Luis Borges"])]) {
+      cloud.rows.set(`catalog-ai/${row.item_key}`, row);
+    }
+    return { cloud, keys };
+  }
+
+  async function laptopSync(cloud: ReturnType<typeof memoryCloud>, catalogAccepted: boolean) {
+    const documents = [book("lap-9", "Morel.pdf")];
+    const context: SyncContext = {
+      keys: await indexLibraryKeys(documents),
+      local: { favorites: [] } as unknown as LocalSnapshot,
+      now: "2026-11-06T12:01:00.000Z",
+    };
+    const catalog = catalogCollection();
+    return runSync({
+      collections: [catalog],
+      context,
+      enabled: (collection) => collection !== catalog || catalogAccepted,
+      remote: cloud.store(),
+      stateStore: memoryState(),
+    });
+  }
+
+  it("nombra por su ficha los que la tienen, en orden alfabético, y cuenta todos", async () => {
+    const { cloud, keys } = await seeded();
+    const documents = [book("lap-9", "Morel.pdf")];
+    const laptop = device(documents);
+    const summary = await laptop.sync(cloud, "2026-11-06T12:01:00.000Z");
+    // Solo con favoritos: tres libros fuera de este equipo y ninguno con nombre.
+    expect(summary.elsewhere).toEqual({ named: [], total: 3 });
+
+    const withCatalog = await laptopSync(cloud, true);
+    // «Morel» está en este equipo: no sale. Los otros dos con ficha, por título.
+    expect(withCatalog.elsewhere.named).toEqual([
+      { authors: ["Jorge Luis Borges"], key: keys.keyById.get("pc-2"), title: "Ficciones" },
+      { authors: ["Juan Rulfo"], key: keys.keyById.get("pc-4"), title: "Pedro Páramo" },
+    ]);
+    expect(withCatalog.elsewhere.total).toBe(2);
+  });
+
+  it("sin permiso para las fichas en este equipo, solo los cuenta", async () => {
+    const { cloud } = await seeded();
+    const summary = await laptopSync(cloud, false);
+    expect(summary.elsewhere).toEqual({ named: [], total: 2 });
+  });
+});
+
 describe("red de seguridad contra borrados masivos", () => {
   const many = (prefix: string) => Array.from({ length: 12 }, (_, index) => book(`${prefix}-${index}`, `Libro ${index}.pdf`));
 

@@ -40,6 +40,9 @@ const originOrder = ["local-folder", "google-drive", "local-file", "local-copy"]
 
 const number = (value: number) => value.toLocaleString("es");
 
+/** Cuántos libros de otros equipos se nombran; el resto se cuenta. */
+const maxNamedElsewhere = 12;
+
 function clock(iso: string) {
   return new Date(iso).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
 }
@@ -149,6 +152,8 @@ export function SyncDetails({ status }: { status: SyncStatus }) {
         </section>
       ) : null}
 
+      {summary?.elsewhere.total ? <BooksElsewhere summary={summary} /> : null}
+
       {activity.length ? (
         <section aria-labelledby="sync-activity-title" className={styles.detailBlock}>
           <h3 id="sync-activity-title">Actividad</h3>
@@ -166,5 +171,50 @@ export function SyncDetails({ status }: { status: SyncStatus }) {
         </section>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Libros con algo guardado en la cuenta que no están en este equipo (06.3). Se nombran por su
+ * ficha sincronizada; los que no la tienen solo se cuentan, porque de ellos la nube guarda la
+ * huella del archivo y no su nombre.
+ */
+function BooksElsewhere({ summary }: { summary: NonNullable<SyncStatus["summary"]> }) {
+  const { named, total } = summary.elsewhere;
+  const shown = named.slice(0, maxNamedElsewhere);
+  const more = shown.length && total > shown.length ? `Y ${number(total - shown.length)} más. ` : "";
+  const unnamed = total - named.length;
+  const unnamedNote = !unnamed
+    ? ""
+    : summary.collections["catalog-ai"]?.disabled
+      ? "Aquí no aceptaste las fichas hechas por la IA: con ellas verías el título de los que tengan ficha."
+      : `${number(unnamed)} sin título: no ${unnamed === 1 ? "tiene" : "tienen"} ficha en tu cuenta.`;
+  return (
+    <section aria-labelledby="sync-elsewhere-title" className={styles.detailBlock}>
+      <h3 id="sync-elsewhere-title">En tus otros equipos</h3>
+      <p className={styles.booksLine}>
+        <strong>{number(total)}</strong> {total === 1 ? "libro tiene" : "libros tienen"} avance, notas, favorito o ficha en
+        tu cuenta y no {total === 1 ? "está" : "están"} en este equipo.
+      </p>
+      {shown.length ? (
+        <ul aria-label="Libros de tus otros equipos" className={styles.elsewhere}>
+          {shown.map((book) => (
+            <li key={book.key}>
+              <cite>{book.title}</cite>
+              {book.authors.length ? <small>{book.authors.join(", ")}</small> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {more || unnamedNote ? (
+        <p className={styles.note}>
+          {more}
+          {unnamedNote}
+        </p>
+      ) : null}
+      <p className={styles.note}>
+        Si añades aquí el mismo archivo (mismo nombre y tamaño), recupera lo que tenía guardado.
+      </p>
+    </section>
   );
 }
