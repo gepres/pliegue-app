@@ -6,6 +6,16 @@ export const maxArchiveOutputBytes = 16 * 1024 * 1024;
 export const maxStructuredTextCharacters = 1_000_000;
 
 const maxArchiveEntries = 5_000;
+/** Imágenes de un EPUB o un DOCX: cuántas y cuánto pesan en total, aparte del texto. */
+const maxArchiveImages = 400;
+const maxArchiveImageBytes = 48 * 1024 * 1024;
+/** Por debajo de esto suele ser un adorno o un píxel de relleno, no una ilustración. */
+const minArchiveImageBytes = 600;
+/**
+ * Una imagen dentro de un párrafo con texto suele ser un glifo, una capitular o un icono: solo
+ * se saca como figura si pesa como una ilustración.
+ */
+const minInlineImageBytes = 16 * 1024;
 const maxSelectedEntries = 800;
 const maxSpreadsheetColumns = 64;
 const maxSpreadsheetRows = 1_000;
@@ -19,7 +29,37 @@ export type StructuredDocumentBlock =
   | { kind: "heading"; level: number; text: string }
   /** `caption`: el pie de la figura que va justo antes (03.5b), con su propio estilo. */
   | { caption?: boolean; kind: "paragraph"; text: string }
-  | { kind: "table"; rows: string[][] };
+  | { kind: "table"; rows: string[][] }
+  /**
+   * Una ilustración de un EPUB o un DOCX (05.1). Lleva el archivo, no una URL: la extracción
+   * vive en memoria mientras el libro está abierto y quien la pinta crea y suelta su `blob:`.
+   * No se traduce; su `alt` entra en el índice como texto que se puede buscar.
+   */
+  | { alt: string; image: Blob; kind: "image" };
+
+/**
+ * Los bloques que cuentan para las anclas de lectura y para la traducción: todos menos las
+ * imágenes. Así un libro que ya se leía o se tradujo antes de que se vieran sus imágenes
+ * conserva su punto de lectura y su traducción guardada: los índices no se mueven.
+ */
+export function isTextualBlock(block: StructuredDocumentBlock) {
+  return block.kind !== "image";
+}
+
+/**
+ * El número de ancla de cada bloque: su posición contando solo los que no son imagen (`null` en
+ * las imágenes). Así el punto de lectura guardado antes de que se vieran las imágenes de un
+ * libro sigue apuntando al mismo párrafo.
+ */
+export function textualAnchors(blocks: readonly StructuredDocumentBlock[]) {
+  let next = 0;
+  return blocks.map((block) => (isTextualBlock(block) ? next++ : null));
+}
+
+/** Los bloques que llevan texto: los que se traducen. */
+export function blockHasText(block: StructuredDocumentBlock): block is Extract<StructuredDocumentBlock, { text: string }> {
+  return block.kind === "heading" || block.kind === "paragraph";
+}
 
 export interface StructuredDocumentSection {
   blocks: StructuredDocumentBlock[];
@@ -35,7 +75,28 @@ export interface StructuredDocumentExtraction {
 
 interface ArchiveEntries {
   entries: Map<string, string>;
+  /** Las imágenes, en binario, por su ruta dentro del ZIP. */
+  images: Map<string, Uint8Array>;
   limited: boolean;
+}
+
+const imageTypes: Record<string, string> = {
+  gif: "image/gif",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+};
+
+/** Solo imágenes de mapa de bits: un SVG puede traer scripts y referencias externas. */
+function imageTypeOf(name: string) {
+  return imageTypes[name.match(/\.([a-z]+)$/i)?.[1]?.toLocaleLowerCase("en") ?? ""] ?? null;
+}
+
+function archiveImageIsWanted(format: StructuredDocumentFormat, name: string) {
+  if (!imageTypeOf(name)) return false;
+  if (format === "docx") return /^word\/media\//i.test(name);
+  return format === "epub";
 }
 
 const xmlEntityPattern = /&(#x[\da-f]+|#\d+|amp|apos|gt|lt|nbsp|quot);/gi;
@@ -101,7 +162,7 @@ function normalizeArchiveName(name: string) {
 }
 
 function archiveEntryIsWanted(format: StructuredDocumentFormat, name: string) {
-  if (format === "docx") return /^word\/document\.xml$/i.test(name);
+  if (format === "docx") return /^word\/(document\.xml|_rels\/document\.xml\.rels)$/i.test(name);
   if (format === "pptx") return /^ppt\/slides\/slide\d+\.xml$/i.test(name);
   if (format === "xlsx") {
     return /^(xl\/(sharedStrings|workbook)\.xml|xl\/_rels\/workbook\.xml\.rels|xl\/worksheets\/sheet\d+\.xml)$/i.test(
@@ -130,6 +191,8 @@ async function readArchive(
   let archiveEntries = 0;
   let selectedEntries = 0;
   let projectedBytes = 0;
+  let selectedImages = 0;
+  let imageBytes = 0;
   let limited = false;
 
   let files: Record<string, Uint8Array>;
@@ -145,6 +208,19 @@ async function readArchive(
             if (archiveEntries > maxArchiveEntries) {
               limited = true;
               return false;
+            }
+            if (name && archiveImageIsWanted(format, name)) {
+              // Las imágenes van con su propio cupo: ya vienen comprimidas y no se vuelven
+              // texto. Las demasiado pequeñas son adornos.
+              const size = file.originalSize;
+              if (!Number.isFinite(size) || size < minArchiveImageBytes) return false;
+              if (selectedImages >= maxArchiveImages || size > maxArchiveEntryBytes || imageBytes + size > maxArchiveImageBytes) {
+                limited = true;
+                return false;
+              }
+              selectedImages += 1;
+              imageBytes += size;
+              return true;
             }
             if (!name || !archiveEntryIsWanted(format, name)) return false;
 
@@ -180,13 +256,16 @@ async function readArchive(
 
   const decoder = new TextDecoder("utf-8", { fatal: false });
   const entries = new Map<string, string>();
+  const images = new Map<string, Uint8Array>();
 
   for (const [rawName, data] of Object.entries(files)) {
     const name = normalizeArchiveName(rawName);
-    if (name) entries.set(name, decoder.decode(data).replace(/^\uFEFF/, ""));
+    if (!name) continue;
+    if (archiveImageIsWanted(format, name)) images.set(name, data);
+    else entries.set(name, decoder.decode(data).replace(/^\uFEFF/, ""));
   }
 
-  return { entries, limited };
+  return { entries, images, limited };
 }
 
 function findEntry(entries: Map<string, string>, path: string) {
@@ -225,14 +304,64 @@ function resolveArchivePath(basePath: string, relativePath: string) {
   return resolved.join("/");
 }
 
-function extractDocx(entries: Map<string, string>): StructuredDocumentSection[] {
+/**
+ * La imagen que hay en `path` dentro del ZIP, como Blob con su tipo. `null` si no está, si no
+ * es de mapa de bits o si apunta fuera (`http:`, `data:`): un libro no pide nada a internet.
+ */
+function archiveImage(images: ReadonlyMap<string, Uint8Array>, path: string | null, minBytes = 0) {
+  if (!path || /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(path)) return null;
+  const normalized = normalizeArchiveName(path);
+  if (!normalized) return null;
+  let data = images.get(normalized);
+  if (!data) {
+    const lower = normalized.toLocaleLowerCase("en");
+    for (const [name, value] of images) if (name.toLocaleLowerCase("en") === lower) data = value;
+  }
+  const type = imageTypeOf(normalized);
+  if (!data || !type || data.byteLength < minBytes) return null;
+  // Una imagen que el libro usa varias veces (un adorno, un logo) se copia una sola vez.
+  let blobs = imageBlobs.get(images);
+  if (!blobs) imageBlobs.set(images, (blobs = new Map()));
+  const known = blobs.get(normalized);
+  if (known) return known;
+  const blob = new Blob([data.slice()], { type });
+  blobs.set(normalized, blob);
+  return blob;
+}
+
+const imageBlobs = new WeakMap<ReadonlyMap<string, Uint8Array>, Map<string, Blob>>();
+
+/** Word escribe solo este texto cuando nadie describió la imagen: no describe nada. */
+const generatedAltText = /(descripci[oó]n generada autom[aá]ticamente|description automatically generated)/i;
+
+function extractDocx(entries: Map<string, string>, images: ReadonlyMap<string, Uint8Array>): StructuredDocumentSection[] {
   const xml = findEntry(entries, "word/document.xml");
   if (!xml) return [];
+
+  // Las imágenes de un párrafo apuntan a una relación («rId5») que dice en qué archivo están.
+  const relationships = new Map<string, string>();
+  for (const match of findEntry(entries, "word/_rels/document.xml.rels")?.matchAll(/<(?:\w+:)?Relationship\b[^>]*\/?\s*>/gi) ?? []) {
+    const id = attributeValue(match[0], "Id");
+    const target = attributeValue(match[0], "Target");
+    const external = /external/i.test(attributeValue(match[0], "TargetMode") ?? "");
+    if (id && target && !external) relationships.set(id, resolveArchivePath("word/document.xml", target));
+  }
 
   const blocks: StructuredDocumentBlock[] = [];
 
   for (const match of xml.matchAll(/<w:p\b[\s\S]*?<\/w:p\s*>/gi)) {
     const paragraph = match[0];
+    // Word guarda a veces la misma imagen dos veces: en DrawingML y, de respaldo, en VML.
+    const drawings = paragraph.replaceAll(/<mc:Fallback\b[\s\S]*?<\/mc:Fallback\s*>/gi, "");
+    for (const drawing of drawings.matchAll(/<w:drawing\b[\s\S]*?<\/w:drawing\s*>|<w:pict\b[\s\S]*?<\/w:pict\s*>/gi)) {
+      const description = normalizeText(attributeValue(drawing[0].match(/<wp:docPr\b[^>]*>/i)?.[0] ?? "", "descr") ?? "");
+      const alt = generatedAltText.test(description) ? "" : description;
+      for (const reference of drawing[0].matchAll(/<a:blip\b[^>]*>|<v:imagedata\b[^>]*>/gi)) {
+        const relation = attributeValue(reference[0], "r:embed") ?? attributeValue(reference[0], "r:id");
+        const image = archiveImage(images, relation ? (relationships.get(relation) ?? null) : null);
+        if (image) blocks.push({ alt, image, kind: "image" });
+      }
+    }
     const text = extractTextElements(paragraph);
     if (!text) continue;
 
@@ -404,23 +533,53 @@ function extractXlsx(entries: Map<string, string>) {
   return { sections, truncated };
 }
 
-function extractHtmlBlocks(html: string) {
+function extractHtmlBlocks(html: string, path = "", images: ReadonlyMap<string, Uint8Array> = new Map()) {
   const sanitized = html
     .replaceAll(/<!--([\s\S]*?)-->/g, "")
-    .replaceAll(/<(script|style|svg|nav)\b[\s\S]*?<\/\1\s*>/gi, "");
+    // La portada de muchos EPUB es un <svg> que envuelve un <image href>: se queda la imagen y
+    // el resto del SVG se va, como antes.
+    .replaceAll(/<svg\b[\s\S]*?<\/svg\s*>/gi, (svg) => {
+      const tag = svg.match(/<image\b[^>]*>/i)?.[0] ?? "";
+      const href = attributeValue(tag, "xlink:href") ?? attributeValue(tag, "href");
+      return href ? `<img alt="" src="${href.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}">` : "";
+    })
+    .replaceAll(/<(script|style|nav)\b[\s\S]*?<\/\1\s*>/gi, "");
   const blocks: StructuredDocumentBlock[] = [];
   let previousText = "";
+  let previousImage = "";
+
+  const pushImages = (fragment: string, minBytes = 0) => {
+    for (const imageTag of fragment.matchAll(/<img\b[^>]*>/gi)) {
+      const source = attributeValue(imageTag[0], "src") ?? "";
+      // Lo de fuera (`http:`, `data:`) no se pide: `archiveImage` lo descarta.
+      const resolved = /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(source) ? source : resolveArchivePath(path, source);
+      // La misma imagen dos veces seguidas (un adorno repetido) se ve una.
+      if (!source || resolved === previousImage) continue;
+      const image = archiveImage(images, resolved, minBytes);
+      if (!image) continue;
+      previousImage = resolved;
+      blocks.push({ alt: normalizeText(attributeValue(imageTag[0], "alt") ?? ""), image, kind: "image" });
+    }
+  };
 
   for (const match of sanitized.matchAll(
-    /<(h[1-6]|p|li|blockquote|figcaption|pre)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi,
+    /<(h[1-6]|p|li|blockquote|figcaption|pre)\b[^>]*>([\s\S]*?)<\/\1\s*>|<img\b[^>]*>/gi,
   )) {
-    const tag = (match[1] ?? "p").toLocaleLowerCase("en");
+    if (!match[1]) {
+      pushImages(match[0]);
+      continue;
+    }
+    const tag = match[1].toLocaleLowerCase("en");
     const text = normalizeText(match[2] ?? "");
+    pushImages(match[2] ?? "", text ? minInlineImageBytes : 0);
     if (!text || text === previousText) continue;
     previousText = text;
+    previousImage = "";
 
     if (tag.startsWith("h")) {
       blocks.push({ kind: "heading", level: Number.parseInt(tag.slice(1), 10), text });
+    } else if (tag === "figcaption") {
+      blocks.push({ caption: true, kind: "paragraph", text });
     } else {
       blocks.push({ kind: "paragraph", text: tag === "li" ? `• ${text}` : text });
     }
@@ -434,7 +593,7 @@ function extractHtmlBlocks(html: string) {
   return blocks;
 }
 
-function extractEpub(entries: Map<string, string>): StructuredDocumentSection[] {
+function extractEpub(entries: Map<string, string>, images: ReadonlyMap<string, Uint8Array>): StructuredDocumentSection[] {
   const container = findEntry(entries, "META-INF/container.xml");
   const rootfileTag = container?.match(/<(?:\w+:)?rootfile\b[^>]*>/i)?.[0] ?? "";
   const declaredPackagePath = attributeValue(rootfileTag, "full-path");
@@ -475,7 +634,7 @@ function extractEpub(entries: Map<string, string>): StructuredDocumentSection[] 
   return orderedPaths.flatMap((path, index) => {
     const html = findEntry(entries, path);
     if (!html) return [];
-    const blocks = extractHtmlBlocks(html);
+    const blocks = extractHtmlBlocks(html, path, images);
     if (!blocks.length) return [];
     const firstHeading = blocks.find(
       (block): block is Extract<StructuredDocumentBlock, { kind: "heading" }> =>
@@ -501,7 +660,7 @@ function extractEpub(entries: Map<string, string>): StructuredDocumentSection[] 
  * interno («una_trenza_de_hierba_sagrada-2») no le dice nada a quien lee.
  */
 function leadingTitle(blocks: readonly StructuredDocumentBlock[]) {
-  const first = blocks[0];
+  const first = blocks.find(isTextualBlock);
   if (first?.kind !== "paragraph") return null;
   const text = first.text.trim();
   if (!text || text.length > 80 || text.split(/\s+/).length > 10) return null;
@@ -524,6 +683,12 @@ function limitExtraction(
       if (remaining <= 0) {
         truncated = true;
         break;
+      }
+
+      // Una imagen no gasta del cupo de texto: tiene el suyo, al leer el ZIP.
+      if (block.kind === "image") {
+        blocks.push(block);
+        continue;
       }
 
       if (block.kind === "table") {
@@ -565,9 +730,9 @@ export async function extractStructuredDocument(
   let sections: StructuredDocumentSection[] = [];
   let parserTruncated = false;
 
-  if (format === "docx") sections = extractDocx(archive.entries);
+  if (format === "docx") sections = extractDocx(archive.entries, archive.images);
   if (format === "pptx") sections = extractPptx(archive.entries);
-  if (format === "epub") sections = extractEpub(archive.entries);
+  if (format === "epub") sections = extractEpub(archive.entries, archive.images);
   if (format === "xlsx") {
     const workbook = extractXlsx(archive.entries);
     sections = workbook.sections;
