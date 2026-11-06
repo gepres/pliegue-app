@@ -33,6 +33,7 @@ import { useLibraryDocuments } from "../library/use-library-documents";
 import styles from "../(workspace)/app/workspace.module.css";
 import { IconButton } from "./app-ui/controls";
 import { suggestNextStep } from "./app-ui/next-step-dialog";
+import { ModelCapabilityTags } from "./model-capability-tags";
 import { TranslationComparison } from "./translation-comparison";
 
 const providerLabels: Record<AiProvider, string> = {
@@ -128,6 +129,7 @@ function ConnectionTest({ target }: { target: ConnectionTarget }) {
       >
         {result ? result.message : connectionHints[target.provider]}
       </p>
+      {result?.ok && result.capabilities ? <ModelCapabilityTags capabilities={result.capabilities} /> : null}
     </div>
   );
 }

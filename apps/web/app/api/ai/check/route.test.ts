@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import fixtures from "../../../ai/model-capabilities.fixtures.json";
 import { POST } from "./route";
 
 const openAiKey = "sk-test-000000000000000000000000";
@@ -41,7 +42,10 @@ describe("ruta «Probar conexión»", () => {
     const [url, options] = providerFetch.mock.calls[0] as [string, RequestInit];
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ modelName: null, ok: true });
+    expect(await response.json()).toEqual({
+      capabilities: { structuredOutput: "desconocido", vision: "desconocido", embeddings: "desconocido" },
+      modelName: null, ok: true,
+    });
     expect(url).toBe("https://api.openai.com/v1/models/gpt-x");
     expect(options.method).toBe("GET");
     expect(options.body).toBeUndefined();
@@ -58,10 +62,56 @@ describe("ruta «Probar conexión»", () => {
     const [url, options] = providerFetch.mock.calls[0] as [string, RequestInit];
     const headers = options.headers as Record<string, string>;
 
-    expect(await response.json()).toEqual({ modelName: "Claude Haiku 4.5", ok: true });
+    expect(await response.json()).toEqual({
+      capabilities: { structuredOutput: true, vision: true, embeddings: false },
+      modelName: "Claude Haiku 4.5", ok: true,
+    });
     expect(url).toBe("https://api.anthropic.com/v1/models/claude-haiku-4-5");
     expect(headers["x-api-key"]).toBe(anthropicKey);
     expect(headers["anthropic-version"]).toBe("2023-06-01");
+  });
+
+  it("devuelve capacidades de OpenAI solo desde la reserva, sin solicitudes adicionales", async () => {
+    const providerFetch = vi.fn().mockResolvedValue(Response.json({ id: "gpt-4o", object: "model" }));
+    vi.stubGlobal("fetch", providerFetch);
+    const response = await POST(request({ provider: "openai", model: "gpt-4o" }));
+    expect(await response.json()).toEqual({
+      ok: true, modelName: null,
+      capabilities: { structuredOutput: true, vision: true, embeddings: false, contextTokens: 128_000 },
+    });
+    expect(providerFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("añade los límites y las capacidades de la ficha de Anthropic conservando el nombre y ok", async () => {
+    const providerFetch = vi.fn().mockResolvedValue(Response.json({
+      ...fixtures.anthropic, capabilities: { ...fixtures.anthropic.capabilities, structured_outputs: { supported: false } },
+    }));
+    vi.stubGlobal("fetch", providerFetch);
+    const response = await POST(request({ provider: "anthropic", model: fixtures.anthropic.id }, anthropicKey));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      ok: true, modelName: fixtures.anthropic.display_name,
+      capabilities: { structuredOutput: false, vision: true, embeddings: false, contextTokens: 200_000, maxOutputTokens: 64_000 },
+    });
+    expect(providerFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { model: fixtures.gemini.name, fixture: fixtures.gemini, structuredOutput: true, embeddings: false, contextTokens: 1_048_576 },
+    { model: fixtures.geminiEmbedding.name, fixture: fixtures.geminiEmbedding, structuredOutput: false, embeddings: true, contextTokens: 2_048 },
+  ])("devuelve las capacidades de Gemini para $model sin generar contenido", async ({ model, fixture, structuredOutput, embeddings, contextTokens }) => {
+    const providerFetch = vi.fn().mockResolvedValue(Response.json(fixture));
+    vi.stubGlobal("fetch", providerFetch);
+    const response = await POST(request({ provider: "gemini", model }, geminiKey));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      ok: true, modelName: fixture.displayName, capabilities: { structuredOutput, embeddings, contextTokens, maxOutputTokens: fixture.outputTokenLimit },
+    });
+    expect(providerFetch).toHaveBeenCalledExactlyOnceWith(
+      `https://generativelanguage.googleapis.com/v1beta/${model}`,
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect((providerFetch.mock.calls[0] as [string, RequestInit])[1].body).toBeUndefined();
   });
 
   it("con Gemini acepta «models/…» y distingue el modelo inexistente de la clave mala", async () => {

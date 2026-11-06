@@ -5,7 +5,7 @@ import { apiKeyFrom, hostedProviders, looksLikeApiKey, providerErrorResponse } f
 
 /**
  * «Probar conexión» del Panel IA: comprueba con el proveedor que la clave de la sesión sirve y
- * que el modelo existe. La clave viaja en la cabecera, como en las demás rutas, y no se guarda.
+ * que el modelo existe, y devuelve sus capacidades. La clave viaja en la cabecera y no se guarda.
  */
 
 interface CheckRouteRequest {

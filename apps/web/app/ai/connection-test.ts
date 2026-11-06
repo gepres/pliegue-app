@@ -1,5 +1,6 @@
 import { normalizeOllamaUrl, normalizeServiceUrl, type AiSettings } from "./ai-settings";
 import { checkApiKey, type HostedAiProvider } from "./api-key";
+import { fallbackModelCapabilities, parseModelCapabilities, resolveModelCapabilities, type ModelCapabilities } from "./model-capabilities";
 import { classifyProviderFailure } from "./provider-error";
 import { unreachableServiceMessage } from "./translation-options";
 
@@ -10,7 +11,7 @@ import { unreachableServiceMessage } from "./translation-options";
  * - OpenAI, Anthropic y Gemini, por la ruta de servidor, como el resto de llamadas con clave.
  * - Azure Translator, por la misma ruta: traduce una palabra.
  * - DeepL, por la misma ruta: pregunta lo gastado del mes, sin traducir nada (05.5).
- * - Ollama, desde el navegador, como cuando cataloga: lista los modelos descargados.
+ * - Ollama, desde el navegador, como cuando cataloga: pide la ficha del modelo descargado.
  * - LibreTranslate, desde el navegador, como cuando traduce: traduce «Hola» (05.5).
  */
 
@@ -22,6 +23,7 @@ export type ConnectionTarget =
   | { model: string; ollamaMode: AiSettings["ollamaMode"]; ollamaUrl: string; provider: "ollama" };
 
 export interface ConnectionTestResult {
+  capabilities?: ModelCapabilities;
   message: string;
   ok: boolean;
 }
@@ -50,26 +52,6 @@ export function connectionSignature(target: ConnectionTarget) {
     default:
       return `${target.provider}|${target.apiKey}|${target.model}`;
   }
-}
-
-interface OllamaTag {
-  model?: unknown;
-  name?: unknown;
-}
-
-/**
- * ¿Tiene Ollama descargado el modelo? Un nombre sin etiqueta («qwen3») es el «:latest», como lo
- * resuelve el propio Ollama al pedirlo.
- */
-export function ollamaHasModel(payload: unknown, model: string) {
-  const wanted = model.trim().toLowerCase();
-  if (!wanted) return false;
-  const candidates = new Set([wanted, wanted.includes(":") ? wanted : `${wanted}:latest`]);
-  const models = payload && typeof payload === "object" ? (payload as { models?: unknown }).models : null;
-  if (!Array.isArray(models)) return false;
-  return (models as OllamaTag[]).some((entry) =>
-    [entry.name, entry.model].some((name) => typeof name === "string" && candidates.has(name.toLowerCase())),
-  );
 }
 
 /** Una URL remota a medio escribir no debe probarse contra el Ollama local por descuido. */
@@ -104,7 +86,12 @@ async function testOllama(
 
   let response: Response;
   try {
-    response = await fetchImpl(`${endpoint}/api/tags`, { signal: AbortSignal.timeout(10_000) });
+    response = await fetchImpl(`${endpoint}/api/show`, {
+      body: JSON.stringify({ model }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+      signal: AbortSignal.timeout(10_000),
+    });
   } catch {
     return {
       message: `No se pudo conectar con Ollama en ${endpoint}. Revisa que el servicio esté activo y que permita el origen de esta app.`,
@@ -113,11 +100,12 @@ async function testOllama(
   }
   const payload = await readJson(response);
   if (!response.ok) return { message: classifyProviderFailure("ollama", response.status, payload, model).message, ok: false };
-  if (!ollamaHasModel(payload, model)) {
-    // El mismo aviso que daría al catalogar, con la orden para descargarlo.
-    return { message: classifyProviderFailure("ollama", 404, { error: `model "${model}" not found` }, model).message, ok: false };
-  }
-  return { message: `Ollama responde en ${endpoint} y tiene «${model}» descargado.`, ok: true };
+  // /api/show responde 404 si falta el modelo: no hace falta listar todos con /api/tags.
+  return {
+    capabilities: resolveModelCapabilities("ollama", model, payload),
+    message: `Ollama responde en ${endpoint} y tiene «${model}» descargado.`,
+    ok: true,
+  };
 }
 
 /**
@@ -222,5 +210,9 @@ export async function testConnection(
     return { message: `DeepL acepta la clave (API ${plan})${quota}.`, ok: true };
   }
   const modelName = typeof payload.modelName === "string" && payload.modelName ? ` (${payload.modelName})` : "";
-  return { message: `${name} acepta la clave y el modelo «${model}»${modelName} está disponible.`, ok: true };
+  return {
+    capabilities: { ...fallbackModelCapabilities(target.provider, model), ...parseModelCapabilities(payload.capabilities) },
+    message: `${name} acepta la clave y el modelo «${model}»${modelName} está disponible.`,
+    ok: true,
+  };
 }

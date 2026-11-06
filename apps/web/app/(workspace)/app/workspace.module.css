@@ -878,6 +878,21 @@
   color: var(--pliegue-color-status-danger);
 }
 
+.aiModelCapabilities {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.aiCapabilityWarning {
+  color: var(--pliegue-color-status-danger);
+  flex-basis: 100%;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  margin: var(--pliegue-spacing-xs) 0 0;
+}
+
 /* El interruptor viene de @pliegue/ui; aquí solo se le da el marco de fila de ajustes. */
 .aiAutoControl {
   background: var(--pliegue-color-bg-subtle);
