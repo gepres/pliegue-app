@@ -118,7 +118,9 @@ A cambio cumplen lo mismo que el paquete: solo tokens (los colores, velos y somb
 pasaron a `@pliegue/tokens`: `--pliegue-color-scrim`, `--pliegue-elevation-sheet`, `-toast`,
 `-dialog`, `-dock`, `-cover`… y los colores de portada `--pliegue-cover-*`), accesibilidad
 documentada en cada componente, y una sección propia en `/design-system` con sus variantes y
-estados. Si otra app los necesita, se mueven al paquete.
+estados: también el esqueleto de carga (`Skeleton`, `SkeletonText`, `SkeletonPage`,
+`SkeletonGroup`), el diálogo de confirmación, el de «siguiente paso» y las piezas de página
+(`PageHeader`, `MetricCard`, `DocumentCard`). Si otra app los necesita, se mueven al paquete.
 
 El catálogo ejecutable en `/design-system` contiene ejemplos Light/Dark. Las preferencias
 de `/app/ajustes` consumen `Field` y `Select`; el lector local documenta la primera
