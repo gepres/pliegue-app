@@ -20,8 +20,18 @@ import {
 } from "./document-catalog";
 import {
   readDocumentCatalogRecords,
+  removeDocumentCatalogRecords,
   saveDocumentCatalogRecord,
 } from "./document-catalog-store";
+
+const providerLabels: Record<AiSettings["provider"], string> = {
+  anthropic: "Anthropic",
+  gemini: "Gemini",
+  ollama: "Ollama",
+  openai: "OpenAI",
+};
+
+const providerLabel = (settings: AiSettings) => providerLabels[settings.provider];
 
 /**
  * Documentos por bloque. La cola se recorre en tramos para que entre uno y otro el navegador
@@ -45,6 +55,11 @@ export interface CatalogAnalysisProgress {
   stopped: boolean;
   total: number;
   usage: CatalogUsage;
+  /**
+   * El proveedor pidió esperar y se espera para volver a intentarlo (04.2): «Gemini limita las
+   * solicitudes por minuto: se reintenta en 18 s». `null` si no se espera.
+   */
+  waiting: string | null;
 }
 
 export type CatalogAnalysisSummary = CatalogAnalysisProgress;
@@ -54,14 +69,22 @@ interface AnalyzeCatalogOptions {
   force?: boolean;
   onProgress?: (progress: CatalogAnalysisProgress) => void;
   retryErrors?: boolean;
+  /** La pone `analyzeDocumentCatalogs`: «Detener» la corta. */
+  signal?: AbortSignal;
 }
 
 let activeRun: Promise<CatalogAnalysisSummary> | null = null;
 let stopRequested = false;
+let stopController: AbortController | null = null;
 
-/** Detiene el análisis en curso al terminar el bloque actual. Lo ya guardado se conserva. */
+/**
+ * Detiene el análisis en curso. Lo ya guardado se conserva; lo que estaba en camino se corta
+ * —la petición al proveedor y la espera de un reintento—, y esos documentos se quedan como
+ * estaban (04.2).
+ */
 export function stopCatalogAnalysis() {
   stopRequested = true;
+  stopController?.abort();
 }
 
 export function catalogAnalysisRunning() {
@@ -246,7 +269,9 @@ async function runCatalogAnalysis(
     stopped: false,
     total: documents.length,
     usage: emptyCatalogUsage,
+    waiting: null,
   };
+  const signal = options.signal;
   const publish = () => {
     progress.elapsedMs = Date.now() - startedAt;
     options.onProgress?.({ ...progress, usage: { ...progress.usage } });
@@ -299,6 +324,8 @@ async function runCatalogAnalysis(
   publish();
 
   const batchSize = Math.max(1, options.batchSize ?? catalogBatchSize);
+  // Tras el primer límite por minuto se sigue con un solo documento a la vez (04.2).
+  let throttled = false;
 
   async function analyzeOne(document: LibraryDocument) {
     const fingerprint = createCatalogInputFingerprint(
@@ -330,8 +357,25 @@ async function runCatalogAnalysis(
       createRecord(document, settings, fingerprint, "analyzing"),
     );
 
+    let retries = 0;
     try {
-      const { catalog, extras, usage } = await requestCatalogFromProvider(input, settings, apiKey);
+      const { catalog, extras, usage } = await requestCatalogFromProvider(input, settings, apiKey, {
+        onWait: ({ reason, seconds }) => {
+          retries += 1;
+          // Con un límite por minuto, varias a la vez se pisan el cupo: se sigue de una en una.
+          if (reason === "rate") throttled = true;
+          progress.waiting =
+            reason === "rate"
+              ? `${providerLabel(settings)} limita las solicitudes por minuto: se reintenta en ${seconds} s.`
+              : `${providerLabel(settings)} no responde ahora: se reintenta en ${seconds} s.`;
+          publish();
+        },
+        ...(signal ? { signal } : {}),
+      });
+      if (progress.waiting) {
+        progress.waiting = null;
+        publish();
+      }
       // El modelo recibe los autores y las categorías conocidos, pero no siempre los respeta:
       // la grafía se decide aquí, donde la reconciliación es una regla y no una sugerencia.
       const authors = catalog.authors.map((author) => authorIndex.add(author));
@@ -349,9 +393,20 @@ async function runCatalogAnalysis(
       progress.analyzed += 1;
       progress.usage = addCatalogUsage(progress.usage, usage);
     } catch (error) {
+      progress.waiting = null;
+      // Detenido a mitad: el documento se queda como estaba, ni «en análisis» ni con un error
+      // que no es suyo. Se vuelve a analizar la próxima vez.
+      if (signal?.aborted) {
+        const previous = recordsByDocument.get(document.id);
+        await (previous ? saveDocumentCatalogRecord(previous) : removeDocumentCatalogRecords([document.id])).catch(() => undefined);
+        return;
+      }
+      // Si se esperó y reintentó, se dice: un límite que sigue tras los reintentos no es lo
+      // mismo que uno que no dejó ni intentarlo.
+      const tried = retries ? ` Se reintentó ${retries === 1 ? "1 vez" : `${retries} veces`}.` : "";
       await saveDocumentCatalogRecord(
         createRecord(document, settings, fingerprint, "error", {
-          error: errorMessage(error),
+          error: `${errorMessage(error)}${tried}`.slice(0, 400),
         }),
       );
       progress.failed += 1;
@@ -367,8 +422,9 @@ async function runCatalogAnalysis(
     const batch = queue.slice(start, start + batchSize);
     let nextIndex = 0;
 
-    async function analyzeNext() {
-      while (nextIndex < batch.length && !stopRequested) {
+    async function analyzeNext(worker: number) {
+      // Con el límite por minuto encima, solo sigue el primero: los demás terminan el suyo y paran.
+      while (nextIndex < batch.length && !stopRequested && (worker === 0 || !throttled)) {
         const document = batch[nextIndex];
         nextIndex += 1;
         if (!document) continue;
@@ -379,7 +435,7 @@ async function runCatalogAnalysis(
     }
 
     await Promise.all(
-      Array.from({ length: Math.min(settings.concurrency, batch.length) }, () => analyzeNext()),
+      Array.from({ length: Math.min(throttled ? 1 : settings.concurrency, batch.length) }, (_, worker) => analyzeNext(worker)),
     );
     await yieldToBrowser();
   }
@@ -401,9 +457,12 @@ export function analyzeDocumentCatalogs(
 ) {
   if (activeRun) return activeRun;
   stopRequested = false;
-  activeRun = runCatalogAnalysis(documents, settings, options).finally(() => {
+  const controller = new AbortController();
+  stopController = controller;
+  activeRun = runCatalogAnalysis(documents, settings, { ...options, signal: controller.signal }).finally(() => {
     activeRun = null;
     stopRequested = false;
+    if (stopController === controller) stopController = null;
   });
   return activeRun;
 }
