@@ -181,6 +181,16 @@ export function providerErrorResponse(error: unknown) {
   if (error instanceof DOMException && error.name === "AbortError") {
     return Response.json({ error: "Se canceló la solicitud." }, { status: 499 });
   }
+  // «fetch failed»: la conexión del servidor con el proveedor se cortó (lo vio el dueño, 6-nov).
+  // Suele ser pasajero, y la petición no llegó a responder: se dice la causa y se reintenta.
+  if (error instanceof TypeError && /fetch failed/i.test(error.message)) {
+    const cause = (error as { cause?: { code?: unknown } }).cause;
+    const code = typeof cause?.code === "string" ? ` (${cause.code})` : "";
+    return Response.json(
+      { error: `Se cortó la conexión del servidor de Pliegue con el proveedor${code}. Suele ser pasajero: Pliegue lo reintenta.`, retryable: true },
+      { status: 502 },
+    );
+  }
   const timeout = error instanceof DOMException && error.name === "TimeoutError";
   const message = error instanceof Error ? error.message : "El proveedor no respondió.";
   // Un tiempo agotado no se reintenta solo: ya costó uno o dos minutos, y quizá tokens.
