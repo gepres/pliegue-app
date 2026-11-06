@@ -128,6 +128,47 @@ describe("límite por minuto frente a cupo agotado (04.2)", () => {
     expect(classifyProviderFailure("gemini", 429, perDay, "m")).toMatchObject({ kind: "quota", retryable: false });
   });
 
+  it("Gemini sin cupo gratis para el modelo («limit: 0») o con el cupo del día agotado: no se reintenta y se dice por qué (6-nov)", () => {
+    const zero = {
+      error: {
+        code: 429,
+        message:
+          "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-3.5-flash-lite\nPlease retry in 41.2s.",
+        status: "RESOURCE_EXHAUSTED",
+      },
+    };
+    const failure = classifyProviderFailure("gemini", 429, zero, "gemini-3.5-flash-lite");
+    expect(failure).toMatchObject({ kind: "quota", retryable: false });
+    expect(failure.message).toMatch(/no tiene cupo gratis para el modelo «gemini-3\.5-flash-lite» \(límite 0\)/);
+    // El detalle del proveedor, sin la dirección, para ver la causa en «Por qué fallaron».
+    expect(failure.message).toMatch(/Detalle del proveedor: «generativelanguage\.googleapis\.com\/generate_content_free_tier_requests, limit: 0, model: gemini-3\.5-flash-lite»/);
+    expect(failure.message).not.toMatch(/https?:/);
+
+    const daily = {
+      error: {
+        details: [{ "@type": "type.googleapis.com/google.rpc.QuotaFailure", violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }],
+        message: "Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-3.5-flash-lite",
+        status: "RESOURCE_EXHAUSTED",
+      },
+    };
+    const dailyFailure = classifyProviderFailure("gemini", 429, daily, "gemini-3.5-flash-lite");
+    expect(dailyFailure).toMatchObject({ kind: "quota", retryable: false });
+    expect(dailyFailure.message).toMatch(/cupo diario de Gemini.*medianoche, hora del Pacífico/);
+    expect(dailyFailure.message).toMatch(/limit: 20/);
+  });
+
+  it("Gemini por minuto, con la espera solo en el texto («Please retry in 17.37s»)", () => {
+    const perMinute = {
+      error: {
+        message: "* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 15, model: gemini-3.5-flash-lite\nPlease retry in 17.37s.",
+        status: "RESOURCE_EXHAUSTED",
+      },
+    };
+    const failure = classifyProviderFailure("gemini", 429, perMinute, "m");
+    expect(failure).toMatchObject({ kind: "rate", retryAfter: 18, retryable: true });
+    expect(failure.message).toMatch(/límite de solicitudes por minuto\. Detalle del proveedor: «.*limit: 15/);
+  });
+
   it("Azure, DeepL y LibreTranslate: 429 es límite por minuto; su cupo, no", () => {
     expect(classifyProviderFailure("azure", 429, {}, "")).toMatchObject({ kind: "rate", retryable: true });
     expect(classifyProviderFailure("azure", 403, {}, "")).toMatchObject({ kind: "quota", retryable: false });

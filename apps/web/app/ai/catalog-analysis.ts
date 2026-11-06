@@ -324,6 +324,8 @@ async function runCatalogAnalysis(
   publish();
 
   const batchSize = Math.max(1, options.batchSize ?? catalogBatchSize);
+  // Tras el primer límite por minuto se sigue con un solo documento a la vez (04.2).
+  let throttled = false;
 
   async function analyzeOne(document: LibraryDocument) {
     const fingerprint = createCatalogInputFingerprint(
@@ -355,9 +357,13 @@ async function runCatalogAnalysis(
       createRecord(document, settings, fingerprint, "analyzing"),
     );
 
+    let retries = 0;
     try {
       const { catalog, extras, usage } = await requestCatalogFromProvider(input, settings, apiKey, {
         onWait: ({ reason, seconds }) => {
+          retries += 1;
+          // Con un límite por minuto, varias a la vez se pisan el cupo: se sigue de una en una.
+          if (reason === "rate") throttled = true;
           progress.waiting =
             reason === "rate"
               ? `${providerLabel(settings)} limita las solicitudes por minuto: se reintenta en ${seconds} s.`
@@ -395,9 +401,12 @@ async function runCatalogAnalysis(
         await (previous ? saveDocumentCatalogRecord(previous) : removeDocumentCatalogRecords([document.id])).catch(() => undefined);
         return;
       }
+      // Si se esperó y reintentó, se dice: un límite que sigue tras los reintentos no es lo
+      // mismo que uno que no dejó ni intentarlo.
+      const tried = retries ? ` Se reintentó ${retries === 1 ? "1 vez" : `${retries} veces`}.` : "";
       await saveDocumentCatalogRecord(
         createRecord(document, settings, fingerprint, "error", {
-          error: errorMessage(error),
+          error: `${errorMessage(error)}${tried}`.slice(0, 400),
         }),
       );
       progress.failed += 1;
@@ -413,8 +422,9 @@ async function runCatalogAnalysis(
     const batch = queue.slice(start, start + batchSize);
     let nextIndex = 0;
 
-    async function analyzeNext() {
-      while (nextIndex < batch.length && !stopRequested) {
+    async function analyzeNext(worker: number) {
+      // Con el límite por minuto encima, solo sigue el primero: los demás terminan el suyo y paran.
+      while (nextIndex < batch.length && !stopRequested && (worker === 0 || !throttled)) {
         const document = batch[nextIndex];
         nextIndex += 1;
         if (!document) continue;
@@ -425,7 +435,7 @@ async function runCatalogAnalysis(
     }
 
     await Promise.all(
-      Array.from({ length: Math.min(settings.concurrency, batch.length) }, () => analyzeNext()),
+      Array.from({ length: Math.min(throttled ? 1 : settings.concurrency, batch.length) }, (_, worker) => analyzeNext(worker)),
     );
     await yieldToBrowser();
   }

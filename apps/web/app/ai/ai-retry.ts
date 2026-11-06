@@ -5,8 +5,8 @@
  * Nació de un fallo real: con el plan gratis de Gemini, catalogar varios libros a la vez daba
  * «3 con error» por el límite por minuto, y bastaba con esperar unos segundos. Espera lo que el
  * proveedor pide (`Retry-After`, o `retryAfter` en la respuesta de las rutas de Pliegue) o, si
- * no lo dice, 2, 4 y 8 segundos con algo de azar, para que varias peticiones no vuelvan a la
- * vez. Lo que no tiene arreglo esperando —cupo o saldo agotados, la clave, el modelo— no se
+ * no lo dice, 15, 30 y 45 segundos ante un límite por minuto y 2, 4 y 8 ante un proveedor
+ * saturado, con algo de azar para que varias peticiones no vuelvan a la vez. Lo que no tiene arreglo esperando —cupo o saldo agotados, la clave, el modelo— no se
  * reintenta: las rutas lo marcan con `retryable: false`.
  *
  * Reintenta en el navegador y no en el servidor: allí cada espera alargaría la función, que
@@ -89,8 +89,11 @@ export async function fetchWithRetry(input: RequestInfo | URL, init: RequestInit
     if (response.ok || attempt >= attempts || !retryableStatuses.has(response.status)) return response;
     const { retryAfter, retryable } = await retryHints(response);
     if (retryable === false) return response;
-    // Lo que pide el proveedor, con un segundo de margen; si no pide nada, 2, 4, 8… y algo de azar.
-    const seconds = retryAfter !== null ? retryAfter + 1 : Math.min(30, 2 ** attempt) + random();
+    // Lo que pide el proveedor, con un segundo de margen. Si no pide nada: un límite por minuto
+    // necesita que pase la ventana del minuto (15, 30 y 45 s); un proveedor saturado, poco (2, 4,
+    // 8 s). Con algo de azar, para que varias peticiones no vuelvan a la vez.
+    const fallback = response.status === 429 ? Math.min(60, 15 * attempt) : Math.min(30, 2 ** attempt);
+    const seconds = retryAfter !== null ? retryAfter + 1 : fallback + random();
     if (seconds > maxWaitSeconds) return response;
     onWait?.({ attempt: attempt + 1, reason: response.status === 429 ? "rate" : "busy", seconds: Math.ceil(seconds) });
     await sleep(seconds * 1000, signal);

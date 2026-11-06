@@ -67,8 +67,30 @@ export function readRetryAfter(headers: Pick<Headers, "get"> | null | undefined,
     .map((detail) => (detail as { retryDelay?: unknown }).retryDelay)
     .find((value): value is string => typeof value === "string");
   const seconds = delay ? Number.parseFloat(delay) : Number.NaN;
-  return Number.isFinite(seconds) && seconds >= 0 ? Math.ceil(seconds) : null;
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds);
+  // Gemini a veces solo lo dice en el texto: «Please retry in 17.37s.»
+  const said = /retry in ([\d.]+)\s*s/i.exec(readDetail(payload).message)?.[1];
+  const fromText = said ? Number.parseFloat(said) : Number.NaN;
+  return Number.isFinite(fromText) && fromText >= 0 ? Math.ceil(fromText) : null;
 }
+
+/**
+ * Lo que dice el proveedor de la cuota que se agotó, para enseñarlo tal cual: «Quota exceeded
+ * for metric: …free_tier_requests, limit: 15, model: …». Sin esto, «Por qué fallaron» no
+ * distinguía un límite por minuto de un modelo sin cupo gratis (lo vio el dueño, 6-nov).
+ */
+function quotaDetail(raw: string) {
+  const metric = /quota exceeded for metric:\s*([^\n]+)/i.exec(raw)?.[1];
+  const text = (metric ?? raw.split("\n")[0] ?? "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
+  return text ? ` Detalle del proveedor: «${text}».` : "";
+}
+
+/** Gemini sin cupo gratis para el modelo: «limit: 0». Esperar no sirve, ni hoy ni mañana. */
+const zeroLimit = (message: string) => /\blimit:\s*0\b/i.test(message);
 
 function geminiDetails(payload: unknown): unknown[] {
   const details = (payload as { error?: { details?: unknown } } | null)?.error?.details;
@@ -118,8 +140,9 @@ function kindOf(status: number, code: string, message: string, payload: unknown)
   // Gemini: nombres de gRPC. Una clave mal puesta llega como 400 «API key not valid».
   if (code === "UNAUTHENTICATED" || /api key not valid/i.test(message)) return "credential";
   // Gemini usa el mismo nombre para el límite por minuto y para la cuota del día: la distinguen
-  // los detalles. Sin ellos, se toma por límite por minuto, que es lo frecuente en el plan gratis.
-  if (code === "RESOURCE_EXHAUSTED") return geminiDailyQuota(payload) ? "quota" : "rate";
+  // los detalles. «limit: 0» es un modelo sin cupo gratis: tampoco se arregla esperando. Sin
+  // nada de eso, se toma por límite por minuto, que es lo frecuente en el plan gratis.
+  if (code === "RESOURCE_EXHAUSTED") return geminiDailyQuota(payload) || zeroLimit(message) ? "quota" : "rate";
   if (code === "PERMISSION_DENIED") return "permission";
   if (code === "NOT_FOUND") return "model";
 
@@ -133,7 +156,7 @@ function kindOf(status: number, code: string, message: string, payload: unknown)
   return "provider";
 }
 
-function describe(kind: ProviderFailureKind, provider: FailingProvider, model: string, raw: string) {
+function describe(kind: ProviderFailureKind, provider: FailingProvider, model: string, raw: string, daily = false) {
   const name = providerName[provider];
   const quoted = model ? `«${model}»` : "seleccionado";
 
@@ -151,9 +174,15 @@ function describe(kind: ProviderFailureKind, provider: FailingProvider, model: s
     case "permission":
       return `Tu cuenta de ${name} no tiene acceso al modelo ${quoted}.`;
     case "quota":
-      return `${name} rechazó la solicitud por cupo o saldo agotado. Esperar unos segundos no lo arregla: revisa tu plan, o vuelve cuando se renueve el cupo.`;
+      if (provider === "gemini" && zeroLimit(raw)) {
+        return `Tu proyecto de Gemini no tiene cupo gratis para el modelo ${quoted} (límite 0): esperar no lo arregla. Elige otro modelo en Ajustes → IA o activa la facturación en Google AI Studio.${quotaDetail(raw)}`;
+      }
+      if (daily) {
+        return `Se agotó el cupo diario de Gemini para el modelo ${quoted}: se renueva a medianoche, hora del Pacífico. Hasta entonces, elige otro modelo en Ajustes → IA.${quotaDetail(raw)}`;
+      }
+      return `${name} rechazó la solicitud por cupo o saldo agotado. Esperar unos segundos no lo arregla: revisa tu plan, o vuelve cuando se renueve el cupo.${quotaDetail(raw)}`;
     case "rate":
-      return `${name} limita las solicitudes por minuto. Pliegue esperó y lo volvió a intentar; si sigue, analiza menos a la vez o inténtalo dentro de un minuto.`;
+      return `${name} rechazó la solicitud por su límite de solicitudes por minuto.${quotaDetail(raw)}`;
     default:
       return raw.slice(0, 280) || `${name} rechazó la solicitud.`;
   }
@@ -190,7 +219,7 @@ export function classifyProviderFailure(
   const transient = kind === "provider" && (transientStatuses.has(status) || code === "overloaded_error");
   return {
     kind,
-    message: describe(kind, provider, model, message),
+    message: describe(kind, provider, model, message, provider === "gemini" && geminiDailyQuota(payload)),
     retryable: kind === "rate" || transient,
     retryAfter: kind === "rate" || transient ? readRetryAfter(headers, payload) : null,
     // Un fallo pasajero responde 503: el navegador lo reintenta, igual que un límite por minuto.

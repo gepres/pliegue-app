@@ -49,6 +49,14 @@ describe("reintentar la IA ante fallos pasajeros (04.2)", () => {
     expect(r.slept).toEqual([2_500, 4_500, 8_500]);
   });
 
+  it("un límite por minuto sin espera pedida aguarda a que pase el minuto: 15, 30 y 45 segundos", async () => {
+    const { calls, impl } = scripted(json(429, { error: "límite", retryable: true }));
+    const r = recorder();
+    await fetchWithRetry("/x", {}, { fetchImpl: impl, random: () => 0.5, sleep: r.sleep });
+    expect(calls).toHaveLength(4);
+    expect(r.slept).toEqual([15_500, 30_500, 45_500]);
+  });
+
   it("lee también la cabecera Retry-After de un servicio que no es de Pliegue (LibreTranslate)", async () => {
     const { impl } = scripted(() => new Response("Too many requests", { headers: { "retry-after": "3" }, status: 429 }), json(200, {}));
     const r = recorder();
