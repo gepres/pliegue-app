@@ -357,6 +357,22 @@ export function TranslationPanel({
             <p className={styles.notice} role="alert">
               {phase.message}
             </p>
+          ) : phase.kind === "sensitive" ? (
+            <div className={styles.notice} role="alert">
+              <p>
+                Este libro es confidencial: solo se traduce en este equipo, y {aiEngine.provider} está fuera de él.
+              </p>
+              <div className={styles.budgetActions}>
+                {browserSupported ? (
+                  <Button onClick={() => onStart({ source, target }, "browser")} size="sm" variant="secondary">
+                    Traducir en este equipo
+                  </Button>
+                ) : null}
+                <Link className={styles.inlineAction} href="/app/ajustes#ia">
+                  Usar Ollama
+                </Link>
+              </div>
+            </div>
           ) : null}
           <Button
             disabled={busy || sameLanguage || unitCount <= 0 || aiUnset || aiNeedsKey || (!usingAi && !browserSupported)}

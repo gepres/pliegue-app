@@ -10,6 +10,9 @@ import {
   type TranslationSnapshot,
 } from "../../library/translation-session";
 import { assertWithinBudget } from "../../ai/ai-usage-store";
+import { routeFor, type ProviderPlace, type Sensitivity } from "../../library/sensitivity";
+import { hasConsent } from "../../library/sensitivity-store";
+import { confirmPersonalSend } from "../ai/sensitive-consent";
 import { useBookGlossary } from "../../library/translation-glossary-store";
 import {
   clearTranslation,
@@ -41,6 +44,8 @@ export type TranslationPhase =
   | { kind: "needs-key" }
   /** «Tu IA» sin proveedor elegido en Ajustes. */
   | { kind: "needs-provider" }
+  /** Libro confidencial y «Tu IA» fuera del equipo: solo se traduce en el equipo (04.3). */
+  | { kind: "sensitive" }
   | { kind: "error"; message: string };
 
 const idleSnapshot: TranslationSnapshot = {
@@ -111,6 +116,10 @@ function describeEngineError(error: unknown) {
 }
 
 export interface BookTranslationOptions<Block extends { text: string }> {
+  /** Dónde trabaja «Tu IA»: en este equipo (Ollama local) o fuera (04.3). */
+  aiPlace?: ProviderPlace;
+  /** El proveedor de «Tu IA», para decir a quién iría el texto. */
+  aiProviderName?: string;
   currentUnit: number;
   /** Motor con el que se empieza si el libro no recuerda otro. */
   defaultEngine: TranslationEngineKind;
@@ -118,18 +127,26 @@ export interface BookTranslationOptions<Block extends { text: string }> {
   engines: Readonly<Record<TranslationEngineKind, TranslationEngine>>;
   loadUnit: (unit: number) => Promise<SourceUnit<Block>>;
   pagesAhead?: number;
+  /** Sensibilidad del libro (04.3): sin ella, «interno». */
+  sensitivity?: Sensitivity;
+  /** El título, para preguntar por un libro personal. */
+  title?: string;
   /** 0 mientras no se sabe cuántas páginas tiene: no se empieza hasta saberlo. */
   unitCount: number;
   unitId: (unit: number) => string;
 }
 
 export function useBookTranslation<Block extends { text: string }>({
+  aiPlace = "cloud",
+  aiProviderName = "tu IA",
   currentUnit,
   defaultEngine,
   documentId,
   engines,
   loadUnit,
   pagesAhead = defaultPagesAhead,
+  sensitivity = "interno",
+  title = "Este libro",
   unitCount,
   unitId,
 }: BookTranslationOptions<Block>) {
@@ -177,13 +194,28 @@ export function useBookTranslation<Block extends { text: string }>({
   useEffect(() => () => session?.dispose(), [session]);
 
   const start = useCallback(
-    async (next: TranslationPair, kind: TranslationEngineKind = engineKind) => {
+    async (next: TranslationPair, kind: TranslationEngineKind = engineKind, interactive = true) => {
       if (unitCount <= 0) return;
       const attempt = (attemptRef.current += 1);
       const chosen = engines[kind];
       setSession(null);
       setPair(next);
       setEngineKind(kind);
+      // Sensibilidad (04.3): confidencial, solo en el equipo; personal, con permiso una vez. Al
+      // retomar un libro sin pulsar nada no se pregunta: espera al botón.
+      const route = routeFor(sensitivity, kind === "browser" ? "device" : aiPlace, hasConsent(documentId, "translate"));
+      if (route === "block") {
+        setPhase({ kind: "sensitive" });
+        return;
+      }
+      if (route === "ask") {
+        const accepted = interactive && (await confirmPersonalSend([{ id: documentId, title }], "translate", aiProviderName));
+        if (attempt !== attemptRef.current) return;
+        if (!accepted) {
+          setPhase({ kind: "off" });
+          return;
+        }
+      }
       setPhase({ kind: "checking" });
       const availability = await chosen.availability(next);
       if (attempt !== attemptRef.current) return;
@@ -247,7 +279,7 @@ export function useBookTranslation<Block extends { text: string }>({
         if (attempt === attemptRef.current) setPhase({ kind: "error", message: describeEngineError(error) });
       }
     },
-    [documentId, engineKind, engines, pagesAhead, unitCount],
+    [aiPlace, aiProviderName, documentId, engineKind, engines, pagesAhead, sensitivity, title, unitCount],
   );
 
   const stop = useCallback(() => {
@@ -278,7 +310,7 @@ export function useBookTranslation<Block extends { text: string }>({
     let cancelled = false;
     void engines[kind].availability(pairOnly).then((availability) => {
       if (cancelled) return;
-      if (availability === "available") void start(pairOnly, kind);
+      if (availability === "available") void start(pairOnly, kind, false);
       else {
         setEngineKind(kind);
         setPair(pairOnly);

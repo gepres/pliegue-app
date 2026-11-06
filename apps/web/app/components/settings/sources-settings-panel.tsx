@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-import { Button, Card, Tag } from "@pliegue/ui";
+import { Button, Card, Select, Tag } from "@pliegue/ui";
 
 import { useDriveConnection } from "../../drive/drive-connection";
 import { useDriveLibrary } from "../../library/drive-library-store";
@@ -11,6 +11,14 @@ import { useLinkedFiles } from "../../library/local-file-reference-store";
 import { requestLinkedFolderReadPermission, useLinkedFolders } from "../../library/local-folder-store";
 import { useImportedDocuments } from "../../library/local-library-store";
 import { protectStorage, readStorageState, type StorageState } from "../../library/storage-protection";
+import {
+  defaultSensitivity,
+  isSensitivity,
+  sensitivityHelp,
+  sensitivityLevels,
+  sensitivityNames,
+} from "../../library/sensitivity";
+import { setSourceSensitivity, useSensitivityMarks } from "../../library/sensitivity-store";
 import { Icon } from "../app-ui/icons";
 import { describeDrive, folderPermission, formatBytes, summarizeFiles } from "./sources-summary";
 import { SkeletonText } from "../app-ui/skeleton";
@@ -183,6 +191,79 @@ function LocationsSection() {
   );
 }
 
+/**
+ * Sensibilidad de cada fuente (04.3): la heredan sus libros, y cada libro puede cambiarla desde
+ * su menú. Sin marcar, «interno»: como hasta ahora.
+ */
+function SensitivitySection() {
+  const marks = useSensitivityMarks();
+  const folders = useLinkedFolders();
+  const files = useLinkedFiles();
+  const imported = useImportedDocuments();
+  const driveLibrary = useDriveLibrary();
+  const looseDrive = driveLibrary.documents.filter((document) => !(document as { sourceId?: string | null }).sourceId).length;
+
+  const sources = [
+    ...folders.sources.map((source) => ({ key: `folder:${source.id}`, kind: "Carpeta de este equipo", name: source.name })),
+    ...driveLibrary.sources.map((source) => ({ key: `drive:${source.id}`, kind: "Carpeta de Google Drive", name: source.name })),
+    ...(files.documents.length ? [{ key: "files", kind: "Archivos vinculados uno a uno", name: "Archivos sueltos" }] : []),
+    ...(imported.documents.length ? [{ key: "copies", kind: "Guardadas en este navegador", name: "Copias importadas" }] : []),
+    ...(looseDrive ? [{ key: "drive-files", kind: "Elegidos uno a uno", name: "Archivos de Google Drive" }] : []),
+  ];
+
+  return (
+    <section aria-labelledby="sensitivity-title" className={styles.block}>
+      <h3 id="sensitivity-title">Sensibilidad</h3>
+      <p className={styles.note}>
+        Qué puede hacer la IA con los libros de cada fuente. La heredan sus libros, y cada uno puede cambiarla en su
+        menú.
+      </p>
+      <ul className={styles.levels}>
+        {sensitivityLevels.map((level) => (
+          <li key={level}>
+            <strong>{sensitivityNames[level]}</strong> {sensitivityHelp[level]}
+          </li>
+        ))}
+      </ul>
+      {sources.length ? (
+        <ul className={styles.locations}>
+          {sources.map((source) => {
+            const level = marks.sources[source.key] ?? defaultSensitivity;
+            const id = `sensitivity-${source.key.replace(/[^a-z0-9-]/gi, "-")}`;
+            return (
+              <li data-level={level} key={source.key}>
+                <Icon name={level === "confidencial" || level === "personal" ? "info" : "folder"} size={18} />
+                <div className={styles.locationText}>
+                  <label htmlFor={id}>
+                    <strong>{source.name}</strong>
+                  </label>
+                  <small>{source.kind}</small>
+                </div>
+                <Select
+                  id={id}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    if (isSensitivity(next)) setSourceSensitivity(source.key, next === defaultSensitivity ? null : next);
+                  }}
+                  value={level}
+                >
+                  {sensitivityLevels.map((option) => (
+                    <option key={option} value={option}>
+                      {sensitivityNames[option]}
+                    </option>
+                  ))}
+                </Select>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className={styles.note}>Cuando vincules o importes libros, aquí podrás marcar cada fuente.</p>
+      )}
+    </section>
+  );
+}
+
 /** Si el navegador puede borrar lo que Pliegue guarda aquí, y cuánto ocupa. */
 function StorageSection() {
   const [state, setState] = useState<StorageState | null>(null);
@@ -290,6 +371,7 @@ export function SourcesSettingsPanel() {
         </p>
       </header>
       <LocationsSection />
+      <SensitivitySection />
       <StorageSection />
     </Card>
   );

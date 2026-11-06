@@ -107,6 +107,8 @@ import {
 } from "./reader/translation-view";
 import { ReadingFilterLayer } from "./reader/reading-filter-layer";
 import { useBookTranslation } from "./reader/use-book-translation";
+import { providerPlace } from "../library/sensitivity";
+import { useDocumentSensitivity } from "../library/sensitivity-store";
 import { PageHeader } from "./workspace-page";
 import { Skeleton, SkeletonGroup, SkeletonPage } from "./app-ui/skeleton";
 import styles from "./local-document-reader.module.css";
@@ -1062,8 +1064,13 @@ export function LocalReaderShell({
     }),
     [aiApiKey, aiProvider, aiSettings.libreTranslateUrl, translationEngines.ai],
   );
+  const sensitivity = useDocumentSensitivity(document);
   const translation = useBookTranslation<TranslationSourceBlock>({
+    aiPlace: providerPlace(aiProvider, aiSettings),
+    aiProviderName: translationProviderNames[aiProvider],
     currentUnit: isPdf ? (pages?.current ?? 1) : currentSection,
+    sensitivity,
+    title: document.title,
     defaultEngine: aiProvider === "browser" ? "browser" : "ai",
     documentId: document.id,
     engines: translationEngines,

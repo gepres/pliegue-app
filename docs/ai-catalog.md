@@ -100,6 +100,33 @@ operaciones, y es donde se engancharán la búsqueda semántica (04.4) y «descr
   que los reintentos y «Por qué fallaron» funcionan igual. `generateJson` con clave reutiliza
   `requestStructuredJsonWith` de `hosted-json.ts`: catalogar y traducir no cambian.
 
+## Sensibilidad (04.3)
+
+Decisión del 6-nov en Foundry (04.3). Los cuatro niveles de 01-product-scope §4.3.
+
+- **Dónde se marca:**
+  - en la fuente, en Ajustes → Fuentes, «Sensibilidad» (cada carpeta, cada carpeta de Drive, los
+    archivos sueltos, las copias importadas y los archivos de Drive sueltos), y la heredan sus
+    libros;
+  - cada libro puede cambiarla en su menú, «Sensibilidad: …».
+  - Sin marcar es «interno»: nada cambia. Se guarda en este equipo (`pliegue-sensitivity-v1`):
+    las fuentes y los ids de libro son de cada equipo.
+- **Qué hace:**
+  - *Público* e *interno*: como siempre.
+  - *Personal*: antes de enviarlo a un proveedor en la nube se pregunta una vez por libro y flujo
+    (catalogar, traducir), y el «sí» se recuerda. Al catalogar varios se pregunta por todos
+    juntos. Al retomar una traducción sin pulsar nada no se pregunta: espera al botón.
+  - *Confidencial*: solo en el equipo, con Ollama en modo local o el traductor del navegador.
+    Con un proveedor en la nube, catalogar lo salta (y lo cuenta) y traducir se bloquea,
+    ofreciendo «Traducir en este equipo» y «Usar Ollama».
+- **En el equipo** cuenta Ollama local (o en `localhost`) y un LibreTranslate en `localhost`;
+  Ollama remoto y el resto, fuera (`providerPlace`).
+- **Dónde se aplica:** dentro de la cola del catálogo, así que también vale para el catálogo
+  automático tras vincular, y al empezar a traducir (`use-book-translation`).
+- **Código:** `library/sensitivity.ts` (modelo y reglas, con pruebas),
+  `library/sensitivity-store.ts`, `components/library/sensitivity-picker.tsx` y
+  `components/ai/sensitive-consent.ts`. e2e: `apps/web/e2e/sensibilidad.mjs`.
+
 ## Presupuesto y gasto (04.6)
 
 Decisión del 6-nov en Foundry (04.6). Ajustes → IA, «Gasto y presupuesto».

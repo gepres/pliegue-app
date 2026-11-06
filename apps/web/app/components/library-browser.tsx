@@ -64,6 +64,10 @@ import { confirmForgetting } from "./library/confirm-forgetting";
 import { forgetLinkedFiles, unlinkFilesConfirmation } from "./linked-files-panel";
 import { StaleIndexNotice } from "./stale-index-notice";
 import styles from "../(workspace)/app/workspace.module.css";
+import { budgetProviderNames } from "../ai/ai-budget";
+import { providerPlace, routeFor } from "../library/sensitivity";
+import { documentSensitivity, hasConsent } from "../library/sensitivity-store";
+import { confirmPersonalSend } from "./ai/sensitive-consent";
 
 const availabilityLabels: Record<AvailabilityState, string> = {
   available: "Disponible",
@@ -437,6 +441,14 @@ export function LibraryBrowser() {
   async function analyzeOneDocument(documentId: string) {
     const document = baseDocuments.find((candidate) => candidate.id === documentId);
     if (!document) return;
+    // Sensibilidad (04.3): lo confidencial no sale; lo personal, con permiso una vez.
+    const provider = budgetProviderNames[aiSettings.provider] ?? aiSettings.provider;
+    const route = routeFor(documentSensitivity(document), providerPlace(aiSettings.provider, aiSettings), hasConsent(document.id, "catalog"));
+    if (route === "block") {
+      setCatalogMessage(`«${document.title}» es confidencial: solo se cataloga en este equipo, con Ollama. Elige Ollama en Ajustes → IA o cambia su sensibilidad en el menú del libro.`);
+      return;
+    }
+    if (route === "ask" && !(await confirmPersonalSend([document], "catalog", provider))) return;
     setCatalogMessage(`Analizando «${document.title}»…`);
 
     try {

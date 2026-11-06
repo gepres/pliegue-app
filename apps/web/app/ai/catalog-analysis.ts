@@ -11,6 +11,8 @@ import { providerModel, type AiSettings } from "./ai-settings";
 import { checkApiKey } from "./api-key";
 import { getSessionApiKey } from "./ai-session-secret-store";
 import { assertWithinBudget, recordAiUsage } from "./ai-usage-store";
+import { providerPlace, routeFor } from "../library/sensitivity";
+import { documentSensitivity, hasConsent } from "../library/sensitivity-store";
 import { requestCatalogFromProvider } from "./catalog-provider-client";
 import {
   addCatalogUsage,
@@ -77,6 +79,11 @@ export interface CatalogAnalysisProgress {
   usage: CatalogUsage;
   /** Se paró la cola al llegar al tope del presupuesto (04.6): el porqué, o null. */
   budgetStop: string | null;
+  /**
+   * Libros que no se enviaron por su sensibilidad (04.3): confidenciales (solo en el equipo) y
+   * personales sin permiso para catalogar.
+   */
+  keptLocal: { confidential: number; personal: number };
   /**
    * El proveedor pidió esperar y se espera para volver a intentarlo (04.2): «Gemini limita las
    * solicitudes por minuto: se reintenta en 18 s». `null` si no se espera.
@@ -345,12 +352,13 @@ async function runCatalogAnalysis(
     total: documents.length,
     usage: emptyCatalogUsage,
     budgetStop: null,
+    keptLocal: { confidential: 0, personal: 0 },
     waiting: null,
   };
   const signal = options.signal;
   const publish = () => {
     progress.elapsedMs = Date.now() - startedAt;
-    options.onProgress?.({ ...progress, usage: { ...progress.usage } });
+    options.onProgress?.({ ...progress, keptLocal: { ...progress.keptLocal }, usage: { ...progress.usage } });
   };
 
   const model = providerModel(settings);
@@ -403,7 +411,18 @@ async function runCatalogAnalysis(
   // Tras el primer límite por minuto se sigue con un solo documento a la vez (04.2).
   let throttled = false;
 
+  // Dónde trabaja el proveedor de catalogar: Ollama en este equipo no saca nada (04.3).
+  const place = providerPlace(settings.provider, settings);
+
   async function analyzeOne(document: LibraryDocument) {
+    // Sensibilidad (04.3): lo confidencial no sale del equipo y lo personal, solo con permiso.
+    // No se escribe ficha: el libro queda como estaba y se cuenta aparte.
+    const route = routeFor(documentSensitivity(document), place, hasConsent(document.id, "catalog"));
+    if (route !== "allow") {
+      if (route === "block") progress.keptLocal.confidential += 1;
+      else progress.keptLocal.personal += 1;
+      return;
+    }
     const fingerprint = createCatalogInputFingerprint(
       document,
       settings.provider,
