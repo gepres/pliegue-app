@@ -144,6 +144,8 @@ export function LibraryBrowser() {
   const [series, setSeries] = useState<string | "all">("all");
   const [language, setLanguage] = useState<string | "all">("all");
   const [hideDuplicates, setHideDuplicates] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [duplicatesOpen, setDuplicatesOpen] = useState(false);
   const [sort, setSortState] = useState<DocumentSortOrder>("title");
   const [importing, setImporting] = useState(false);
   const [reindexing, setReindexing] = useState(false);
@@ -647,6 +649,8 @@ export function LibraryBrowser() {
 
         <Popover
           align="end"
+          onOpenChange={setFiltersOpen}
+          open={filtersOpen}
           title="Filtros"
           trigger={(props) => (
             <button
@@ -781,7 +785,16 @@ export function LibraryBrowser() {
                 label="Ocultar duplicados"
                 onChange={(event) => setHideDuplicates(event.target.checked)}
               />
-              <DuplicateFinder documents={allDocuments} extraText={ocrTexts} />
+              <Button
+                onClick={() => {
+                  setFiltersOpen(false);
+                  setDuplicatesOpen(true);
+                }}
+                size="sm"
+                variant="secondary"
+              >
+                Buscar libros repetidos
+              </Button>
             </div>
 
             <div className={libraryStyles.filterGroup}>
@@ -1130,6 +1143,12 @@ export function LibraryBrowser() {
         </div>
       )}
 
+      <DuplicateFinder
+        documents={allDocuments}
+        extraText={ocrTexts}
+        onClose={() => setDuplicatesOpen(false)}
+        open={duplicatesOpen}
+      />
       <Toast message={toast?.text ?? null} nonce={toast?.nonce ?? 0} />
     </>
   );

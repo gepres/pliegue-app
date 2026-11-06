@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { Button, Tag } from "@pliegue/ui";
 
@@ -26,6 +26,9 @@ import styles from "./duplicate-finder.module.css";
  * «Buscar libros repetidos» (03.6): otro escaneo, otra edición, el EPUB y el PDF del mismo
  * libro. Los idénticos byte a byte ya son copias de un mismo libro; estos se proponen y la
  * persona decide cuál conservar o que no son el mismo libro.
+ *
+ * La hoja vive fuera del popover de «Filtros», donde está el botón que la abre: dentro de él
+ * quedaría encerrada en su panel, y su Escape cerraría el popover en vez de la hoja.
  */
 
 /** Las firmas y las huellas de portada ya calculadas, para no rehacerlas en cada búsqueda. */
@@ -77,12 +80,15 @@ type SearchState =
 export function DuplicateFinder({
   documents,
   extraText,
+  onClose,
+  open,
 }: {
   documents: readonly LibraryDocument[];
   /** Lo leído con OCR de los escaneos, que también cuenta como su texto. */
   extraText?: ReadonlyMap<string, string>;
+  onClose: () => void;
+  open: boolean;
 }) {
-  const [open, setOpen] = useState(false);
   const [search, setSearch] = useState<SearchState>({ status: "idle" });
   const decisions = useDuplicateDecisions();
   const runRef = useRef(0);
@@ -129,10 +135,11 @@ export function DuplicateFinder({
     }
   }
 
-  function openFinder() {
-    setOpen(true);
-    void run();
-  }
+  // Cada vez que se abre se compara de nuevo: la biblioteca puede haber cambiado.
+  const startSearch = useEffectEvent(() => void run());
+  useEffect(() => {
+    if (open) startSearch();
+  }, [open]);
 
   const dismissed = new Set(decisions.records.flatMap((record) => (record.kind === "dismiss" ? [pairKey(record.ids[0], record.ids[1])] : [])));
   const marked = new Set(marks.flatMap((mark) => [mark.documentId]));
@@ -149,15 +156,11 @@ export function DuplicateFinder({
       : [];
 
   return (
-    <>
-      <Button onClick={openFinder} size="sm" variant="secondary">
-        Buscar libros repetidos
-      </Button>
-      <Sheet
+    <Sheet
         description="Otro escaneo, otra edición o el mismo libro en EPUB y en PDF. Los archivos idénticos ya se juntan solos; estos los decides tú."
         onClose={() => {
           runRef.current += 1;
-          setOpen(false);
+          onClose();
         }}
         open={open}
         title="Libros repetidos"
@@ -250,7 +253,6 @@ export function DuplicateFinder({
             </section>
           ) : null}
         </div>
-      </Sheet>
-    </>
+    </Sheet>
   );
 }
