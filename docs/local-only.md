@@ -174,15 +174,21 @@ de Office. El archivo original siempre permanece disponible sin modificación.
 
 IndexedDB no es una bóveda criptográfica. Puede guardar documentos y fichas derivadas
 porque pertenecen al perfil del navegador, pero nunca se usa para claves BYOK o tokens
-OAuth. OpenAI y Anthropic aceptan una clave temporal que vive únicamente en memoria de la
-pestaña; la bóveda persistente sigue bloqueada por `02.5`. Las copias pueden descargarse
-nuevamente desde Biblioteca; backup, exportación masiva y restauración corresponden a
-`06.4`.
+OAuth. Las claves de todos los proveedores (OpenAI, Anthropic, Gemini, Azure, DeepL y
+LibreTranslate) viven únicamente en memoria de la pestaña: al recargar hay que volver a
+pegarlas. La bóveda persistente sigue pendiente de `02.5`. Las copias pueden descargarse
+nuevamente desde Biblioteca; la copia de seguridad, la exportación de copias y la
+restauración están en Ajustes → Datos (`06.4`).
+
+Con cuenta, «Borrar mi cuenta» (Ajustes → Cuenta) borra la cuenta y lo sincronizado en la
+nube, incluida su biblioteca compartida; lo guardado en este navegador se queda y se borra
+aparte con «Borrar todo en este navegador» (Ajustes → Datos).
 
 ## Pendientes multiplataforma
 
 - Tauri: diálogo nativo, scopes mínimos, permisos persistentes y file watchers en tiempo real.
 - Expo: document picker, almacenamiento sandbox y permisos por plataforma.
 - Estructura de PDF más allá del texto plano: encabezados, columnas, tablas y coordenadas.
-- OCR para imágenes y PDF escaneados, imágenes embebidas y archivos protegidos.
+- Imágenes embebidas y archivos protegidos. El OCR de PDF escaneados ya está en el navegador,
+  con Tesseract (`03.5`, `03.5b`): lee una zona recortada y la página entera al leer o traducir.
 - Eliminación, cuota, exportación y recuperación de errores.

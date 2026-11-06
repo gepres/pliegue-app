@@ -20,6 +20,8 @@ import {
 } from "../../cloud/sync/sync-controller";
 import { useIsPliegueAdmin } from "../../cloud/admin-store";
 import { useOwnSharedLibrary } from "../../cloud/shared-library-store";
+import { cloudClient } from "../../cloud/supabase-client";
+import { accountDeletionConfirmation } from "../../library-access/account-server";
 import { describeChanges } from "../../cloud/sync/sync-activity";
 import { confirmAction } from "../app-ui/confirm-dialog";
 import { Icon } from "../app-ui/icons";
@@ -327,6 +329,68 @@ function SignedIn({ email, provider, userId }: { email: string | null; provider:
   );
 }
 
+/**
+ * «Borrar mi cuenta» (02.4, decisión del dueño del 6-nov): se borran la cuenta y lo
+ * sincronizado en la nube, y su biblioteca compartida si la tiene; lo del navegador se queda.
+ * El aviso lo dice antes, con lo que se pierde renglón a renglón, y no se puede deshacer.
+ */
+function DeleteAccount({ onDeleted, userId }: { onDeleted: () => void; userId: string }) {
+  const own = useOwnSharedLibrary();
+  const [state, setState] = useState<{ error: string | null; working: boolean }>({ error: null, working: false });
+
+  async function remove() {
+    const confirmed = await confirmAction({
+      confirmLabel: "Borrar mi cuenta",
+      description: "Se borra tu cuenta de Pliegue y todo lo que se sincronizó en la nube. No se puede deshacer.",
+      details: [
+        "Favoritos, progreso de lectura, resaltados, notas y recortes sincronizados",
+        "Fichas importadas, idiomas de traducción y ajustes guardados en la cuenta",
+        ...(own.status === "ready" ? [`Tu biblioteca compartida «${own.library.name}», con sus códigos y su registro de entradas`] : []),
+      ],
+      icon: "trash",
+      note: "Lo guardado en este navegador se queda: tus libros, notas y ajustes siguen aquí, sin cuenta. Para borrarlo también, usa «Borrar todo en este navegador» en Datos.",
+      title: "¿Borrar tu cuenta de Pliegue?",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    setState({ error: null, working: true });
+    try {
+      const session = (await cloudClient()?.auth.getSession())?.data.session;
+      if (!session) throw new Error("Tu sesión caducó. Vuelve a entrar y repite el borrado.");
+      const response = await fetch("/api/cuenta", {
+        body: JSON.stringify({ confirm: accountDeletionConfirmation }),
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        method: "DELETE",
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: unknown };
+      if (!response.ok) throw new Error(typeof payload.error === "string" ? payload.error : "No se pudo borrar la cuenta ahora.");
+      // La cuenta ya no existe: este equipo deja de sincronizar con ella y cierra su sesión.
+      setSyncChoices(userId, { enabled: false });
+      await signOut();
+      onDeleted();
+    } catch (error) {
+      setState({ error: error instanceof Error ? error.message : "No se pudo borrar la cuenta ahora.", working: false });
+    }
+  }
+
+  return (
+    <div className={styles.dangerZone}>
+      <div>
+        <strong>Borrar mi cuenta</strong>
+        <small>Borra la cuenta y lo sincronizado en la nube. Lo de este navegador se queda.</small>
+      </div>
+      <Button disabled={state.working} onClick={() => void remove()} size="sm" variant="secondary">
+        {state.working ? "Borrando…" : "Borrar mi cuenta"}
+      </Button>
+      {state.error ? (
+        <p className={styles.dangerError} role="alert">
+          {state.error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /** Ajustes → Cuenta. Opcional: sin ella, Pliegue sigue siendo local, como siempre. */
 /** Solo para quien administra Pliegue: la biblioteca general y la moderación de las compartidas. */
 function AdminLink() {
@@ -362,6 +426,7 @@ function OwnLibraryLink() {
 
 export function AccountPanel() {
   const account = useAccount();
+  const [deleted, setDeleted] = useState(false);
 
   return (
     <Card aria-labelledby="account-title" as="section" className={styles.panel}>
@@ -382,9 +447,19 @@ export function AccountPanel() {
       ) : account.status === "loading" ? (
         <p className={styles.note}>Comprobando la sesión…</p>
       ) : account.status === "signed-in" && account.userId ? (
-        <SignedIn email={account.email} provider={account.provider} userId={account.userId} />
+        <>
+          <SignedIn email={account.email} provider={account.provider} userId={account.userId} />
+          <DeleteAccount onDeleted={() => setDeleted(true)} userId={account.userId} />
+        </>
       ) : (
-        <SignInForm linkError={account.linkError} />
+        <>
+          {deleted ? (
+            <p className={styles.deletedNotice} role="status">
+              Se borró tu cuenta y lo que tenía en la nube. Lo de este navegador sigue aquí.
+            </p>
+          ) : null}
+          <SignInForm linkError={account.linkError} />
+        </>
       )}
       <AdminLink />
       <OwnLibraryLink />
