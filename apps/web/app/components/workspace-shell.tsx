@@ -156,7 +156,15 @@ export function WorkspaceShell({ children }: Readonly<{ children: ReactNode }>) 
             <span aria-hidden="true" className={styles.areaDot} data-synced={synced ? "" : undefined} />
             <span className={styles.areaText}>
               <strong>Área personal</strong>
-              <small>{synced ? `Sincronizada · ${account.email ?? "tu cuenta"}` : "Local · este dispositivo"}</small>
+              {synced ? (
+                <>
+                  <small>Sincronizada</small>
+                  {/* Un correo largo se corta con «…»: entero, en el `title` del enlace. */}
+                  <small className={styles.areaEmail}>{account.email ?? "tu cuenta"}</small>
+                </>
+              ) : (
+                <small>Local · este dispositivo</small>
+              )}
             </span>
           </Link>
           <IconButton
