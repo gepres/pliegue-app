@@ -1,6 +1,15 @@
 import type { DocumentFormat, DocumentReference, LibraryDocument } from "./documents";
+import { maxArchiveInputBytes } from "./structured-document-extractor";
 
 export const maxImportedFileBytes = 50 * 1024 * 1024;
+
+/**
+ * Hasta cuánto se puede importar o vincular un archivo: EPUB y DOCX, lo mismo que el lector
+ * extrae (150 MB, decisión del dueño del 6-nov: un libro ilustrado pesa más); lo demás, 50 MB.
+ */
+export function maxLocalFileBytes(format: DocumentFormat) {
+  return format === "epub" || format === "docx" ? maxArchiveInputBytes : maxImportedFileBytes;
+}
 
 const extensionToFormat: Record<string, DocumentFormat> = {
   docx: "docx",
@@ -59,8 +68,9 @@ export function validateLocalFile(file: LocalFileDescriptor): FileValidation {
     return { reason: "El archivo está vacío.", valid: false };
   }
 
-  if (file.size > maxImportedFileBytes) {
-    return { reason: "El archivo supera el límite local de 50 MB.", valid: false };
+  const limit = maxLocalFileBytes(format);
+  if (file.size > limit) {
+    return { reason: `El archivo supera el límite local de ${Math.round(limit / 1024 / 1024)} MB.`, valid: false };
   }
 
   return { format, valid: true };
