@@ -16,6 +16,7 @@ import {
 } from "../preferences/shell-layout-store";
 import { ConfirmDialogHost } from "./app-ui/confirm-dialog";
 import { NextStepHost } from "./app-ui/next-step-dialog";
+import { BudgetAlerts } from "./ai/budget-alerts";
 import { BookCopiesSync } from "./book-copies-sync";
 import { CloudSync } from "./cloud/cloud-sync";
 import { NoticesBanner } from "./cloud/notices-banner";
@@ -211,6 +212,7 @@ export function WorkspaceShell({ children }: Readonly<{ children: ReactNode }>) 
 
       <ConfirmDialogHost />
       <NextStepHost />
+      <BudgetAlerts />
       <BookCopiesSync />
       <CloudSync />
     </div>

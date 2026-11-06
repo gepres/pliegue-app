@@ -1,3 +1,4 @@
+import { defaultAiBudget, parseAiBudget, type AiBudget } from "./ai-budget";
 import { aiProviders, type AiProvider } from "./document-catalog";
 import { translationProviderChoices, type TranslationProviderChoice } from "./translation-options";
 
@@ -6,6 +7,8 @@ export const maxCatalogConcurrency = 6;
 
 export interface AiSettings {
   autoAnalyzeAfterLink: boolean;
+  /** Límites del mes y tabla de precios (04.6). Viajan con los ajustes a los otros equipos. */
+  budget: AiBudget;
   concurrency: number;
   maxExcerptCharacters: number;
   models: Record<AiProvider, string>;
@@ -54,6 +57,7 @@ export interface AiSettings {
  */
 export const defaultAiSettings: AiSettings = {
   autoAnalyzeAfterLink: false,
+  budget: defaultAiBudget,
   concurrency: 2,
   maxExcerptCharacters: 12_000,
   models: {
@@ -116,6 +120,7 @@ export function parseAiSettings(value: unknown): AiSettings {
 
   return {
     autoAnalyzeAfterLink: candidate.autoAnalyzeAfterLink === true,
+    budget: parseAiBudget(candidate.budget),
     concurrency:
       typeof candidate.concurrency === "number"
         ? Math.min(maxCatalogConcurrency, Math.max(1, Math.round(candidate.concurrency)))

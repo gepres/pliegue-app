@@ -289,3 +289,11 @@
   outline: 2px solid var(--pliegue-color-focus-ring, var(--pliegue-color-action-primary));
   outline-offset: 2px;
 }
+
+/* Parado por el tope del presupuesto: seguir con este libro o ir a cambiar el límite. */
+.budgetActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm);
+}

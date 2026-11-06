@@ -58,6 +58,7 @@ export const collectionNames: Record<string, { one: string; many: string; label:
   "reading-progress": { label: "Avance de lectura", many: "avances", one: "avance" },
   settings: { label: "Ajustes", many: "ajustes", one: "ajuste" },
   "translation-files": { label: "Traducciones guardadas", many: "traducciones", one: "traducción" },
+  "ai-usage": { label: "Gasto de IA", many: "meses de gasto de IA", one: "mes de gasto de IA" },
 };
 
 /** Una vuelta terminada, lista para el registro. */

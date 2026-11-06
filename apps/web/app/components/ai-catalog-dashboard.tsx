@@ -76,7 +76,7 @@ function plural(count: number, singular: string, pluralForm = `${singular}s`) {
 
 function describeSummary(summary: Awaited<ReturnType<typeof analyzeDocumentCatalogs>>) {
   return [
-    summary.stopped ? "Detenido" : "",
+    summary.budgetStop ?? (summary.stopped ? "Detenido" : ""),
     summary.analyzed ? `${plural(summary.analyzed, "catalogado")}` : "",
     summary.needsContent ? `${summary.needsContent} sin texto que leer` : "",
     summary.failed ? `${summary.failed} con error: el motivo, en «Por qué fallaron»` : "",

@@ -141,3 +141,70 @@ describe("traducir el libro entero (05.5)", () => {
     expect(session.getSnapshot().pending).toEqual([]);
   });
 });
+
+describe("el tope del presupuesto (04.6)", () => {
+  function gated(allowed: () => boolean, stored = new Map<string, TranslatedBlock[]>()) {
+    const calls: string[] = [];
+    const session = new TranslationSession({
+      gate: () => {
+        if (allowed()) return;
+        const error = new Error("En noviembre se alcanzó el presupuesto de OpenAI en dólares.");
+        error.name = "BudgetExceededError";
+        throw error;
+      },
+      loadUnit: async (unit) => page(unit),
+      pagesAhead: 3,
+      storage: {
+        read: async (id) => stored.get(id) ?? null,
+        write: async (id, blocks) => {
+          stored.set(id, blocks);
+        },
+      },
+      storedIds: new Set(stored.keys()),
+      translator: {
+        destroy: () => {},
+        translate: async (text) => {
+          calls.push(text);
+          return `ES ${text}`;
+        },
+      },
+      unitCount: 10,
+      unitId: (unit) => `page:${unit}`,
+    });
+    return { calls, session, stored };
+  }
+
+  it("termina la unidad en curso y para antes de la siguiente, sin reintentar", async () => {
+    let budgetLeft = 2;
+    const { calls, session } = gated(() => budgetLeft-- > 0);
+    session.setCurrent(1);
+    await idle(session);
+    const snapshot = session.getSnapshot();
+    expect(calls).toEqual(["Page 1 text", "Page 2 text"]);
+    expect(snapshot).toMatchObject({ budget: true, done: 2, error: "En noviembre se alcanzó el presupuesto de OpenAI en dólares." });
+    // Parada, nada queda «traduciéndose».
+    expect(snapshot.pending).toEqual([]);
+  });
+
+  it("lo ya traducido y guardado no pasa por el freno", async () => {
+    const stored = new Map<string, TranslatedBlock[]>([["page:1", [{ hash: hashText("Page 1 text"), text: "ES Page 1 text" }]]]);
+    const { calls, session } = gated(() => false, stored);
+    session.setCurrent(1);
+    await idle(session);
+    expect(calls).toEqual([]);
+    expect(session.getSnapshot()).toMatchObject({ budget: true, done: 1 });
+  });
+
+  it("«Seguir con este libro» (reintentar con permiso) sigue desde donde paró", async () => {
+    let allowed = false;
+    const { calls, session } = gated(() => allowed);
+    session.setCurrent(1);
+    await idle(session);
+    expect(session.getSnapshot().budget).toBe(true);
+    allowed = true;
+    session.retry();
+    await idle(session);
+    expect(session.getSnapshot()).toMatchObject({ budget: false, error: null });
+    expect(calls[0]).toBe("Page 1 text");
+  });
+});

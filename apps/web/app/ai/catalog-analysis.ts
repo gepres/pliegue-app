@@ -10,6 +10,7 @@ import { CategoryIndex, spanishCategory } from "./category-names";
 import { providerModel, type AiSettings } from "./ai-settings";
 import { checkApiKey } from "./api-key";
 import { getSessionApiKey } from "./ai-session-secret-store";
+import { assertWithinBudget, recordAiUsage } from "./ai-usage-store";
 import { requestCatalogFromProvider } from "./catalog-provider-client";
 import {
   addCatalogUsage,
@@ -74,6 +75,8 @@ export interface CatalogAnalysisProgress {
   stopped: boolean;
   total: number;
   usage: CatalogUsage;
+  /** Se paró la cola al llegar al tope del presupuesto (04.6): el porqué, o null. */
+  budgetStop: string | null;
   /**
    * El proveedor pidió esperar y se espera para volver a intentarlo (04.2): «Gemini limita las
    * solicitudes por minuto: se reintenta en 18 s». `null` si no se espera.
@@ -341,6 +344,7 @@ async function runCatalogAnalysis(
     stopped: false,
     total: documents.length,
     usage: emptyCatalogUsage,
+    budgetStop: null,
     waiting: null,
   };
   const signal = options.signal;
@@ -496,6 +500,7 @@ async function runCatalogAnalysis(
       );
       progress.analyzed += 1;
       progress.usage = addCatalogUsage(progress.usage, usage);
+      recordAiUsage(settings.provider, model, usage);
     } catch (error) {
       progress.waiting = null;
       // Detenido a mitad: el documento se queda como estaba, ni «en análisis» ni con un error
@@ -518,7 +523,7 @@ async function runCatalogAnalysis(
   }
 
   for (let start = 0; start < queue.length; start += batchSize) {
-    if (stopRequested) {
+    if (stopRequested || progress.budgetStop) {
       progress.stopped = true;
       break;
     }
@@ -528,7 +533,16 @@ async function runCatalogAnalysis(
 
     async function analyzeNext(worker: number) {
       // Con el límite por minuto encima, solo sigue el primero: los demás terminan el suyo y paran.
-      while (nextIndex < batch.length && !stopRequested && (worker === 0 || !throttled)) {
+      while (nextIndex < batch.length && !stopRequested && !progress.budgetStop && (worker === 0 || !throttled)) {
+        // Al tope del presupuesto, la cola se para: lo que está en marcha termina (04.6).
+        try {
+          assertWithinBudget(settings.provider);
+        } catch (error) {
+          progress.budgetStop = error instanceof Error ? error.message : "Se alcanzó el presupuesto de IA del mes.";
+          progress.stopped = true;
+          publish();
+          break;
+        }
         const document = batch[nextIndex];
         nextIndex += 1;
         if (!document) continue;

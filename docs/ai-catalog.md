@@ -100,6 +100,32 @@ operaciones, y es donde se engancharán la búsqueda semántica (04.4) y «descr
   que los reintentos y «Por qué fallaron» funcionan igual. `generateJson` con clave reutiliza
   `requestStructuredJsonWith` de `hosted-json.ts`: catalogar y traducir no cambian.
 
+## Presupuesto y gasto (04.6)
+
+Decisión del 6-nov en Foundry (04.6). Ajustes → IA, «Gasto y presupuesto».
+
+- **Qué se cuenta:** cada llamada apunta sus tokens (o caracteres en DeepL y Azure) por
+  proveedor y modelo. Se cuenta al catalogar y al traducir con «Tu IA», lo que diga la respuesta
+  del proveedor, sin estimar. Ollama y LibreTranslate se cuentan, pero no tienen límite.
+- **Dólares estimados:** con una tabla de precios por millón de tokens (o de caracteres),
+  editable. Los precios de partida son los de `translation-options.ts` (29-sep-2026). Un modelo
+  sin precio cuenta tokens, no dólares, y el panel lo dice.
+- **Límites del mes:** global (dólares y tokens) y por proveedor. Se avisa al 80 % con un aviso
+  (`BudgetAlerts`). Al 100 %:
+  - catalogar para la cola; la ficha en curso termina;
+  - traducir para antes de la sección siguiente, con «Seguir con este libro» (solo ese libro y
+    ese mes) y «Cambiar el límite».
+- **Dónde vive:**
+  - límites y precios, en `AiSettings.budget`, que se sincroniza con los ajustes;
+  - el gasto, en `ai-usage-store.ts` (`localStorage`, por mes, sin textos);
+  - con la cuenta, la colección `ai-usage` sube el contador de cada equipo (`equipo/mes`) y el
+    total es la suma: nadie escribe la fila de otro, así que no hay conflictos.
+- **Código:** `ai/ai-budget.ts` (cuentas y precios, con pruebas), `ai/ai-usage-store.ts` (el
+  contador y el freno `assertWithinBudget`), `components/ai/ai-budget-panel.tsx`. e2e:
+  `apps/web/e2e/presupuesto-ia.mjs`.
+- **Registros:** las rutas `/api/ai/*` no escriben en la consola (`api/ai/no-logs.test.ts`):
+  reciben textos de libros y claves.
+
 ## Datos persistidos
 
 La base IndexedDB `pliegue-document-catalog` guarda una fila por `documentId`:
@@ -117,8 +143,8 @@ visibles asociadas. El archivo original nunca se borra.
 
 - Las imágenes y los PDF escaneados sin capa de texto no generan contenido para este flujo;
   quedan `needs-content` a la espera del OCR de `03.5`. Un PDF con texto sí se cataloga.
-- No hay cola durable entre recargas, presupuesto, límites por proveedor ni estimación de
-  costo antes de ejecutar.
+- No hay cola durable entre recargas ni estimación de coste antes de ejecutar (el presupuesto
+  frena al llegar al tope, no antes).
 - No hay embeddings ni búsqueda semántica global.
 - Ollama Cloud no se trata como equivalente a un servidor Ollama remoto propio; el flujo
   requiere una instancia que acepte el esquema estructurado y CORS.
