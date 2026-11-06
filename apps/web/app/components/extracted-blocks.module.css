@@ -103,3 +103,19 @@
     padding: var(--pliegue-spacing-lg);
   }
 }
+
+/* Una ilustración de un EPUB o un DOCX (05.1): a lo ancho del texto como mucho, sin pasar de
+   la altura de la pantalla, y centrada. Sin fondo propio: un PNG transparente toma el de la
+   página, también en oscuro. */
+.figure {
+  margin: 1.5em 0;
+  text-align: center;
+}
+
+.figure img {
+  display: inline-block;
+  height: auto;
+  max-height: 80vh;
+  max-width: 100%;
+  object-fit: contain;
+}

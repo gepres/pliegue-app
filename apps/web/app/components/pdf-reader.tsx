@@ -35,7 +35,7 @@ import {
   languageName,
   originalLeading,
 } from "../library/translation";
-import type { StructuredDocumentBlock } from "../library/structured-document-extractor";
+import { blockHasText, type StructuredDocumentBlock } from "../library/structured-document-extractor";
 import { ExtractedBlocks, type BlockInsert } from "./extracted-blocks";
 import { IconButton, Segmented } from "./app-ui/controls";
 import { Icon } from "./app-ui/icons";
@@ -1138,7 +1138,7 @@ function PdfReadingView({
         const translated =
           view && !view.pending && blocks.length > 0 && view.blocks.length === blocks.length
             ? blocks.map<StructuredDocumentBlock>((block, index) =>
-                block.kind === "table" ? block : { ...block, text: view.blocks[index]?.translated || block.text },
+                blockHasText(block) ? { ...block, text: view.blocks[index]?.translated || block.text } : block,
               )
             : null;
         return (

@@ -164,11 +164,18 @@ La primera versión aplica estas defensas:
 - máximo 5.000 entradas detectadas y 800 entradas seleccionadas;
 - rechazo de rutas relativas inseguras, ratios de compresión anómalos y ZIP dañados;
 - máximo 1.000.000 de caracteres renderizados, 300 secciones, 1.000 filas y 64 columnas;
-- scripts, estilos, SVG y navegación EPUB no entran al texto extraído.
+- scripts, estilos, SVG y navegación EPUB no entran al texto extraído;
+- imágenes de EPUB y DOCX (05.1): solo de mapa de bits (PNG, JPEG, GIF, WebP) y de dentro del
+  propio archivo, nunca de internet ni en `data:`; máximo 400 por libro, 5 MB cada una y 48 MB
+  en total, con su propio cupo, aparte del texto. Las de menos de 600 bytes son adornos y no
+  se muestran. La portada que un EPUB envuelve en un `<svg>` se muestra como imagen.
 
-El resultado es una vista de lectura, no una réplica visual completa. En esta etapa no se
-renderizan imágenes embebidas, comentarios, macros, animaciones, fórmulas evaluadas ni estilos
-de Office. El archivo original siempre permanece disponible sin modificación.
+El resultado es una vista de lectura, no una réplica visual completa. Las imágenes se pintan
+en su sitio, con su texto alternativo, y no se traducen; el alternativo sí entra en el índice
+de búsqueda. Viven en memoria mientras el libro está abierto: cada una tiene su URL `blob:`
+mientras se ve y se suelta al cerrarlo. No se renderizan comentarios, macros, animaciones,
+fórmulas evaluadas ni estilos de Office. El archivo original siempre permanece disponible sin
+modificación.
 
 ## Privacidad y recuperación
 
@@ -189,6 +196,6 @@ aparte con «Borrar todo en este navegador» (Ajustes → Datos).
 - Tauri: diálogo nativo, scopes mínimos, permisos persistentes y file watchers en tiempo real.
 - Expo: document picker, almacenamiento sandbox y permisos por plataforma.
 - Estructura de PDF más allá del texto plano: encabezados, columnas, tablas y coordenadas.
-- Imágenes embebidas y archivos protegidos. El OCR de PDF escaneados ya está en el navegador,
+- Archivos protegidos. Las imágenes de EPUB y DOCX ya se ven en el lector (05.1). El OCR de PDF escaneados ya está en el navegador,
   con Tesseract (`03.5`, `03.5b`): lee una zona recortada y la página entera al leer o traducir.
 - Eliminación, cuota, exportación y recuperación de errores.

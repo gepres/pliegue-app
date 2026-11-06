@@ -91,7 +91,7 @@ import {
 } from "../library/local-reader-state";
 import { useReadingFilter } from "../preferences/reading-filter-store";
 import { PdfReader, type PdfLayoutBlock, type PdfPageTranslationView, type PdfReaderProps } from "./pdf-reader";
-import type { StructuredDocumentBlock, StructuredDocumentSection } from "../library/structured-document-extractor";
+import { blockHasText, type StructuredDocumentBlock, type StructuredDocumentSection } from "../library/structured-document-extractor";
 import { ParallelBlocks } from "./reader/parallel-blocks";
 import { useParallelLink } from "./reader/parallel-link";
 import { useReadingPlace } from "./reader/reading-place";
@@ -275,7 +275,7 @@ function StructuredPreview({
           const texts = view && !view.pending && view.texts?.length === section.blocks.length ? view.texts : null;
           const blocks = texts
             ? section.blocks.map<StructuredDocumentBlock>((block, index) =>
-                block.kind === "table" ? block : { ...block, text: texts[index] || block.text },
+                blockHasText(block) ? { ...block, text: texts[index] || block.text } : block,
               )
             : section.blocks;
           // Sin título propio, la sección se nombra solo por su número: «Sección 3» dos veces
@@ -1058,8 +1058,8 @@ export function LocalReaderShell({
       if (!isPdf) {
         const section = structuredSections?.[unit - 1];
         if (!section) throw new Error("Esa sección ya no está en el documento.");
-        // Las tablas se dejan como están: sus cifras y celdas no se tocan.
-        return { blocks: section.blocks.map((block) => ({ text: block.kind === "table" ? "" : block.text })) };
+        // Las tablas y las imágenes se dejan como están: no hay texto que traducir.
+        return { blocks: section.blocks.map((block) => ({ text: blockHasText(block) ? block.text : "" })) };
       }
       const tools = regionToolsRef.current;
       if (!tools) throw new Error("El visor del PDF aún no está listo.");

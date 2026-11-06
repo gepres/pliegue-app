@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, type ReactNode } from "react";
 
 import type { StructuredDocumentBlock } from "../library/structured-document-extractor";
 import { readingAnchorProps } from "./reader/reading-anchor";
@@ -36,6 +36,8 @@ export function ExtractedBlock({
     );
   }
 
+  if (block.kind === "image") return <ExtractedImage alt={block.alt} anchorProps={anchorProps} image={block.image} />;
+
   return (
     <div
       {...anchorProps}
@@ -56,6 +58,41 @@ export function ExtractedBlock({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/**
+ * Una ilustración de un EPUB o un DOCX (05.1). La URL `blob:` se crea al pintarla y se suelta al
+ * quitarla, como el visor de PDF: si se creara en la extracción, cada libro abierto dejaría sus
+ * imágenes retenidas en memoria hasta cerrar la pestaña.
+ */
+function ExtractedImage({
+  alt,
+  anchorProps,
+  image,
+}: {
+  alt: string;
+  anchorProps: ReturnType<typeof readingAnchorProps>;
+  image: Blob;
+}) {
+  const imageRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    const element = imageRef.current;
+    if (!element) return;
+    const url = URL.createObjectURL(image);
+    element.src = url;
+    return () => {
+      element.removeAttribute("src");
+      URL.revokeObjectURL(url);
+    };
+  }, [image]);
+
+  return (
+    <figure {...anchorProps} className={styles.figure}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- imagen local del libro, en un blob: */}
+      <img alt={alt} decoding="async" loading="lazy" ref={imageRef} />
+    </figure>
   );
 }
 

@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 
-import type { StructuredDocumentBlock } from "../../library/structured-document-extractor";
+import { blockHasText, type StructuredDocumentBlock } from "../../library/structured-document-extractor";
 import { ExtractedBlock, insertsAt, type BlockInsert } from "../extracted-blocks";
 import extracted from "../extracted-blocks.module.css";
 import styles from "./parallel-blocks.module.css";
@@ -105,7 +105,7 @@ export function ParallelBlocks({
   );
 }
 
-/** Las tablas no se traducen: no tienen pareja que resaltar. */
+/** Las tablas y las imágenes no se traducen: no tienen pareja que resaltar. */
 function linkProps(block: StructuredDocumentBlock, key: string, side: "source" | "target") {
-  return block.kind === "table" ? {} : { "data-parallel-key": key, "data-parallel-side": side };
+  return blockHasText(block) ? { "data-parallel-key": key, "data-parallel-side": side } : {};
 }

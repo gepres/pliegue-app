@@ -84,6 +84,9 @@ async function indexText(format: DocumentFormat, file: Blob): Promise<TextIndex>
         for (const block of section.blocks) {
           if (block.kind === "table") {
             for (const row of block.rows) chunks.push(row.join(" "));
+          } else if (block.kind === "image") {
+            // De una ilustración se busca lo que dice su texto alternativo, si lo tiene.
+            if (block.alt) chunks.push(block.alt);
           } else {
             chunks.push(block.text);
           }
