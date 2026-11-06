@@ -104,7 +104,7 @@ vacíos, tarjetas, métricas y llamadas a retomar se construyen con datos reales
 
 `apps/web/app/components/app-ui` reúne los controles que nacieron con el rediseño del lector y
 de la Biblioteca: `IconButton`, `Segmented`, `Disclosure`, `Toast`, `Popover`, `MenuItem`,
-`Sheet`, el diálogo de confirmación y la iconografía (unos sesenta iconos de trazo 1,75 px).
+`Sheet`, el diálogo de confirmación y la iconografía (54 iconos de trazo 1,75 px).
 Se quedan en la app, y no en `@pliegue/ui`, por tres razones (02.2b):
 
 - usan CSS Modules y piezas de Next y del shell de la app (`createPortal` sobre el `body` de la
