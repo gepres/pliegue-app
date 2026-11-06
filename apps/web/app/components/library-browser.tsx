@@ -53,6 +53,7 @@ import {
 } from "./library/library-document-tile";
 import libraryStyles from "./library/library.module.css";
 import { categoryChipLimit, sortLabels, usePhoneWidth } from "./library/library-view-options";
+import { DuplicateFinder } from "./library/duplicate-finder";
 import { LinkingUnavailableNotice } from "./library/linking-unavailable-notice";
 import { useCatalogAi } from "../ai/ai-readiness";
 import { afterLibraryGrowth } from "../guide/next-steps";
@@ -780,6 +781,7 @@ export function LibraryBrowser() {
                 label="Ocultar duplicados"
                 onChange={(event) => setHideDuplicates(event.target.checked)}
               />
+              <DuplicateFinder documents={allDocuments} extraText={ocrTexts} />
             </div>
 
             <div className={libraryStyles.filterGroup}>

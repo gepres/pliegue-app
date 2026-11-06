@@ -1,0 +1,110 @@
+.finder {
+  display: grid;
+  gap: var(--pliegue-spacing-lg);
+}
+
+.status {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.pairs {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pair {
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  justify-items: start;
+  padding: var(--pliegue-spacing-md);
+}
+
+.reason {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.books {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+}
+
+/* En el móvil, uno encima del otro. */
+@media (max-width: 520px) {
+  .books {
+    grid-template-columns: 1fr;
+  }
+}
+
+.book {
+  align-items: start;
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: 56px minmax(0, 1fr);
+}
+
+.cover {
+  aspect-ratio: 2 / 3;
+  background: var(--pliegue-color-bg-subtle);
+  border-radius: var(--pliegue-radius-sm);
+  overflow: hidden;
+}
+
+.cover img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.bookText {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  min-width: 0;
+}
+
+.bookText strong {
+  font-size: 0.875rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.bookText small {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.marked h3 {
+  font-size: 0.875rem;
+  margin: 0 0 var(--pliegue-spacing-xs);
+}
+
+.marked ul {
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.marked li {
+  align-items: center;
+  display: flex;
+  font-size: 0.8125rem;
+  gap: var(--pliegue-spacing-sm);
+  justify-content: space-between;
+}

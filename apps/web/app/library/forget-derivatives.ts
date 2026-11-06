@@ -1,6 +1,7 @@
 "use client";
 
 import { removeDocumentCatalogRecords } from "../ai/document-catalog-store";
+import { removeDuplicateDecisions } from "./duplicate-store";
 import { removeFetchedCovers } from "./fetched-cover-store";
 import { removeDocumentsOcr } from "./ocr-page-store";
 import { clearDocumentsTranslations, countDocumentsTranslations } from "./translation-store";
@@ -43,6 +44,8 @@ export async function forgetDocumentDerivatives(
     removeTranslations ? Promise.resolve(0) : countDocumentsTranslations(ids).catch(() => 0),
     removeFetchedCovers(ids).catch(() => 0),
     removeDocumentsOcr(ids).catch(() => 0),
+    // Lo decidido sobre sus duplicados (03.6): sin el libro, la marca no tiene a quién ocultar.
+    removeDuplicateDecisions(ids).catch(() => 0),
   ]);
   return { catalogs, covers, documents: ids.length, ocrPages, translations, translationsKept };
 }
