@@ -476,8 +476,9 @@
   top: 8px;
 }
 
+/* Va sobre la portada, no sobre el papel: el mismo rojo en los dos temas, con su texto blanco. */
 .coverBadge:has([data-unavailable="true"]) {
-  background: color-mix(in srgb, var(--pliegue-color-status-danger) 78%, var(--pliegue-ink-950));
+  background: color-mix(in srgb, var(--pliegue-danger-500) 78%, var(--pliegue-ink-950));
 }
 
 .coverBadge [data-unavailable="true"] {

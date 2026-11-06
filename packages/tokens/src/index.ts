@@ -9,6 +9,7 @@ export const primitiveColors = [
   { name: "forest/300", variable: "--pliegue-forest-300", value: "#7fa58d" },
   { name: "ochre/500", variable: "--pliegue-ochre-500", value: "#c99232" },
   { name: "terracotta/500", variable: "--pliegue-terracotta-500", value: "#b9674f" },
+  { name: "terracotta/400", variable: "--pliegue-terracotta-400", value: "#d28a73" },
   { name: "plum/500", variable: "--pliegue-plum-500", value: "#76566f" },
   { name: "white/1000", variable: "--pliegue-white-1000", value: "#ffffff" },
   { name: "danger/500", variable: "--pliegue-danger-500", value: "#a9473e" },

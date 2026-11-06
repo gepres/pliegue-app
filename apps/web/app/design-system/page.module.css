@@ -49,8 +49,9 @@
   margin-bottom: var(--pliegue-spacing-xl);
 }
 
+/* Texto secundario, como el antetítulo de la portada: el ocre puro se queda en 2,5:1 sobre papel. */
 .sectionHeader > span {
-  color: var(--pliegue-color-accent-warm);
+  color: var(--pliegue-color-text-secondary);
   font-family: var(--pliegue-font-data);
   font-size: 0.6875rem;
   letter-spacing: 0.1em;

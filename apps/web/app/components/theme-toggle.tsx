@@ -45,7 +45,8 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
 
   return (
     <Button
-      aria-label={`Tema actual: ${labels[theme]}. Cambiar tema`}
+      // El nombre empieza por lo que se lee en el botón (WCAG 2.5.3): quien lo dicta en voz lo encuentra.
+      aria-label={`Tema · ${labels[theme]}. Cambiar tema`}
       onClick={cycleTheme}
       size="sm"
       variant="quiet"

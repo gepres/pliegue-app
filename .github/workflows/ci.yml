@@ -22,3 +22,45 @@ jobs:
       - run: pnpm type-check
       - run: pnpm test
       - run: pnpm build
+
+  # Las e2e (06.5): la app compilada en el 3300 y las pruebas de apps/web/e2e con el Chrome del
+  # runner, sin ventana. Supabase va con valores de mentira: las pruebas de cuenta lo simulan por
+  # CDP y ninguna toca una cuenta real ni sale a la red con datos.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://pliegue-e2e.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_e2e
+      E2E_WORK: ${{ runner.temp }}/pliegue-e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Servir la app en el 3300
+        working-directory: apps/web
+        run: |
+          nohup pnpm exec next start -p 3300 > "$RUNNER_TEMP/next.log" 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://localhost:3300/ && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/next.log"
+          exit 1
+      - run: pnpm --filter @pliegue/web e2e
+      - name: Capturas y registro si algo falla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e
+          path: |
+            ${{ runner.temp }}/pliegue-e2e
+            ${{ runner.temp }}/next.log
+          if-no-files-found: ignore

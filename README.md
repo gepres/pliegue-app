@@ -28,6 +28,10 @@ pnpm test
 pnpm build
 ```
 
+Las pruebas de extremo a extremo (`apps/web/e2e`) corren contra la app compilada en el puerto
+3300: `pnpm build`, luego `pnpm --filter @pliegue/web exec next start -p 3300` y, en otra
+terminal, `pnpm --filter @pliegue/web e2e`. Ver `apps/web/e2e/README.md`.
+
 Abre `http://localhost:3000` para la portada y `http://localhost:3000/design-system` para el catálogo de estilos y componentes.
 
 Para configurar un entorno local, copia `.env.example` como `.env.local`. El contrato
