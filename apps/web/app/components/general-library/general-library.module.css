@@ -426,3 +426,19 @@
   outline: 2px solid var(--pliegue-color-action-primary);
   outline-offset: 1px;
 }
+
+/* Mientras se lee la biblioteca compartida: la cuadrícula de libros, en esqueleto. */
+.booksSkeleton {
+  justify-self: stretch;
+  margin-top: var(--pliegue-spacing-md);
+}
+
+.bookSkeleton {
+  display: grid;
+  gap: 4px;
+}
+
+.bookSkeletonCover {
+  aspect-ratio: 2 / 3;
+  margin-bottom: var(--pliegue-spacing-xs);
+}

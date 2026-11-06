@@ -1358,3 +1358,17 @@
   align-self: end;
   grid-column: 1 / -1;
 }
+
+/* El esqueleto de «Retomar lectura» (Inicio): los mismos huecos que su contenido. */
+.skeletonHeading {
+  margin: var(--pliegue-spacing-md) 0;
+}
+
+.skeletonButton {
+  margin-top: var(--pliegue-spacing-lg);
+}
+
+.bookCoverSkeleton {
+  aspect-ratio: 3 / 4;
+  height: auto;
+}

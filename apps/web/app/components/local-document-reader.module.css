@@ -666,3 +666,9 @@
     animation: none;
   }
 }
+
+/* Mientras se preparan el lector y sus metadatos (ver `resolution.status === "loading"`). */
+.readerSkeleton {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+}

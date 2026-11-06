@@ -15,6 +15,7 @@ import { DriveSourcesPanel } from "../drive-sources-panel";
 import { LinkedFilesPanel } from "../linked-files-panel";
 import { LocalSourcesPanel } from "../local-sources-panel";
 import { CoverSearchPanel } from "./cover-search-panel";
+import { Skeleton } from "../app-ui/skeleton";
 import styles from "./sources.module.css";
 
 type FolderDocument = LibraryDocument & { relativePath?: string; sizeBytes?: number };
@@ -110,7 +111,7 @@ export function SourcesOverview() {
             <div className={styles.stat} key={stat.label}>
               <dt>{stat.label}</dt>
               <dd>
-                <strong>{loading ? "—" : stat.value}</strong>
+                <strong>{loading ? <Skeleton height="1em" width="2ch" /> : stat.value}</strong>
                 <span>{stat.hint}</span>
               </dd>
             </div>

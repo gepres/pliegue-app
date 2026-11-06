@@ -108,6 +108,7 @@ import {
 import { ReadingFilterLayer } from "./reader/reading-filter-layer";
 import { useBookTranslation } from "./reader/use-book-translation";
 import { PageHeader } from "./workspace-page";
+import { Skeleton, SkeletonGroup, SkeletonPage } from "./app-ui/skeleton";
 import styles from "./local-document-reader.module.css";
 
 type LocalDocument = LocalReaderDocument;
@@ -1754,12 +1755,14 @@ export function LocalDocumentReader({
   if (group && resolution.status === "missing") resolution = resolveLocalReaderDocument(documentId, stores);
 
   if (resolution.status === "loading") {
+    // Mientras se leen los metadatos guardados: la cabecera y una página, no un mensaje de
+    // «Regresa a la Biblioteca», que parecía un error.
     return (
-      <ReaderMessage
-        description="Recuperando los metadatos guardados en este navegador."
-        eyebrow="Biblioteca local"
-        title="Preparando lector"
-      />
+      <SkeletonGroup className={styles.readerSkeleton} label="Preparando el lector">
+        <Skeleton height="1.5rem" radius={999} width="9rem" />
+        <Skeleton height="2.25rem" width="min(60%, 28rem)" />
+        <SkeletonPage />
+      </SkeletonGroup>
     );
   }
 

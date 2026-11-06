@@ -286,17 +286,27 @@
   gap: 0;
 }
 
-.skeleton {
-  animation: pulse 1.4s ease-in-out infinite;
-  aspect-ratio: 2 / 3;
-  background: var(--pliegue-color-bg-subtle);
-  border-radius: var(--pliegue-radius-md);
+/* Esqueleto de una tarjeta: portada y dos líneas (título y autor), como `.tile`. En la lista,
+   una fila con la portada pequeña, como `.tileList`. */
+.skeletonTile {
+  align-content: start;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
 }
 
-@keyframes pulse {
-  50% {
-    opacity: 0.55;
-  }
+.skeletonCover {
+  aspect-ratio: 2 / 3;
+}
+
+.skeletonBody {
+  display: grid;
+  gap: 2px;
+}
+
+.skeletonRow {
+  align-items: center;
+  grid-template-columns: 52px minmax(0, 1fr);
 }
 
 .tile {
@@ -893,8 +903,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cover,
-  .skeleton {
+  .cover {
     animation: none;
     transition: none;
   }
