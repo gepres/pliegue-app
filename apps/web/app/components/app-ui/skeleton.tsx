@@ -76,9 +76,14 @@ export function SkeletonText({
 }
 
 /**
- * El contenedor que se anuncia: «Cargando tus documentos» para el lector de pantalla, y los
- * esqueletos para la vista. `as` deja usarlo como la misma etiqueta que tendrá el contenido
- * (una `section` de la cuadrícula, una `dl` de cifras…), con su misma clase de maquetación.
+ * Los esqueletos de una zona y lo que se anuncia mientras están: «Cargando tus documentos» para
+ * el lector de pantalla, los esqueletos para la vista. `as` deja usarlo como la misma etiqueta
+ * que tendrá el contenido (una `section` de la cuadrícula, una `ul` de fichas…), con su misma
+ * clase de maquetación.
+ *
+ * El aviso va aparte, con su texto dentro: una región viva anuncia el texto que contiene, no su
+ * `aria-label`, y los esqueletos no tienen texto. El dibujo queda entero fuera del árbol de
+ * accesibilidad, así que una lista en esqueleto no deja elementos de lista vacíos.
  */
 export function SkeletonGroup({
   as: Tag = "div",
@@ -92,17 +97,19 @@ export function SkeletonGroup({
   /** Sin etiqueta es solo decorativo: lo que se anuncia ya lo dice un texto de al lado. */
   label?: string;
 }) {
-  if (!label) {
-    return (
-      <Tag aria-hidden="true" className={cx(styles.group, className)}>
-        {children}
-      </Tag>
-    );
-  }
-  return (
-    <Tag aria-busy="true" aria-label={label} aria-live="polite" className={cx(styles.group, className)} role="status">
+  const drawing = (
+    <Tag aria-hidden="true" className={cx(styles.group, className)} data-skeleton="">
       {children}
     </Tag>
+  );
+  if (!label) return drawing;
+  return (
+    <>
+      <span aria-live="polite" className={styles.srOnly} data-skeleton-status="" role="status">
+        {label}
+      </span>
+      {drawing}
+    </>
   );
 }
 
