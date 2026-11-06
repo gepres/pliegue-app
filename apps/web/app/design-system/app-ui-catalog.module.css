@@ -38,7 +38,24 @@
   outline-offset: 2px;
 }
 
+/* En escritorio la tarjeta va en fila: la rejilla salta a la línea de abajo, a todo lo ancho. En
+   el móvil va en columna y la rejilla se estira, como el resto. */
+.iconsCard {
+  flex-wrap: wrap;
+}
+
+/* En columna (como la deja el catálogo por debajo de 800 px), saltar de línea la mandaría a una
+   segunda columna, fuera de la tarjeta. */
+@media (max-width: 800px) {
+  .iconsCard {
+    flex-wrap: nowrap;
+  }
+}
+
 .icons {
+  flex: 1 1 100%;
+  min-width: 0;
+  width: 100%;
   display: grid;
   gap: var(--pliegue-spacing-sm);
   grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));

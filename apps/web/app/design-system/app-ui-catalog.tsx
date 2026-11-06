@@ -209,7 +209,9 @@ export function AppUiCatalog() {
         <Toast message={toast?.text ?? null} nonce={toast?.nonce ?? 0} />
       </Card>
 
-      <Card className={pageStyles.componentDemo}>
+      {/* La rejilla va debajo del texto y a todo lo ancho: al lado, la tarjeta en fila la
+          encogía a una sola columna. */}
+      <Card className={`${pageStyles.componentDemo} ${styles.iconsCard}`}>
         <div>
           <h3>Iconos</h3>
           <p>
