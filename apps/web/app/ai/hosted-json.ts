@@ -55,8 +55,8 @@ async function readPayload(response: Response): Promise<unknown> {
   }
 }
 
-async function callOpenAi(request: StructuredRequest, signal: AbortSignal) {
-  const response = await fetch("https://api.openai.com/v1/responses", {
+async function callOpenAi(request: StructuredRequest, signal: AbortSignal, fetchImpl: typeof fetch) {
+  const response = await fetchImpl("https://api.openai.com/v1/responses", {
     body: JSON.stringify({
       input: [
         { content: request.system, role: "system" },
@@ -86,8 +86,8 @@ async function callOpenAi(request: StructuredRequest, signal: AbortSignal) {
   return { payload, text };
 }
 
-async function callAnthropic(request: StructuredRequest, signal: AbortSignal) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+async function callAnthropic(request: StructuredRequest, signal: AbortSignal, fetchImpl: typeof fetch) {
+  const response = await fetchImpl("https://api.anthropic.com/v1/messages", {
     body: JSON.stringify({
       max_tokens: request.maxOutputTokens,
       messages: [{ content: request.user, role: "user" }],
@@ -111,9 +111,9 @@ async function callAnthropic(request: StructuredRequest, signal: AbortSignal) {
 }
 
 /** `generateContent` con `responseJsonSchema`, que admite el JSON Schema completo, anulables incluidos. */
-async function callGemini(request: StructuredRequest, signal: AbortSignal) {
+async function callGemini(request: StructuredRequest, signal: AbortSignal, fetchImpl: typeof fetch) {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(request.model)}:generateContent`;
-  const response = await fetch(endpoint, {
+  const response = await fetchImpl(endpoint, {
     body: JSON.stringify({
       contents: [{ parts: [{ text: request.user }], role: "user" }],
       generationConfig: {
@@ -155,7 +155,16 @@ export function providerSignal(timeoutMs: number, signal?: AbortSignal) {
 }
 
 export async function requestStructuredJson(request: StructuredRequest, signal?: AbortSignal): Promise<StructuredResponse> {
-  const { payload, text } = await callers[request.provider](request, providerSignal(request.timeoutMs ?? 60_000, signal));
+  return requestStructuredJsonWith(fetch, request, signal);
+}
+
+/** Lo mismo con un `fetch` inyectado: lo usa la interfaz común (`adapters.ts`) y sus pruebas. */
+export async function requestStructuredJsonWith(
+  fetchImpl: typeof fetch,
+  request: StructuredRequest,
+  signal?: AbortSignal,
+): Promise<StructuredResponse> {
+  const { payload, text } = await callers[request.provider](request, providerSignal(request.timeoutMs ?? 60_000, signal), fetchImpl);
   const name = providerNames[request.provider];
   if (!text) throw new Error(`${name} no devolvió contenido.`);
   try {

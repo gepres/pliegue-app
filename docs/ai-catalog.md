@@ -80,6 +80,26 @@ Los ajustes no sensibles viven en la clave versionada `pliegue-ai-settings-v1` d
 `localStorage`. Las claves no entran en `localStorage`, IndexedDB, variables
 `NEXT_PUBLIC_`, repositorio o telemetría.
 
+## Interfaz común (04.2)
+
+`apps/web/app/ai/adapters.ts` da un mismo contrato a los cuatro proveedores para tres
+operaciones, y es donde se engancharán la búsqueda semántica (04.4) y «describir figura»:
+
+| Operación | OpenAI | Anthropic | Gemini | Ollama |
+| --- | --- | --- | --- | --- |
+| `generateJson` (JSON por esquema) | `/v1/responses` | `/v1/messages` | `generateContent` | `/api/chat` con `format` |
+| `describeImage` (imagen + instrucción) | `input_image` | `image` en base64 | `inlineData` | `images` |
+| `embed` (un vector por texto) | `/v1/embeddings` | no hay: falla con aviso | `batchEmbedContents` | `/api/embed` |
+
+- `adapterFor({ provider, model, apiKey?, baseUrl?, fetch? })` devuelve el adaptador. Recibe el
+  `fetch`: con clave se usa en las rutas de servidor, como catalogar y traducir; Ollama, desde el
+  navegador.
+- Antes de llamar mira las capacidades del modelo (`model-capabilities.ts`): si consta que no
+  puede, `UnsupportedOperationError` sin gastar nada; si no se sabe, lo intenta.
+- Los fallos son los de siempre (`ProviderFailureError`, con `retryable` y `retryAfter`), así
+  que los reintentos y «Por qué fallaron» funcionan igual. `generateJson` con clave reutiliza
+  `requestStructuredJsonWith` de `hosted-json.ts`: catalogar y traducir no cambian.
+
 ## Datos persistidos
 
 La base IndexedDB `pliegue-document-catalog` guarda una fila por `documentId`:
