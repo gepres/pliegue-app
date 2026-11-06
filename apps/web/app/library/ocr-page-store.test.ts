@@ -4,7 +4,7 @@ import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 
 import type { OcrPageLayout } from "./ocr-layout";
-import { countDocumentsOcr, readOcrPage, removeDocumentsOcr, saveOcrPage } from "./ocr-page-store";
+import { countDocumentsOcr, readOcrPage, readOcrSearchTexts, removeDocumentsOcr, saveOcrPage } from "./ocr-page-store";
 
 const layout = (text: string): OcrPageLayout => ({
   blocks: [{ box: { height: 0.1, width: 0.8, x: 0.1, y: 0.1 }, centered: false, confidence: 90, kind: "paragraph", lineHeight: 0.014, lines: 3, text }],
@@ -32,5 +32,12 @@ describe("las páginas leídas con OCR, guardadas en el navegador (03.5b)", () =
     expect(await removeDocumentsOcr(["libro", "sin-nada"])).toBe(2);
     expect(await countDocumentsOcr(["libro"])).toBe(0);
     expect(await readOcrPage("otro", 1, "eng")).not.toBeNull();
+  });
+
+  it("junta lo leído de cada documento, en orden de página, para buscarlo (03.4)", async () => {
+    await saveOcrPage("buscar", 2, "spa", layout("segunda página."));
+    await saveOcrPage("buscar", 1, "spa", layout("Primera página."));
+    const texts = await readOcrSearchTexts();
+    expect(texts.get("buscar")).toBe("Primera página. segunda página.");
   });
 });

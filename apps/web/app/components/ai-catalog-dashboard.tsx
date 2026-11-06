@@ -13,8 +13,10 @@ import { afterCatalog } from "../guide/next-steps";
 import { suggestNextStep } from "./app-ui/next-step-dialog";
 import {
   analyzeDocumentCatalogs,
+  catalogable,
   catalogBatchSize,
   catalogQueueReason,
+  isScannedPdf,
   reconcileStoredNames,
   stopCatalogAnalysis,
   type CatalogAnalysisProgress,
@@ -124,7 +126,9 @@ export function AiCatalogDashboard() {
     () => new Map(catalogs.records.map((record) => [record.documentId, record])),
     [catalogs.records],
   );
-  const withText = documents.filter((document) => Boolean(document.searchText?.trim()));
+  // Con texto, o escaneos cuyo principio se lee con OCR al catalogar (03.4).
+  const withText = documents.filter(catalogable);
+  const scanned = documents.filter(isScannedPdf).length;
   // La misma regla que usa el análisis: el número del botón es lo que de verdad se enviará.
   const queue = useMemo(() => {
     const counts: Record<CatalogQueueReason, number> = { changed: 0, error: 0, new: 0, outdated: 0 };
@@ -148,7 +152,7 @@ export function AiCatalogDashboard() {
   // algo que se resuelve reindexando, y costó varias rondas de diagnóstico averiguarlo.
   const staleIndex = documents.filter(hasStaleIndex).length;
   const withoutText = documents.filter(
-    (document) => !document.searchText?.trim() && !hasStaleIndex(document),
+    (document) => !catalogable(document) && !hasStaleIndex(document),
   ).length;
 
   const model = providerModel(settings);
@@ -233,7 +237,10 @@ export function AiCatalogDashboard() {
         <Card className={styles.catalogMetric}>
           <span>Documentos</span>
           <strong>{documents.length}</strong>
-          <small>{withText.length} con texto que la IA puede leer</small>
+          <small>
+            {withText.length} con texto que la IA puede leer
+            {scanned ? ` · ${scanned} escaneados: se lee con OCR su principio` : ""}
+          </small>
         </Card>
         <Card className={styles.catalogMetric}>
           <span>Con ficha</span>
@@ -258,7 +265,7 @@ export function AiCatalogDashboard() {
           <span>Sin texto</span>
           <strong>{withoutText}</strong>
           <small>
-            Escaneos e imágenes: esperan al OCR
+            Imágenes y archivos sin texto que leer
             {staleIndex ? ` · ${staleIndex} solo necesitan reindexarse` : ""}
           </small>
         </Card>
