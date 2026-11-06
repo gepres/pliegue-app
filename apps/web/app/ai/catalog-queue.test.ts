@@ -90,7 +90,7 @@ describe("escaneos en el catálogo (03.4)", () => {
   it("un PDF sin capa de texto es un escaneo que se puede catalogar; una imagen o un índice viejo, no", () => {
     expect(isScannedPdf(scan)).toBe(true);
     expect(catalogable(scan)).toBe(true);
-    expect(catalogable({ ...scan, format: "image" })).toBe(false);
+    expect(catalogable({ ...scan, format: "png" })).toBe(false);
     expect(isScannedPdf({ ...scan, indexStatus: "pending" })).toBe(false);
     expect(isScannedPdf(document)).toBe(false);
   });
