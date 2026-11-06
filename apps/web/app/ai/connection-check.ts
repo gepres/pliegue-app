@@ -1,6 +1,7 @@
 import type { HostedAiProvider } from "./api-key";
 import { deeplEndpoint, deeplHeaders, deeplPlan } from "./deepl";
 import { ProviderFailureError } from "./hosted-json";
+import { resolveModelCapabilities, type ModelCapabilities } from "./model-capabilities";
 import { classifyProviderFailure, type FailingProvider } from "./provider-error";
 
 /**
@@ -14,6 +15,7 @@ import { classifyProviderFailure, type FailingProvider } from "./provider-error"
 export interface ConnectionCheckResult {
   /** Nombre legible del modelo, si el proveedor lo da («Claude Haiku 4.5»). */
   modelName: string | null;
+  capabilities?: ModelCapabilities;
 }
 
 /** Lo que Azure traduce para probar la clave: 4 caracteres de su cupo. */
@@ -72,7 +74,10 @@ export async function checkHostedConnection(
   const response = await fetch(url, { ...init, method: "GET", signal: AbortSignal.timeout(checkTimeoutMs) });
   const payload = await failIfNotOk(response, provider, model);
   // Anthropic lo llama `display_name`; Gemini, `displayName`. OpenAI no da nombre.
-  return { modelName: stringField(payload, "display_name") ?? stringField(payload, "displayName") };
+  return {
+    capabilities: resolveModelCapabilities(provider, model, payload),
+    modelName: stringField(payload, "display_name") ?? stringField(payload, "displayName"),
+  };
 }
 
 /** Azure: una palabra traducida prueba a la vez la clave y la región del recurso. */
