@@ -40,11 +40,14 @@ export async function openChrome({ port = 9344, profile, windowSize = "1440,900"
     `--window-size=${windowSize}`,
     "about:blank",
   ], { stdio: "ignore" });
+  // Hasta 30 s: el primer Chrome de un runner de CI en frío tarda más que los 15 s de antes.
   let version;
-  for (let i = 0; i < 60; i++) {
+  let exited = null;
+  proc.once("exit", (code) => { exited = code; });
+  for (let i = 0; i < 120 && exited === null; i++) {
     try { version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json(); break; } catch { await sleep(250); }
   }
-  if (!version) throw new Error("Chrome no arrancó");
+  if (!version) throw new Error(exited === null ? "Chrome no arrancó en 30 s" : `Chrome se cerró al arrancar (código ${exited})`);
   const ws = new WebSocket(version.webSocketDebuggerUrl);
   await new Promise((ok, ko) => { ws.onopen = ok; ws.onerror = ko; });
   let id = 0;
