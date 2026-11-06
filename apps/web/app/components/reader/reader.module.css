@@ -470,9 +470,10 @@
   padding: 6px 10px;
 }
 
+/* Tinta del tema encima: blanca en claro y oscura en oscuro, donde el rojo es más claro. */
 .confirmDanger {
   background: var(--pliegue-color-status-danger);
-  color: #fff;
+  color: var(--pliegue-color-text-on-action);
 }
 
 .confirmCancel {

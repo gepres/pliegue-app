@@ -12,6 +12,7 @@
   --pliegue-forest-500: #365b48;
   --pliegue-ochre-500: #c99232;
   --pliegue-terracotta-500: #b9674f;
+  --pliegue-terracotta-400: #d28a73;
   --pliegue-plum-500: #76566f;
   --pliegue-white-1000: #ffffff;
   --pliegue-danger-500: #a9473e;
@@ -97,6 +98,8 @@
   --pliegue-ease-standard: cubic-bezier(0.2, 0, 0, 1);
 }
 
+/* En oscuro, peligro es terracota/400: la 500 se quedaba en 4:1 sobre ink/800 y el texto de un
+   botón de borrar pide 4,5:1. Con la 400 llega a 6:1 sobre ink/800 y a 5,7:1 sobre ink/900. */
 [data-theme="dark"] {
   color-scheme: dark;
   --pliegue-color-bg-canvas: var(--pliegue-ink-950);
@@ -109,7 +112,7 @@
   --pliegue-color-accent-warm: var(--pliegue-ochre-500);
   --pliegue-color-border-default: var(--pliegue-forest-300);
   --pliegue-color-icon-default: var(--pliegue-paper-100);
-  --pliegue-color-status-danger: var(--pliegue-terracotta-500);
+  --pliegue-color-status-danger: var(--pliegue-terracotta-400);
   --pliegue-color-bg-field: color-mix(in srgb, var(--pliegue-ink-950) 55%, var(--pliegue-ink-800));
   --pliegue-color-border-control: color-mix(in srgb, var(--pliegue-paper-100) 38%, var(--pliegue-ink-800));
   --pliegue-color-border-strong: color-mix(in srgb, var(--pliegue-paper-100) 55%, var(--pliegue-ink-800));
@@ -133,7 +136,7 @@
     --pliegue-color-accent-warm: var(--pliegue-ochre-500);
     --pliegue-color-border-default: var(--pliegue-forest-300);
     --pliegue-color-icon-default: var(--pliegue-paper-100);
-    --pliegue-color-status-danger: var(--pliegue-terracotta-500);
+    --pliegue-color-status-danger: var(--pliegue-terracotta-400);
     --pliegue-color-bg-field: color-mix(in srgb, var(--pliegue-ink-950) 55%, var(--pliegue-ink-800));
     --pliegue-color-border-control: color-mix(in srgb, var(--pliegue-paper-100) 38%, var(--pliegue-ink-800));
     --pliegue-color-border-strong: color-mix(in srgb, var(--pliegue-paper-100) 55%, var(--pliegue-ink-800));

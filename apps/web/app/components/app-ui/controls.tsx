@@ -40,7 +40,9 @@ export function IconButton({
 }: IconButtonProps) {
   return (
     <button
-      aria-label={label}
+      // El número del distintivo va en el nombre: se ve, así que se tiene que poder decir.
+      // Sin paréntesis: axe descarta lo que va entre paréntesis al comparar el nombre con lo visible.
+      aria-label={badge ? `${label}: ${badge}` : label}
       className={cx(
         styles.iconButton,
         size === "sm" && styles.iconButtonSm,
