@@ -95,6 +95,8 @@ import { blockHasText, isTextualBlock, largeArchiveBytes, type StructuredDocumen
 import { ParallelBlocks } from "./reader/parallel-blocks";
 import { useParallelLink } from "./reader/parallel-link";
 import { useReadingPlace } from "./reader/reading-place";
+import { readingAnchorAttribute } from "./reader/reading-anchor";
+import { readDocumentChunks, type SemanticChunkRecord } from "../library/semantic-index-store";
 import { confirmAction } from "./app-ui/confirm-dialog";
 import { SnippetTranslationCard, type SnippetRequest } from "./reader/snippet-translation";
 import { TranslationPanel } from "./reader/translation-panel";
@@ -389,6 +391,7 @@ type PdfAnnotationProps = Pick<
   | "parallel"
   | "pendingRegion"
   | "regions"
+  | "searchHit"
   | "translation"
 >;
 
@@ -956,6 +959,7 @@ function pageUnitId(unit: number) {
 export function LocalReaderShell({
   alternateCopy,
   document,
+  fragmentId,
   permissionRequired = false,
   permissionVariant = "local",
   requestPermission,
@@ -965,6 +969,8 @@ export function LocalReaderShell({
 }: {
   alternateCopy?: { label: string; onSelect: () => void } | undefined;
   document: LocalDocument;
+  /** Un fragmento de la búsqueda (04.4): se abre en su sitio y se resalta. */
+  fragmentId?: string | undefined;
   /** La copia de la que se lee; si no se indica, el propio documento. */
   source?: LocalDocument | undefined;
   permissionRequired?: boolean;
@@ -1008,6 +1014,9 @@ export function LocalReaderShell({
   );
   const selfScrolling = readerCountsItsOwnPages(document.format);
   const position = useScrollPosition(previewRef, contentReady && !selfScrolling);
+  const searchFragment = useSearchFragment(fragmentId);
+  const searchHit = searchFragment?.location.kind === "page" ? { page: searchFragment.location.page, rects: searchFragment.location.rects } : null;
+  useSearchJump(searchFragment, contentReady, previewRef, setPageRequest);
   const [cropMode, setCropMode] = useState(false);
   const [pendingRegion, setPendingRegion] = useState<{ anchor: DOMRect; page: number; rect: NormalizedRect } | null>(null);
   const [openCard, setOpenCard] = useState<{ anchor: DOMRect; focusNote: boolean; id: string } | null>(null);
@@ -1572,6 +1581,7 @@ export function LocalReaderShell({
               parallel,
               pendingRegion,
               regions: regionMarks,
+              searchHit,
               translation: pdfTranslation,
             }}
             restartSignal={restartSignal}
@@ -1677,6 +1687,60 @@ function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+/** El fragmento de una búsqueda (04.4), leído del índice; null mientras no llega o si no está. */
+function useSearchFragment(fragmentId: string | undefined) {
+  const [fragment, setFragment] = useState<SemanticChunkRecord | null>(null);
+  useEffect(() => {
+    if (!fragmentId) return;
+    const documentId = fragmentId.slice(0, fragmentId.lastIndexOf("#"));
+    let cancelled = false;
+    readDocumentChunks(documentId)
+      .then((chunks) => {
+        if (!cancelled) setFragment(chunks.find((chunk) => chunk.id === fragmentId) ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [fragmentId]);
+  return fragmentId && fragment?.id === fragmentId ? fragment : null;
+}
+
+/**
+ * Lleva al fragmento de una búsqueda: en un PDF, a su página (los renglones los pinta el visor);
+ * en un EPUB o un DOCX, a su primer bloque, y marca sus bloques con `data-search-hit`.
+ */
+function useSearchJump(
+  fragment: SemanticChunkRecord | null,
+  contentReady: boolean,
+  rootRef: React.RefObject<HTMLElement | null>,
+  requestPage: React.Dispatch<React.SetStateAction<{ nonce: number; page: number } | null>>,
+) {
+  const doneRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!fragment || doneRef.current === fragment.id) return;
+    const location = fragment.location;
+    if (location.kind === "page") {
+      doneRef.current = fragment.id;
+      requestPage((current) => ({ nonce: (current?.nonce ?? 0) + 1, page: location.page }));
+      return;
+    }
+    if (!contentReady) return;
+    const root = rootRef.current;
+    if (!root) return;
+    const blocks: HTMLElement[] = [];
+    for (let anchor = location.blockStart; anchor <= location.blockEnd; anchor += 1) {
+      const element = root.querySelector<HTMLElement>(`[${readingAnchorAttribute}="s${location.section + 1}:${anchor}"]`);
+      if (element) blocks.push(element);
+    }
+    if (!blocks.length) return;
+    doneRef.current = fragment.id;
+    for (const element of root.querySelectorAll("[data-search-hit]")) element.removeAttribute("data-search-hit");
+    for (const element of blocks) element.setAttribute("data-search-hit", "");
+    blocks[0]!.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "center" });
+  }, [contentReady, fragment, requestPage, rootRef]);
+}
+
 /**
  * Posición actual —no el máximo alcanzado— para la barra de avance y la línea superior.
  * El progreso que se guarda solo crece; la posición sube y baja con la lectura.
@@ -1756,9 +1820,12 @@ type PermissionProps = {
  */
 export function LocalDocumentReader({
   documentId,
+  fragmentId,
   resumeRequested = false,
 }: {
   documentId: string;
+  /** Un fragmento de la búsqueda (04.4): el libro se abre en su página o su bloque. */
+  fragmentId?: string | undefined;
   resumeRequested?: boolean;
 }) {
   const importedLibrary = useImportedDocuments();
@@ -1874,6 +1941,7 @@ export function LocalDocumentReader({
           : undefined
       }
       document={document}
+      fragmentId={fragmentId}
       key={document.id}
       {...sourceAccess}
       resumeRequested={resumeRequested}

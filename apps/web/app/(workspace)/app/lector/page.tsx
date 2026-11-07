@@ -11,6 +11,8 @@ export const metadata: Metadata = {
 interface ReaderPageProps {
   searchParams: Promise<{
     document?: string | string[];
+    /** Un fragmento de la búsqueda (04.4): el libro se abre en su página o su bloque. */
+    fragmento?: string | string[];
     resume?: string | string[];
   }>;
 }
@@ -21,9 +23,10 @@ export default async function ReaderPage({ searchParams }: ReaderPageProps) {
     ? parameters.document[0]
     : parameters.document;
   const resume = Array.isArray(parameters.resume) ? parameters.resume[0] : parameters.resume;
+  const fragmentId = Array.isArray(parameters.fragmento) ? parameters.fragmento[0] : parameters.fragmento;
 
   if (documentId) {
-    return <LocalDocumentReader documentId={documentId} resumeRequested={resume === "1"} />;
+    return <LocalDocumentReader documentId={documentId} fragmentId={fragmentId} resumeRequested={resume === "1"} />;
   }
 
   return <ReaderStart />;

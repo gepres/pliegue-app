@@ -672,3 +672,12 @@
   display: grid;
   gap: var(--pliegue-spacing-md);
 }
+
+/* El fragmento de una búsqueda (04.4): sus bloques, con una marca a la izquierda y el fondo de
+   acento. No solo color: la marca se ve también en alto contraste. */
+.structuredPreview :global([data-search-hit]) {
+  background: color-mix(in srgb, var(--pliegue-color-accent-warm) 18%, transparent);
+  border-radius: 4px;
+  box-shadow: -6px 0 0 var(--pliegue-color-accent-warm);
+  scroll-margin-block: 25vh;
+}

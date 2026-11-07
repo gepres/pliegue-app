@@ -255,7 +255,9 @@ export function SemanticSearchPanel() {
               {result.hits.map((hit) => (
                 <li className={styles.hit} key={hit.chunk.id}>
                   <p className={styles.hitHead}>
-                    <Link href={`/app/lector?document=${encodeURIComponent(hit.chunk.documentId)}`}>
+                    <Link
+                      href={`/app/lector?document=${encodeURIComponent(hit.chunk.documentId)}&fragmento=${encodeURIComponent(hit.chunk.id)}`}
+                    >
                       {titles.get(hit.chunk.documentId) ?? "Un libro que ya no está"}
                     </Link>
                     <span className={styles.where}>{describeLocation(hit.chunk.location)}</span>

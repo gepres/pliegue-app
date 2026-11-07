@@ -179,7 +179,11 @@ t.check(
 );
 t.check("y no trae fragmentos lejanos solo por parecerse un poco", found.hits.length === 1, String(found.hits.length));
 t.check("la pregunta se manda como pregunta (no los libros)", found.queries.length === 1 && found.queries[0].purpose === "query" && found.queries[0].texts[0] === "caminos que se bifurcan");
-t.check("el resultado lleva al libro", found.hits[0]?.href === `/app/lector?document=${encodeURIComponent(ids.Jardin)}`);
+t.check(
+  "el resultado lleva al libro, a ese fragmento",
+  found.hits[0]?.href?.startsWith(`/app/lector?document=${encodeURIComponent(ids.Jardin)}&fragmento=${encodeURIComponent(`${ids.Jardin}#`)}`),
+  found.hits[0]?.href,
+);
 await page.eval(`(document.querySelector("#semantic-search-title").scrollIntoView({ block: "start" }), true)`);
 await page.sleep(300);
 await page.screenshot(`${work}/2-resultados.png`);
@@ -205,6 +209,34 @@ const overflow = await page.eval(`(() => { const s = document.querySelector("#se
 t.check("en el móvil, el panel cabe sin desplazamiento lateral", overflow.right <= overflow.width && overflow.scroll <= overflow.width, JSON.stringify(overflow));
 await page.screenshot(`${work}/3-movil.png`);
 await page.viewport(1366, 900);
+
+// ---- Abrir el resultado en su sitio ------------------------------------------------------------------------------------
+const inView = (selector) =>
+  page.eval(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return null; const r = el.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom), visible: r.bottom > 0 && r.top < innerHeight, text: el.textContent.trim().slice(0, 80) }; })()`);
+found = await search("espejo");
+await page.eval(`([...document.querySelectorAll("section[aria-label^='Resultados'] li a")].find((a) => a.textContent === "Anaqueles").click(), true)`);
+const pdfHit = await page.waitFor(`document.querySelector("[data-page-number='2'] [data-search-hit]")`, { timeout: 30000 }).then(() => true, () => false);
+await page.sleep(1200);
+const pdfHits = await page.eval(`document.querySelectorAll("[data-page-number='2'] [data-search-hit]").length`);
+const pdfSpot = await inView("[data-page-number='2'] [data-search-hit]");
+t.check("el resultado del PDF abre la página 2 con sus renglones resaltados", pdfHit && pdfHits >= 2 && pdfSpot?.visible, `${pdfHits} renglones · ${JSON.stringify(pdfSpot)}`);
+t.check("y no resalta nada en la página 1", (await page.eval(`document.querySelectorAll("[data-page-number='1'] [data-search-hit]").length`)) === 0);
+await page.screenshot(`${work}/4-pdf-resaltado.png`);
+
+await page.eval(`(document.querySelector("a[href='/app/ia']").click(), true)`);
+await page.waitFor(`document.querySelector("#semantic-query")`, { timeout: 20000 });
+found = await search("caminos que se bifurcan");
+await page.eval(`([...document.querySelectorAll("section[aria-label^='Resultados'] li a")].find((a) => a.textContent === "Jardin").click(), true)`);
+const blockHit = await page.waitFor(`document.querySelector("[data-search-hit]")`, { timeout: 30000 }).then(() => true, () => false);
+await page.sleep(1200);
+const blockSpot = await inView("[data-search-hit]");
+const marked = await page.eval(`[...document.querySelectorAll("[data-search-hit]")].map((el) => el.textContent.trim())`);
+t.check(
+  "el resultado del EPUB abre la sección y resalta sus bloques, a la vista",
+  blockHit && blockSpot?.visible && marked.some((text) => /laberinto/.test(text)) && !marked.some((text) => /flores/.test(text)),
+  JSON.stringify(marked),
+);
+await page.screenshot(`${work}/5-epub-resaltado.png`);
 
 // ---- El registro de la IA lo cuenta ------------------------------------------------------------------------------------
 await page.eval(`(document.querySelector("a[href^='/app/ajustes']").click(), true)`);

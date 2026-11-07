@@ -21,6 +21,7 @@ import {
   type ReadingAnchor,
 } from "../library/pdf-page-layout";
 import type { HighlightColor, NormalizedRect } from "../library/annotations";
+import type { ChunkRect } from "../library/chunking";
 import { ocrLanguages } from "../library/ocr";
 import type { OcrPageBlock, OcrPageLayout } from "../library/ocr-layout";
 import { readScannedPage, type PdfOcrSource } from "../library/ocr-pdf";
@@ -178,6 +179,8 @@ export interface PdfReaderProps {
   ocr?: PdfOcrSource | null;
   /** Página que se está leyendo y total, para la barra del lector. */
   onPageChange?: (page: number, pageCount: number) => void;
+  /** El fragmento de una búsqueda (04.4): sus renglones se resaltan en su página. */
+  searchHit?: { page: number; rects: readonly ChunkRect[] } | null;
   /** Avance real, contado en páginas. Sustituye a la medición por desplazamiento. */
   onProgressChange?: (percent: number) => void;
   onReady?: () => void;
@@ -286,6 +289,7 @@ export interface PdfRegionMark {
 }
 
 const noRegions: readonly PdfRegionMark[] = [];
+const noRects: readonly ChunkRect[] = [];
 
 const PdfPage = memo(function PdfPage({
   crop,
@@ -294,6 +298,7 @@ const PdfPage = memo(function PdfPage({
   placement,
   regions,
   scale,
+  searchRects,
   shouldRender,
   title,
   translation,
@@ -301,6 +306,8 @@ const PdfPage = memo(function PdfPage({
 }: {
   /** Zona que se está recortando o recién recortada en esta página. */
   crop: NormalizedRect | null;
+  /** Renglones del fragmento de una búsqueda, si es de esta página. */
+  searchRects: readonly ChunkRect[];
   document: PdfDocument;
   onRegionClick?: ((id: string, rect: DOMRect) => void) | undefined;
   placement: PdfPagePlacement;
@@ -469,6 +476,15 @@ const PdfPage = memo(function PdfPage({
         </button>
       ))}
       {crop ? <span aria-hidden="true" className={styles.cropBox} style={regionStyle(crop)} /> : null}
+      {searchRects.map((rect, index) => (
+        <span
+          aria-hidden="true"
+          className={styles.searchHit}
+          data-search-hit=""
+          key={index}
+          style={regionStyle({ height: rect.h, width: rect.w, x: rect.x, y: rect.y })}
+        />
+      ))}
       {translation && !twin ? <PageTranslationLayer page={pageNumber} view={translation} /> : null}
       <span aria-hidden="true" className={styles.pageNumber}>
         {pageNumber}
@@ -1245,6 +1261,7 @@ export function PdfReader({
   pendingRegion = null,
   regions = noRegions,
   restartSignal = 0,
+  searchHit = null,
   resumeRequested = false,
   title,
   translation = null,
@@ -1771,6 +1788,7 @@ export function PdfReader({
                   placement={placement}
                   regions={regionsByPage.get(placement.number) ?? noRegions}
                   scale={scale}
+                  searchRects={searchHit?.page === placement.number ? searchHit.rects : noRects}
                   shouldRender={index >= range.first && index <= range.last}
                   translation={translation?.get(placement.number) ?? null}
                   title={title}
