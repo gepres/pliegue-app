@@ -18,6 +18,7 @@ import {
   type IndexProgress,
   type SearchResult,
 } from "../../ai/semantic-indexer";
+import { answerPrepared, prepareQuestion, type AssistantResult } from "../../ai/library-assistant";
 import { describeLocation } from "../../library/chunking";
 import type { LibraryDocument } from "../../library/documents";
 import { loadSearchCorpus, useSemanticDocuments } from "../../library/semantic-index-store";
@@ -25,6 +26,8 @@ import { routeFor } from "../../library/sensitivity";
 import { documentSensitivity, hasConsent } from "../../library/sensitivity-store";
 import { useLibraryDocuments } from "../../library/use-library-documents";
 import { confirmAction } from "../app-ui/confirm-dialog";
+import { Segmented } from "../app-ui/controls";
+import { LibraryAssistantAnswer } from "./library-assistant-answer";
 import { confirmPersonalSend } from "./sensitive-consent";
 import styles from "./semantic-search-panel.module.css";
 
@@ -63,6 +66,8 @@ export function SemanticSearchPanel() {
   const [scope, setScope] = useState("all");
   const [result, setResult] = useState<(SearchResult & { query: string }) | null>(null);
   const [searching, setSearching] = useState(false);
+  const [mode, setMode] = useState<"search" | "ask">("search");
+  const [asked, setAsked] = useState<{ question: string; result: AssistantResult | null; error: string | null } | null>(null);
   const controller = useRef<AbortController | null>(null);
 
   const config = embeddingConfigOf(settings);
@@ -149,21 +154,38 @@ export function SemanticSearchPanel() {
     }
   }
 
+  const searchScope = () => ({
+    documentIds: new Set(documents.map((document) => document.id)),
+    ...(scope === "all" ? {} : { sourceKeys: new Set([scope]) }),
+  });
+
+  /** Preguntar (04.5): buscar los fragmentos, pedir permiso por los personales y responder. */
+  async function ask(text: string) {
+    setSearching(true);
+    setAsked({ error: null, question: text, result: null });
+    const apiKey = getSessionApiKey(settings.provider);
+    const byId = new Map(documents.map((document) => [document.id, document]));
+    try {
+      if (settings.provider !== "ollama" && !apiKey) throw new Error(`Pon la clave de ${providerName} en Ajustes → IA para preguntar.`);
+      const prepared = await prepareQuestion(text, searchScope(), byId, settings, apiKey);
+      if (prepared.needsConsent.length) await confirmPersonalSend(prepared.needsConsent, "ask", providerName);
+      const result = await answerPrepared(prepared, byId, settings, apiKey);
+      setAsked({ error: null, question: text, result });
+    } catch (error) {
+      setAsked({ error: error instanceof Error ? error.message : "No se pudo responder.", question: text, result: null });
+    } finally {
+      setSearching(false);
+    }
+  }
+
   async function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = query.trim();
     if (!text) return;
+    if (mode === "ask") return ask(text);
     setSearching(true);
     try {
-      const found = await searchLibrary(
-        text,
-        {
-          documentIds: new Set(documents.map((document) => document.id)),
-          ...(scope === "all" ? {} : { sourceKeys: new Set([scope]) }),
-        },
-        settings,
-        getSessionApiKey(settings.provider),
-      );
+      const found = await searchLibrary(text, searchScope(), settings, getSessionApiKey(settings.provider));
       setResult({ ...found, query: text });
     } catch (error) {
       setResult({ hits: [], query: text, searched: 0, semanticNote: error instanceof Error ? error.message : "No se pudo buscar." });
@@ -213,12 +235,28 @@ export function SemanticSearchPanel() {
         </p>
       ) : null}
 
+      <Segmented
+        label="Buscar o preguntar"
+        onChange={setMode}
+        options={[
+          { label: "Buscar", value: "search" },
+          { label: "Preguntar", value: "ask" },
+        ]}
+        size="sm"
+        value={mode}
+      />
+      {mode === "ask" ? (
+        <p className={styles.note}>
+          Responde solo con lo que dicen tus libros indexados, con citas que abren el libro en su sitio. Se envían a{" "}
+          {providerName} los fragmentos que mejor responden (hasta 8); los confidenciales no salen.
+        </p>
+      ) : null}
       <form className={styles.form} onSubmit={search} role="search">
-        <Field label="Qué buscas" labelFor="semantic-query">
+        <Field label={mode === "ask" ? "Qué quieres saber" : "Qué buscas"} labelFor="semantic-query">
           <Input
             id="semantic-query"
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Una idea, un personaje, una cita…"
+            placeholder={mode === "ask" ? "¿Qué dicen mis libros sobre…?" : "Una idea, un personaje, una cita…"}
             type="search"
             value={query}
           />
@@ -237,12 +275,22 @@ export function SemanticSearchPanel() {
         ) : null}
         <div className={styles.submit}>
           <Button disabled={searching || !query.trim() || !ready.length} type="submit">
-            {searching ? "Buscando…" : "Buscar"}
+            {searching ? (mode === "ask" ? "Pensando…" : "Buscando…") : mode === "ask" ? "Preguntar" : "Buscar"}
           </Button>
         </div>
       </form>
 
-      {result ? (
+      {mode === "ask" && asked ? (
+        asked.result ? (
+          <LibraryAssistantAnswer providerName={providerName} question={asked.question} result={asked.result} />
+        ) : asked.error ? (
+          <p className={styles.note} role="alert">
+            {asked.error}
+          </p>
+        ) : null
+      ) : null}
+
+      {mode === "search" && result ? (
         <section aria-label={`Resultados de «${result.query}»`} className={styles.results}>
           <p className={styles.note}>
             {result.hits.length

@@ -127,3 +127,107 @@
   font-size: 0.75rem;
   padding: 1px 8px;
 }
+
+/* ---- La respuesta del asistente (04.5) ---------------------------------------------------------- */
+
+.answer {
+  border-left: 3px solid var(--pliegue-color-accent-warm);
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  max-width: 48rem;
+  min-width: 0;
+  padding-left: var(--pliegue-spacing-md);
+}
+
+.answer[data-status="no-evidence"] {
+  border-left-color: var(--pliegue-color-border-default);
+}
+
+.answer p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.answerState {
+  font-weight: 600;
+}
+
+.summary {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+
+.findings {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.finding {
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding-bottom: var(--pliegue-spacing-sm);
+}
+
+.findingHead {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.badge {
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: 999px;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  padding: 1px 8px;
+  text-transform: uppercase;
+}
+
+/* Lo deducido y lo que no tiene cita se distinguen también por el borde, no solo por el texto. */
+.finding[data-kind="inference"] .badge {
+  border-style: dashed;
+}
+
+.finding[data-kind="unverified"] .badge {
+  border-color: var(--pliegue-color-status-danger);
+  color: var(--pliegue-color-status-danger);
+}
+
+.findingText {
+  font-family: var(--pliegue-font-reading);
+  line-height: 1.55;
+}
+
+.citations {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.citations li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.citations a {
+  font-family: var(--pliegue-font-reading);
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.missing {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.9375rem;
+}
