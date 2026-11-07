@@ -171,12 +171,15 @@ async function askQuestion(question) {
   await page.sleep(300);
 }
 const embedsBefore = calls.ollamaEmbed.length;
-await askQuestion("¿Qué hay en el centro del jardín?");
+// La pregunta toca también el diario: así se ve que su fragmento se queda en el equipo.
+await askQuestion("¿Qué hay en el centro del jardín y dónde está la llave?");
 const sent = calls.answer.at(-1);
 t.check("la pregunta se vectoriza en Ollama, no en la nube", calls.ollamaEmbed.length === embedsBefore + 1 && calls.hostedEmbed === 0, `${calls.ollamaEmbed.length - embedsBefore}`);
 t.check("responde Claude con claude-opus-5-5 y la clave de Claude", sent?.body.provider === "anthropic" && sent.body.model === "claude-opus-5-5" && /^Bearer sk-ant-/.test(sent.auth), JSON.stringify({ model: sent?.body.model, provider: sent?.body.provider }));
 t.check("al proveedor en la nube no le llega el diario confidencial", sent && !sent.body.fragments.some((f) => /diario|llave/i.test(f.text)), JSON.stringify(sent?.body.fragments.map((f) => f.title)));
-t.check("y se enseña la respuesta con su cita", await page.eval(`/Un laberinto de setos ocupa el centro/.test(document.querySelector("section[aria-label^='Respuesta a']")?.textContent ?? "")`));
+const answerText = await page.eval(`document.querySelector("section[aria-label^='Respuesta a']")?.textContent ?? ""`);
+t.check("y se enseña la respuesta con su cita", /Un laberinto de setos ocupa el centro/.test(answerText), answerText.slice(0, 200));
+t.check("el diario se ofrece para leerlo en el equipo: no se envió a Claude", /no se envió a Claude|no se enviaron a Claude/.test(answerText) && answerText.includes("Diario"), answerText.slice(-200));
 
 // ---- Si Claude falla, no se prueba con otro --------------------------------------------------------------------------------
 answerFails = true;

@@ -174,7 +174,11 @@ export function parseAiSettings(value: unknown): AiSettings {
   const models = recordOf(candidate.models);
   const translationModels = recordOf(candidate.translationModels);
   // Antes de 04.3 se preguntaba con el modelo de catalogar: quien no tiene los suyos sigue con él.
-  const askModels = candidate.askModels === undefined ? models : recordOf(candidate.askModels);
+  const askFromCatalog = candidate.askModels === undefined;
+  const askModels = askFromCatalog ? models : recordOf(candidate.askModels);
+  // Lo de partida antiguo se cambia solo al heredarlo de catalogar: lo que se eligió para
+  // preguntar se respeta, aunque coincida con un modelo que antes venía de partida.
+  const askLegacy = (provider: AiProvider) => (askFromCatalog ? legacyDefaultModels.models[provider] : undefined);
   const provider = aiProviders.includes(candidate.provider as AiProvider)
     ? (candidate.provider as AiProvider)
     : defaultAiSettings.provider;
@@ -182,10 +186,10 @@ export function parseAiSettings(value: unknown): AiSettings {
 
   return {
     askModels: {
-      anthropic: cleanModel(askModels.anthropic, defaultAiSettings.askModels.anthropic, legacyDefaultModels.models.anthropic),
-      gemini: cleanModel(askModels.gemini, defaultAiSettings.askModels.gemini, legacyDefaultModels.models.gemini),
-      ollama: cleanModel(askModels.ollama, defaultAiSettings.askModels.ollama, legacyDefaultModels.models.ollama),
-      openai: cleanModel(askModels.openai, defaultAiSettings.askModels.openai, legacyDefaultModels.models.openai),
+      anthropic: cleanModel(askModels.anthropic, defaultAiSettings.askModels.anthropic, askLegacy("anthropic")),
+      gemini: cleanModel(askModels.gemini, defaultAiSettings.askModels.gemini, askLegacy("gemini")),
+      ollama: cleanModel(askModels.ollama, defaultAiSettings.askModels.ollama, askLegacy("ollama")),
+      openai: cleanModel(askModels.openai, defaultAiSettings.askModels.openai, askLegacy("openai")),
     },
     askProvider: askProviderChoices.includes(candidate.askProvider as AskProviderChoice)
       ? (candidate.askProvider as AskProviderChoice)

@@ -45,6 +45,16 @@ describe("proveedor por flujo (04.3)", () => {
     expect(parsed.indexProvider).toBe("catalog");
   });
 
+  it("un modelo elegido para preguntar se respeta, aunque antes fuera uno de partida", () => {
+    // Revisión de Codex: `claude-sonnet-5` es de partida antiguo para catalogar, no para preguntar.
+    const chosen = parseAiSettings({ askModels: { anthropic: "claude-sonnet-5" }, askProvider: "anthropic" });
+    expect(chosen.askModels.anthropic).toBe("claude-sonnet-5");
+    // Heredado de los ajustes de antes, sí pasa al de ahora, como el de catalogar.
+    const inherited = parseAiSettings({ models: { anthropic: "claude-sonnet-5" }, provider: "anthropic" });
+    expect(inherited.askModels.anthropic).toBe("claude-haiku-5-5");
+    expect(inherited.models.anthropic).toBe("claude-haiku-5-5");
+  });
+
   it("descarta elecciones que no existen: Claude no busca por significado", () => {
     const parsed = parseAiSettings({ askProvider: "deepl", indexProvider: "anthropic" });
     expect(parsed.indexProvider).toBe("catalog");
