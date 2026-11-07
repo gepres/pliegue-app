@@ -548,6 +548,17 @@
 
 /* ---- Zonas marcadas y recorte --------------------------------------------------------- */
 
+/* El fragmento de una búsqueda (04.4): sus renglones, en el color de acento, sin tapar el texto. */
+.searchHit {
+  background: color-mix(in srgb, var(--pliegue-color-accent-warm) 30%, transparent);
+  border-bottom: 2px solid var(--pliegue-color-accent-warm);
+  border-radius: 2px;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+
 .region {
   --region: 242 183 5;
 

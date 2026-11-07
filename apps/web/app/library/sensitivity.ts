@@ -34,13 +34,22 @@ export function isSensitivity(value: unknown): value is Sensitivity {
   return (sensitivityLevels as readonly unknown[]).includes(value);
 }
 
-/** Los flujos que pueden mandar el texto de un libro fuera del equipo. */
-export type SensitiveFlow = "catalog" | "translate";
+/**
+ * Los flujos que pueden mandar el texto de un libro fuera del equipo. Indexar (04.4) manda el
+ * texto entero, en fragmentos, para calcular sus embeddings: pide su propio permiso.
+ */
+export const sensitiveFlows = ["catalog", "translate", "index"] as const;
+export type SensitiveFlow = (typeof sensitiveFlows)[number];
 
 export const flowNames: Record<SensitiveFlow, string> = {
   catalog: "catalogar",
+  index: "indexar",
   translate: "traducir",
 };
+
+export function isSensitiveFlow(value: unknown): value is SensitiveFlow {
+  return (sensitiveFlows as readonly unknown[]).includes(value);
+}
 
 /** De qué fuente sale un libro, para heredar su sensibilidad. */
 export function sourceKeyOf(document: Pick<LibraryDocument, "reference">): string {
@@ -99,7 +108,9 @@ export function providerPlace(
   settings: { libreTranslateUrl: string; ollamaMode: "local" | "remote"; ollamaUrl: string },
 ): ProviderPlace {
   if (provider === "browser") return "device";
-  if (provider === "ollama") return settings.ollamaMode === "local" || isLoopbackUrl(settings.ollamaUrl) ? "device" : "cloud";
+  // Por la dirección y no por el modo: en modo local la URL ya es `localhost`, y si no lo fuera,
+  // el texto saldría del equipo (con 04.4, el libro entero).
+  if (provider === "ollama") return isLoopbackUrl(settings.ollamaUrl) ? "device" : "cloud";
   if (provider === "libretranslate") return isLoopbackUrl(settings.libreTranslateUrl) ? "device" : "cloud";
   return "cloud";
 }

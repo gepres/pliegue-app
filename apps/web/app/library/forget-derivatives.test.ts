@@ -74,6 +74,26 @@ describe("olvidar lo derivado de un libro al desvincularlo (03.3)", () => {
       ["byDocument", "documentId"],
     ]);
 
+    // El índice de búsqueda (04.4): dos almacenes, fragmentos y fichas.
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open("pliegue-semantic-index", 1);
+      request.onupgradeneeded = () => {
+        const chunks = request.result.createObjectStore("chunks", { keyPath: "id" });
+        chunks.createIndex("byDocument", "documentId");
+        const documents = request.result.createObjectStore("documents", { keyPath: "documentId" });
+        for (const [documentId, index] of [["carpeta-1", 0], ["carpeta-1", 1], ["otro", 0]] as const) {
+          chunks.put({ documentId, id: `${documentId}#${index}`, index, text: "x" });
+        }
+        documents.put({ documentId: "carpeta-1" });
+        documents.put({ documentId: "otro" });
+      };
+      request.onsuccess = () => {
+        request.result.close();
+        resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+
     const ids = ["carpeta-1", "carpeta-2", "sin-nada"];
     // El interruptor del aviso sale porque hay traducciones, con cuántas son.
     expect(await translationsChoice(ids)).toEqual({
@@ -83,7 +103,9 @@ describe("olvidar lo derivado de un libro al desvincularlo (03.3)", () => {
 
     // Por defecto, las traducciones se conservan (decisión del dueño, 4-nov).
     const kept = await forgetDocumentDerivatives(ids);
-    expect(kept).toEqual({ catalogs: 2, covers: 1, documents: 3, ocrPages: 2, translations: 0, translationsKept: 3 });
+    expect(kept).toEqual({ catalogs: 2, covers: 1, documents: 3, ocrPages: 2, searchChunks: 2, translations: 0, translationsKept: 3 });
+    expect(await countAll("pliegue-semantic-index", "chunks")).toBe(1);
+    expect(await countAll("pliegue-semantic-index", "documents")).toBe(1);
     expect(await countAll("pliegue-document-catalog", "catalogs")).toBe(1);
     expect(await countAll("pliegue-translations", "units")).toBe(4);
     expect(await countAll("pliegue-covers", "covers")).toBe(1);
@@ -92,7 +114,7 @@ describe("olvidar lo derivado de un libro al desvincularlo (03.3)", () => {
 
     // Con el interruptor encendido, se van también, y solo las de esos libros.
     const removed = await forgetDocumentDerivatives(ids, { translations: true });
-    expect(removed).toEqual({ catalogs: 0, covers: 0, documents: 3, ocrPages: 0, translations: 3, translationsKept: 0 });
+    expect(removed).toEqual({ catalogs: 0, covers: 0, documents: 3, ocrPages: 0, searchChunks: 0, translations: 3, translationsKept: 0 });
     expect(await countAll("pliegue-translations", "units")).toBe(1);
     expect(await translationsChoice(ids)).toBeNull();
   });
@@ -106,6 +128,9 @@ describe("olvidar lo derivado de un libro al desvincularlo (03.3)", () => {
     );
     expect(describeForgotten({ catalogs: 0, covers: 0, documents: 1, ocrPages: 42, translations: 0, translationsKept: 0 })).toBe(
       "Se borraron el índice de 1 documento y 42 páginas leídas con OCR.",
+    );
+    expect(describeForgotten({ catalogs: 0, covers: 0, documents: 2, ocrPages: 0, searchChunks: 640, translations: 0, translationsKept: 0 })).toBe(
+      "Se borraron el índice de 2 documentos y 640 fragmentos del índice de búsqueda.",
     );
     expect(describeForgotten({ catalogs: 1, covers: 0, documents: 1, ocrPages: 0, translations: 0, translationsKept: 25 })).toBe(
       "Se borraron el índice de 1 documento y 1 ficha del catálogo. Se conservan 25 páginas traducidas.",

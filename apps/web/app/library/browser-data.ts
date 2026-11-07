@@ -23,6 +23,7 @@ export const knownDatabases = [
   "pliegue-linked-folders",
   "pliegue-local-library",
   "pliegue-ocr",
+  "pliegue-semantic-index",
   "pliegue-sync",
   "pliegue-translations",
 ] as const;

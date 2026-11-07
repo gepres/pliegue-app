@@ -64,7 +64,7 @@ const modelFamilies: Record<AiProvider, readonly ModelFamily[]> = {
     },
   ],
   ollama: [
-    { pattern: /^(?:nomic-embed-text|mxbai-embed-large|qwen3-embedding)(?::|$)/, capabilities: embeddingModel },
+    { pattern: /^(?:nomic-embed-text|mxbai-embed-large|qwen3-embedding|embeddinggemma)(?::|$)/, capabilities: embeddingModel },
     { pattern: /^qwen3-vl(?::|$)/, capabilities: visionModel },
     { pattern: /^qwen3(?:-coder|-next)?(?::|$)/, capabilities: textModel },
     { pattern: /^llama3\.2-vision(?::|$)|^llama3\.2:(?:11b|90b)(?:\b|_)/, capabilities: visionModel },

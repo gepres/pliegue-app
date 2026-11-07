@@ -4,6 +4,7 @@ import { Card, Tag } from "@pliegue/ui";
 
 import { publicConfig } from "../../../config/public-config";
 import { AiCatalogDashboard } from "../../../components/ai-catalog-dashboard";
+import { SemanticSearchPanel } from "../../../components/ai/semantic-search-panel";
 import { PageHeader } from "../../../components/workspace-page";
 import styles from "../workspace.module.css";
 
@@ -42,6 +43,7 @@ export default function AiPage() {
       />
 
       <AiCatalogDashboard />
+      <SemanticSearchPanel />
     </>
   );
 }
