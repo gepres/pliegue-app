@@ -64,6 +64,6 @@ opacidad hasta llegar a ellas, y axe mediría ese contraste a medio aparecer.
 - `teclado.mjs`: «Saltar al contenido», indicador de foco en cada parada del tabulador
   (también el que pinta el contenedor con `:focus-within`), el menú de un libro con flechas y
   Escape, y un diálogo que retiene el foco y lo devuelve. Intro se manda con su carácter
-  (``): sin él, Chrome no activa un `<button>`.
+  (`\r`): sin él, Chrome no activa un `<button>`.
 - `sin-conexion.mjs`: corta la red a la página **y al service worker** (CDP, sesión del
   `service_worker`) y abre la Biblioteca, el lector y Ajustes desde la caché.
