@@ -21,8 +21,11 @@ function summary(collections: Record<string, Partial<CollectionCounts>>): SyncSu
     applied: 0,
     booksWithState: 0,
     collections: Object.fromEntries(Object.entries(collections).map(([name, value]) => [name, counts(value)])),
+    conflicts: [],
     elsewhere: { named: [], total: 0 },
+    fresh: [],
     pulled: 0,
+    push: null,
     pushed: 0,
   };
 }

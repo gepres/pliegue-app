@@ -18,7 +18,7 @@ export function supabaseRemote(client: SupabaseClient, userId: string, deviceId:
       for (let from = 0; ; from += pageSize) {
         let query = client
           .from(table)
-          .select("collection,item_key,payload,deleted,updated_at,server_updated_at")
+          .select("collection,item_key,payload,deleted,updated_at,server_updated_at,device_id")
           .order("server_updated_at", { ascending: true })
           .range(from, from + pageSize - 1);
         if (since) query = query.gt("server_updated_at", since);
@@ -29,14 +29,23 @@ export function supabaseRemote(client: SupabaseClient, userId: string, deviceId:
       }
     },
     async push(outgoing: readonly OutgoingRow[]) {
+      const serverTimes: string[] = [];
       for (let start = 0; start < outgoing.length; start += pushBatch) {
         const batch = outgoing
           .slice(start, start + pushBatch)
           // `user_id` va explícito: el upsert de supabase-js rellena con null lo que falta.
           .map((row) => ({ ...row, device_id: deviceId, user_id: userId }));
-        const { error } = await client.from(table).upsert(batch, { onConflict: "user_id,collection,item_key" });
+        // Con la hora del servidor de vuelta: sirve para corregir el reloj de este equipo (06.3).
+        const { data, error } = await client
+          .from(table)
+          .upsert(batch, { onConflict: "user_id,collection,item_key" })
+          .select("server_updated_at");
         if (error) throw new Error(error.message);
+        for (const row of (data ?? []) as Array<{ server_updated_at?: unknown }>) {
+          if (typeof row.server_updated_at === "string") serverTimes.push(row.server_updated_at);
+        }
       }
+      return serverTimes;
     },
   };
 }

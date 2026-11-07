@@ -6,18 +6,21 @@ import { deletedHash, mergeCollection, type SyncEntry } from "./sync-merge";
 export interface RemoteRow {
   collection: string;
   deleted: boolean;
+  /** Qué equipo la escribió: lo que llega de otro sirve para medir la latencia (06.3). */
+  device_id?: string;
   item_key: string;
   payload: unknown;
   server_updated_at: string;
   updated_at: string;
 }
 
-export type OutgoingRow = Omit<RemoteRow, "server_updated_at">;
+export type OutgoingRow = Omit<RemoteRow, "device_id" | "server_updated_at">;
 
 /** La nube, reducida a lo que el motor necesita. Supabase en la app; memoria en los tests. */
 export interface RemoteStore {
   pull(since: string | null): Promise<RemoteRow[]>;
-  push(rows: readonly OutgoingRow[]): Promise<void>;
+  /** Devuelve, si puede, la hora del servidor de lo subido: con ella se corrige el reloj (06.3). */
+  push(rows: readonly OutgoingRow[]): Promise<string[] | void>;
 }
 
 type EntryMap = Record<string, SyncEntry>;
@@ -64,11 +67,31 @@ export interface BookElsewhere {
   title: string;
 }
 
+/** Un conflicto de esta vuelta, listo para el historial (06.3). */
+export interface SyncConflict {
+  collection: string;
+  docKey: string | null;
+  key: string;
+  /** La versión que no quedó, con su carga. */
+  loser: SyncEntry;
+  /** «local»: se quedó la de otro equipo; «remote»: la de este pisó la de otro. */
+  lost: "local" | "remote";
+  preview: string | null;
+  /** El libro, si es de uno y está aquí. */
+  title: string | null;
+  winnerUpdatedAt: string;
+}
+
 export interface SyncSummary {
   applied: number;
   /** Libros de este equipo que tienen algo guardado en la cuenta. */
   booksWithState: number;
   collections: Record<string, CollectionCounts>;
+  conflicts: SyncConflict[];
+  /** Hora del servidor de lo que llegó de otros equipos desde la vuelta anterior (06.3). */
+  fresh: string[];
+  /** La subida: cuándo empezó y acabó en este equipo, y la hora del servidor de cada fila. */
+  push: { endedAt: number; serverTimes: string[]; startedAt: number } | null;
   /**
    * Libros con avance, notas, favorito o ficha en la cuenta que no están en este equipo. Se
    * nombran los que tienen ficha sincronizada (si aquí se aceptan las fichas); el resto solo se
@@ -155,6 +178,7 @@ export async function runSync({
   allowMassDeletion = false,
   collections,
   context,
+  deviceId,
   enabled,
   onPlanned,
   remote,
@@ -164,6 +188,8 @@ export async function runSync({
   allowMassDeletion?: boolean;
   collections: readonly SyncCollection[];
   context: SyncContext;
+  /** Este equipo: lo que llega de otros se cuenta para la latencia. */
+  deviceId?: string;
   /** Las colecciones con consentimiento que la persona aceptó. */
   enabled: (collection: SyncCollection) => boolean;
   /**
@@ -181,8 +207,13 @@ export async function runSync({
     applied: 0,
     booksWithState: 0,
     collections: {},
+    conflicts: [],
     elsewhere: { named: [], total: 0 },
+    fresh: rows
+      .filter((row) => deviceId && row.device_id && row.device_id !== deviceId && (!state.cursor || toIso(row.server_updated_at) > state.cursor))
+      .map((row) => toIso(row.server_updated_at)),
     pulled: rows.length,
+    push: null,
     pushed: 0,
   };
 
@@ -233,6 +264,21 @@ export async function runSync({
       });
 
       if (merged.apply.length) await collection.apply(merged.apply, context);
+      if (collection.history !== false) {
+        for (const conflict of merged.conflicts) {
+          const docKey = conflict.loser.docKey ?? conflict.winner.docKey ?? null;
+          summary.conflicts.push({
+            collection: collection.name,
+            docKey,
+            key: conflict.key,
+            loser: conflict.loser,
+            lost: conflict.lost,
+            preview: conflict.loser.deleted ? null : (collection.preview?.(conflict.loser.payload) ?? null),
+            title: docKey ? (context.keys.documentByKey.get(docKey)?.title ?? null) : null,
+            winnerUpdatedAt: conflict.winner.updatedAt,
+          });
+        }
+      }
       summary.applied += merged.apply.length;
       outgoing.push(...merged.push.map((entry) => entryToRow(collection.name, entry)));
       next.base[collection.name] = Object.fromEntries(merged.base);
@@ -278,7 +324,11 @@ export async function runSync({
   const deletions = outgoing.filter((row) => row.deleted).length;
   if (deletions > maxSilentDeletions && !allowMassDeletion) throw new MassDeletionError(deletions);
 
-  if (outgoing.length) await remote.push(outgoing);
+  if (outgoing.length) {
+    const startedAt = Date.now();
+    const serverTimes = await remote.push(outgoing);
+    summary.push = { endedAt: Date.now(), serverTimes: Array.isArray(serverTimes) ? serverTimes : [], startedAt };
+  }
   await stateStore.save(next);
   return summary;
 }

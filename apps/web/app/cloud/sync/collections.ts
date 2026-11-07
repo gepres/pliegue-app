@@ -61,6 +61,13 @@ export interface SyncCollection {
   describe?(payload: unknown): { authors: string[]; title: string } | null;
   /** El documento de un elemento remoto, para saber si aquí se puede aplicar. */
   docKeyOf(key: string, payload: unknown): string | null;
+  /**
+   * `false`: sus conflictos no se guardan (06.3). El avance de lectura se queda con el mayor, y
+   * los índices y contadores no son algo que la persona quiera recuperar.
+   */
+  history?: boolean;
+  /** Qué dice una versión, en pocas palabras, para el historial de conflictos. */
+  preview?(payload: unknown): string | null;
   name: string;
   resolve?: MergeOptions["resolve"];
   snapshot(context: SyncContext): Map<string, SyncEntry>;
@@ -93,6 +100,7 @@ const favorites: SyncCollection = {
   },
   docKeyOf: (key) => key,
   name: "favorites",
+  preview: () => "Marcado como favorito",
   snapshot(context) {
     const items = new Map<string, SyncEntry>();
     for (const documentId of context.local.favorites) {
@@ -120,6 +128,7 @@ const readingProgress: SyncCollection = {
     }
   },
   docKeyOf: (key) => key,
+  history: false,
   name: "reading-progress",
   resolve(local, remote) {
     if (local.deleted || remote.deleted) return lastWriteWins(local, remote);
@@ -154,6 +163,14 @@ const annotations: SyncCollection = {
   },
   docKeyOf: (_key, payload) => (isRecord(payload) && typeof payload.docKey === "string" ? payload.docKey : null),
   name: "annotations",
+  preview(payload) {
+    if (!isRecord(payload)) return null;
+    const note = typeof payload.note === "string" ? payload.note.trim() : "";
+    const target = isRecord(payload.target) ? payload.target : {};
+    const quote = typeof target.quote === "string" ? target.quote.trim() : "";
+    const text = note || quote;
+    return text ? `«${text.length > 140 ? `${text.slice(0, 140)}…` : text}»` : null;
+  },
   snapshot(context) {
     const items = new Map<string, SyncEntry>();
     for (const annotation of context.local.annotations) {
@@ -207,6 +224,10 @@ const catalogAi: SyncCollection = {
   },
   docKeyOf: (key) => key,
   name: "catalog-ai",
+  preview(payload) {
+    const title = isRecord(payload) && isRecord(payload.catalog) ? payload.catalog.canonicalTitle : null;
+    return typeof title === "string" && title ? `Ficha de «${title}»` : "Ficha de la IA";
+  },
   snapshot(context) {
     const items = new Map<string, SyncEntry>();
     for (const record of context.local.catalogRecords) {
@@ -236,6 +257,10 @@ const catalogImport: SyncCollection = {
   },
   docKeyOf: () => null,
   name: "catalog-import",
+  preview(payload) {
+    const title = isRecord(payload) && isRecord(payload.bibliographic) ? payload.bibliographic.title : null;
+    return typeof title === "string" && title ? `Ficha importada de «${title}»` : "Ficha importada";
+  },
   snapshot(context) {
     const items = new Map<string, SyncEntry>();
     for (const record of context.local.importedCatalogs) {
@@ -327,6 +352,7 @@ const settings: SyncCollection = {
   },
   docKeyOf: () => null,
   name: "settings",
+  preview: () => null,
   // Un equipo nuevo, sin base, adopta los ajustes de la cuenta en vez de pisarlos con los suyos
   // por defecto. Después, gana el último cambio.
   resolve: (local, remote, base) => (base ? lastWriteWins(local, remote) : "remote"),
@@ -362,6 +388,11 @@ const bookTranslation: SyncCollection = {
   },
   docKeyOf: (key) => key,
   name: "book-translation",
+  preview(payload) {
+    return isRecord(payload) && typeof payload.source === "string" && typeof payload.target === "string"
+      ? `Traducir de ${payload.source} a ${payload.target}`
+      : null;
+  },
   snapshot(context) {
     const items = new Map<string, SyncEntry>();
     const stored = readJson(bookTranslationKey);

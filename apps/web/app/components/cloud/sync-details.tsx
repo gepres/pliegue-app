@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+
+import { Button } from "@pliegue/ui";
 
 import { collectionNames, describeActivity, syncedPercent } from "../../cloud/sync/sync-activity";
-import type { SyncStatus } from "../../cloud/sync/sync-controller";
+import { restoreConflict, type SyncStatus } from "../../cloud/sync/sync-controller";
+import { useSyncConflicts, type StoredConflict } from "../../cloud/sync/sync-history";
+import { sloSeconds } from "../../cloud/sync/sync-latency";
 import { useDriveConnection } from "../../drive/drive-connection";
 import { useDriveLibrary } from "../../library/drive-library-store";
 import styles from "./account-panel.module.css";
@@ -53,7 +58,7 @@ function clock(iso: string) {
  * cuánto está al día, de dónde salen los libros y qué hicieron las últimas vueltas. Los datos
  * son los de la última vuelta: no consultan la nube por su cuenta.
  */
-export function SyncDetails({ status }: { status: SyncStatus }) {
+export function SyncDetails({ status, userId }: { status: SyncStatus; userId: string }) {
   const { activity, books, summary, unsynced } = status;
   const percent = syncedPercent(summary, unsynced);
   const drive = useDriveConnection();
@@ -155,6 +160,9 @@ export function SyncDetails({ status }: { status: SyncStatus }) {
 
       {summary?.elsewhere.total ? <BooksElsewhere summary={summary} /> : null}
 
+      <SyncSpeed latency={status.latency} />
+      <ConflictHistory userId={userId} />
+
       {activity.length ? (
         <section aria-labelledby="sync-activity-title" className={styles.detailBlock}>
           <h3 id="sync-activity-title">Actividad</h3>
@@ -216,6 +224,117 @@ function BooksElsewhere({ summary }: { summary: NonNullable<SyncStatus["summary"
       <p className={styles.note}>
         Si añades aquí el mismo archivo (mismo nombre y tamaño), recupera lo que tenía guardado.
       </p>
+    </section>
+  );
+}
+
+const seconds = (value: number) => `${value.toLocaleString("es", { maximumFractionDigits: 1 })}\u00a0s`;
+
+/** Cuánto tarda un cambio en llegar a otro equipo (06.3, objetivo: 60 s en el p95). */
+function SyncSpeed({ latency }: { latency: SyncStatus["latency"] }) {
+  return (
+    <section aria-labelledby="sync-speed-title" className={styles.detailBlock}>
+      <h3 id="sync-speed-title">Rapidez</h3>
+      {latency?.total !== null && latency?.total !== undefined ? (
+        <p className={styles.booksLine} data-ok={latency.total <= sloSeconds || undefined} role="status">
+          Un cambio llega a tus otros equipos en unos <strong>{seconds(latency.total)}</strong> (p95: subir{" "}
+          {seconds(latency.up ?? 0)} y bajar {seconds(latency.down ?? 0)}). Objetivo: {sloSeconds}&nbsp;s
+          {latency.total <= sloSeconds ? ", cumplido." : ": no se cumple."}
+        </p>
+      ) : (
+        <p className={styles.note}>
+          Aún sin medidas suficientes
+          {latency ? ` (subir: ${latency.samples.up}, bajar: ${latency.samples.down})` : ""}. Se miden los cambios que viajan
+          mientras tus equipos están abiertos y con conexión.
+        </p>
+      )}
+      {latency?.total !== null && latency ? (
+        <p className={styles.note}>
+          Con {latency.samples.up} {latency.samples.up === 1 ? "subida" : "subidas"} y {latency.samples.down}{" "}
+          {latency.samples.down === 1 ? "bajada" : "bajadas"} medidas en este equipo.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/** Qué ajuste es cada uno de los que se sincronizan. */
+const settingNames: Record<string, string> = {
+  ai: "Ajustes de IA",
+  "postcard-design": "Diseño de las postales",
+  preferences: "Preferencias de lectura",
+  "reader-view": "Vista del lector",
+};
+
+function ago(iso: string) {
+  const minutes = Math.round((Date.now() - Date.parse(iso)) / 60_000);
+  if (minutes < 1) return "hace un momento";
+  if (minutes < 60) return `hace ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  return new Date(iso).toLocaleDateString("es", { day: "numeric", month: "short" });
+}
+
+/**
+ * Conflictos recientes (06.3): cuando dos equipos cambiaron lo mismo, uno ganó. Aquí está la
+ * versión que perdió, y se puede recuperar.
+ */
+function ConflictHistory({ userId }: { userId: string }) {
+  const conflicts = useSyncConflicts(userId);
+  const [message, setMessage] = useState<string | null>(null);
+  if (!conflicts.length) return null;
+  const shown = conflicts.slice(0, 10);
+
+  async function restore(conflict: StoredConflict) {
+    const done = await restoreConflict(userId, conflict.id);
+    setMessage(done ? "Restaurada: se subirá en la próxima vuelta y llegará a tus otros equipos." : "No se pudo restaurar ahora. Vuelve a intentarlo.");
+  }
+
+  return (
+    <section aria-labelledby="sync-conflicts-title" className={styles.detailBlock}>
+      <h3 id="sync-conflicts-title">Conflictos recientes</h3>
+      <p className={styles.note}>
+        Cuando dos equipos cambian lo mismo antes de sincronizarse, se queda el último cambio. La otra versión se guarda
+        aquí 30 días, por si era la buena.
+      </p>
+      <ol className={styles.conflicts}>
+        {shown.map((conflict) => {
+          const name = collectionNames[conflict.collection]?.one ?? conflict.collection;
+          const what =
+            conflict.collection === "settings"
+              ? (settingNames[conflict.key] ?? "Ajustes")
+              : `${name[0]?.toUpperCase() ?? ""}${name.slice(1)}${conflict.title ? ` de «${conflict.title}»` : ""}`;
+          return (
+            <li key={conflict.id}>
+              <div>
+                <strong>{what}</strong>
+                <small>
+                  {conflict.lost === "local" ? "Se quedó la de otro equipo" : "Este equipo pisó la de otro"} · {ago(conflict.at)}
+                </small>
+                <span className={styles.conflictLoser}>
+                  {conflict.loser.deleted
+                    ? "La otra versión era un borrado."
+                    : conflict.preview
+                      ? `La otra versión: ${conflict.preview}`
+                      : `La otra versión, del ${new Date(conflict.loser.updatedAt).toLocaleString("es", { day: "numeric", hour: "2-digit", minute: "2-digit", month: "short" })}.`}
+                </span>
+              </div>
+              {conflict.restoredAt ? (
+                <small>Restaurada</small>
+              ) : (
+                <Button onClick={() => void restore(conflict)} size="sm" type="button" variant="secondary">
+                  {conflict.loser.deleted ? "Restaurar el borrado" : "Restaurar esta versión"}
+                </Button>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      {message ? (
+        <p className={styles.note} role="status">
+          {message}
+        </p>
+      ) : null}
     </section>
   );
 }

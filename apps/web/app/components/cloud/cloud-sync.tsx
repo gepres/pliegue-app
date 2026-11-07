@@ -6,6 +6,7 @@ import { useAiSettings } from "../../ai/ai-settings-store";
 import { useAccount } from "../../cloud/account-store";
 import {
   registerLocalSource,
+  markLocalChange,
   requestSync,
   useSyncChoices,
   type LocalSource,
@@ -67,9 +68,13 @@ export function CloudSync() {
 
   const active = account.status === "signed-in" && choices.enabled;
 
-  // Cada cambio de lo que se sincroniza —y la propia activación— programa una vuelta.
+  // Cada cambio de lo que se sincroniza —y la propia activación— programa una vuelta. La primera
+  // vez es la carga, no un cambio de la persona: no cuenta para medir lo que tarda en subir (06.3).
+  const loadedRef = useRef(false);
   useEffect(() => {
     if (!active || !ready) return;
+    if (loadedRef.current) markLocalChange();
+    loadedRef.current = true;
     const timer = window.setTimeout(() => void requestSync(), changeDelayMs);
     return () => window.clearTimeout(timer);
   }, [
