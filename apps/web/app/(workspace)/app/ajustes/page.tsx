@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { AiSettingsPanel } from "../../../components/ai-settings-panel";
 import { AiBudgetPanel } from "../../../components/ai/ai-budget-panel";
 import { AiProcessingLog } from "../../../components/ai/ai-processing-log";
+import { AiRouterMatrix } from "../../../components/ai/ai-router-matrix";
 import { AccountPanel } from "../../../components/cloud/account-panel";
 import { InstallAppCard } from "../../../components/pwa/install-app";
 import { PreferencesPanel } from "../../../components/preferences-panel";
@@ -51,11 +52,12 @@ export default function SettingsPage() {
           content: (
             <div className={styles.settingsStack}>
               <AiSettingsPanel />
+              <AiRouterMatrix />
               <AiBudgetPanel />
               <AiProcessingLog />
             </div>
           ),
-          description: "Proveedor, clave, catálogo, traducción, gasto y registro",
+          description: "Proveedor por tarea, clave, sensibilidad, gasto y registro",
           icon: "sparkles",
           id: "ia",
           label: "Inteligencia artificial",

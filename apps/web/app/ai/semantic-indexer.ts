@@ -410,8 +410,12 @@ export async function searchLibrary(
   const semantic = new Map<number, number>();
   let semanticNote: string | null = null;
   const config = embeddingConfigOf(settings);
-  if (!config) semanticNote = "Tu proveedor no calcula embeddings: se busca solo por palabras.";
-  else {
+  if (!config) {
+    semanticNote =
+      settings.indexProvider === "off"
+        ? "Se busca solo por palabras, como elegiste en Ajustes → IA."
+        : "Tu proveedor no calcula embeddings: se busca solo por palabras.";
+  } else {
     const key = embeddingKey(config);
     const candidates = corpus.chunks.flatMap((chunk, index) => (allowed[index] && chunk.vector?.key === key ? [index] : []));
     if (!candidates.length) semanticNote = "Todavía no hay vectores de estos libros: se busca solo por palabras.";

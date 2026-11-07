@@ -7,6 +7,7 @@ import { Button, Card, Field, Input, Select } from "@pliegue/ui";
 
 import { budgetProviderNames, priceKey } from "../../ai/ai-budget";
 import { getSessionApiKey } from "../../ai/ai-session-secret-store";
+import { askModelOf, askProviderOf } from "../../ai/ai-settings";
 import { useAiSettings } from "../../ai/ai-settings-store";
 import { embeddingConfigOf, embeddingKey, estimateTokens } from "../../ai/embeddings";
 import {
@@ -72,7 +73,12 @@ export function SemanticSearchPanel() {
 
   const config = embeddingConfigOf(settings);
   const key = config ? embeddingKey(config) : null;
-  const providerName = budgetProviderNames[settings.provider] ?? settings.provider;
+  // Buscar y preguntar pueden ir con proveedores distintos (04.3), cada uno con su clave.
+  const indexName = config ? (budgetProviderNames[config.provider] ?? config.provider) : null;
+  const searchKey = () => (config ? getSessionApiKey(config.provider) : "");
+  const askProvider = askProviderOf(settings);
+  const askName = budgetProviderNames[askProvider] ?? askProvider;
+  const catalogName = budgetProviderNames[settings.provider] ?? settings.provider;
   const documents = library.allDocuments;
   const indexable = useMemo(() => documents.filter(isIndexable), [documents]);
   const records = useMemo(() => new Map(indexed.map((record) => [record.documentId, record])), [indexed]);
@@ -100,16 +106,22 @@ export function SemanticSearchPanel() {
     controller.current = abort;
     setRunning(true);
     setStatus(null);
-    const apiKey = getSessionApiKey(settings.provider);
+    const apiKey = searchKey();
     try {
       // 1. Trocear, en el equipo. Con esto ya se busca por palabras.
       let last = await indexDocuments(list, settings, apiKey, { embed: false, onProgress: setProgress, signal: abort.signal });
       if (last.stopped || !config) {
-        setStatus(last.stopped ? "Se detuvo." : `Listo: se busca por palabras. ${providerName} no calcula embeddings; para buscar por significado, cataloga con OpenAI, Gemini u Ollama.`);
+        setStatus(
+          last.stopped
+            ? "Se detuvo."
+            : settings.indexProvider === "off"
+              ? "Listo: se busca por palabras, como elegiste en Ajustes → IA. Nada sale del equipo."
+              : `Listo: se busca por palabras. ${catalogName} no calcula embeddings; para buscar por significado, elige en Ajustes → IA otro proveedor para buscar (OpenAI, Gemini u Ollama).`,
+        );
         return;
       }
       if (config.provider !== "ollama" && !apiKey) {
-        setStatus(`Troceados: ya se busca por palabras. Para buscar por significado, pon la clave de ${providerName} en Ajustes → IA y vuelve a indexar.`);
+        setStatus(`Troceados: ya se busca por palabras. Para buscar por significado, pon la clave de ${indexName} en Ajustes → IA y vuelve a indexar.`);
         return;
       }
       // 2. Lo que saldría, antes de mandarlo.
@@ -118,7 +130,7 @@ export function SemanticSearchPanel() {
       const byId = new Map(list.map((document) => [document.id, document]));
       const route = (document: LibraryDocument) => routeFor(documentSensitivity(document), config.place, hasConsent(document.id, "index"));
       const personal = list.filter((document) => route(document) === "ask");
-      if (personal.length && config.place === "cloud") await confirmPersonalSend(personal, "index", providerName);
+      if (personal.length && config.place === "cloud") await confirmPersonalSend(personal, "index", indexName ?? config.provider);
       const outgoing = corpus.chunks.filter((chunk) => {
         const document = byId.get(chunk.documentId);
         return listed.has(chunk.documentId) && document && chunk.vector?.key !== key && route(document) === "allow";
@@ -130,7 +142,7 @@ export function SemanticSearchPanel() {
         const books = new Set(outgoing.map((chunk) => chunk.documentId)).size;
         const confirmed = await confirmAction({
           confirmLabel: "Enviar y calcular",
-          description: `Para buscar por significado se envía a ${providerName} (${config.model}) el texto de ${count(books, "libro", "libros")}, en fragmentos.`,
+          description: `Para buscar por significado se envía a ${indexName} (${config.model}) el texto de ${count(books, "libro", "libros")}, en fragmentos.`,
           details: [
             `${count(outgoing.length, "fragmento", "fragmentos")} · ${count(characters, "carácter", "caracteres")}`,
             price !== undefined ? `Unos ${number(tokens)} tokens: ~${dollars.format((tokens / 1_000_000) * price)}` : `Unos ${number(tokens)} tokens (sin precio en la tabla de Ajustes → IA)`,
@@ -163,12 +175,12 @@ export function SemanticSearchPanel() {
   async function ask(text: string) {
     setSearching(true);
     setAsked({ error: null, question: text, result: null });
-    const apiKey = getSessionApiKey(settings.provider);
+    const apiKey = getSessionApiKey(askProvider);
     const byId = new Map(documents.map((document) => [document.id, document]));
     try {
-      if (settings.provider !== "ollama" && !apiKey) throw new Error(`Pon la clave de ${providerName} en Ajustes → IA para preguntar.`);
-      const prepared = await prepareQuestion(text, searchScope(), byId, settings, apiKey);
-      if (prepared.needsConsent.length) await confirmPersonalSend(prepared.needsConsent, "ask", providerName);
+      if (askProvider !== "ollama" && !apiKey) throw new Error(`Pon la clave de ${askName} en Ajustes → IA para preguntar.`);
+      const prepared = await prepareQuestion(text, searchScope(), byId, settings, searchKey());
+      if (prepared.needsConsent.length) await confirmPersonalSend(prepared.needsConsent, "ask", askName);
       const result = await answerPrepared(prepared, byId, settings, apiKey);
       setAsked({ error: null, question: text, result });
     } catch (error) {
@@ -185,7 +197,7 @@ export function SemanticSearchPanel() {
     if (mode === "ask") return ask(text);
     setSearching(true);
     try {
-      const found = await searchLibrary(text, searchScope(), settings, getSessionApiKey(settings.provider));
+      const found = await searchLibrary(text, searchScope(), settings, searchKey());
       setResult({ ...found, query: text });
     } catch (error) {
       setResult({ hits: [], query: text, searched: 0, semanticNote: error instanceof Error ? error.message : "No se pudo buscar." });
@@ -201,7 +213,7 @@ export function SemanticSearchPanel() {
         <p>
           Busca por palabras y por significado dentro del texto de tus libros, con la página o la sección donde está.
           Indexar trocea cada libro en este equipo; para buscar por significado, los fragmentos se envían a{" "}
-          {config ? `${providerName} (${config.model})` : "un proveedor que calcule embeddings"} y se guardan sus vectores aquí.
+          {config ? `${indexName} (${config.model})` : "un proveedor que calcule embeddings"} y se guardan sus vectores aquí.
           Los confidenciales se buscan solo por palabras.
         </p>
       </div>
@@ -248,7 +260,7 @@ export function SemanticSearchPanel() {
       {mode === "ask" ? (
         <p className={styles.note}>
           Responde solo con lo que dicen tus libros indexados, con citas que abren el libro en su sitio. Se envían a{" "}
-          {providerName} los fragmentos que mejor responden (hasta 8); los confidenciales no salen.
+          {askName} ({askModelOf(settings)}) los fragmentos que mejor responden (hasta 8); los confidenciales no salen.
         </p>
       ) : null}
       <form className={styles.form} onSubmit={search} role="search">
@@ -282,7 +294,7 @@ export function SemanticSearchPanel() {
 
       {mode === "ask" && asked ? (
         asked.result ? (
-          <LibraryAssistantAnswer providerName={providerName} question={asked.question} result={asked.result} />
+          <LibraryAssistantAnswer providerName={askName} question={asked.question} result={asked.result} />
         ) : asked.error ? (
           <p className={styles.note} role="alert">
             {asked.error}

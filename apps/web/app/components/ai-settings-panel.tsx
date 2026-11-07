@@ -1,15 +1,21 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { Fragment, useState, useSyncExternalStore } from "react";
 
 import { Button, Card, Field, Input, Select, Switch, Tag } from "@pliegue/ui";
 
 import {
+  askProviderChoices,
+  askProviderOf,
   defaultAiSettings,
+  indexProviderChoices,
+  indexProviderOf,
   normalizeAzureRegion,
   normalizeServiceUrl,
   translationProviderOf,
   type AiSettings,
+  type AskProviderChoice,
+  type IndexProviderChoice,
 } from "../ai/ai-settings";
 import { saveAiSettings, useAiSettings } from "../ai/ai-settings-store";
 import {
@@ -27,6 +33,7 @@ import {
   type ConnectionTestResult,
 } from "../ai/connection-test";
 import type { AiProvider } from "../ai/document-catalog";
+import { embeddingModels } from "../ai/embeddings";
 import { translationProviderChoices, type TranslationProviderChoice } from "../ai/translation-options";
 import { afterAiReady } from "../guide/next-steps";
 import { useLibraryDocuments } from "../library/use-library-documents";
@@ -314,6 +321,78 @@ function OllamaFields({
   );
 }
 
+/** Con qué buscar por significado: el modelo de embeddings de cada uno, o nadie. */
+function indexChoiceLabel(choice: IndexProviderChoice, catalogProvider: AiProvider) {
+  if (choice === "off") return "Solo por palabras · nada sale del equipo";
+  if (choice === "catalog") {
+    const model = embeddingModels[catalogProvider];
+    return `El de catalogar · ${providerLabels[catalogProvider]}${model ? ` (${model})` : ": no calcula embeddings, solo por palabras"}`;
+  }
+  return `${providerLabels[choice]} · ${embeddingModels[choice]}${choice === "ollama" ? ", en tu equipo" : ""}`;
+}
+
+function askChoiceLabel(choice: AskProviderChoice, catalogProvider: AiProvider) {
+  return choice === "catalog" ? `El de catalogar · ${providerLabels[catalogProvider]}` : providerLabels[choice];
+}
+
+/**
+ * La clave o el Ollama de buscar y preguntar (04.3), solo de los proveedores que no salen ya
+ * arriba: una clave aparece una vez por proveedor, y Ollama es un solo servicio.
+ */
+function SearchAskConnections({
+  draft,
+  onChange,
+  shownKeys,
+  shownOllama,
+}: {
+  draft: AiSettings;
+  onChange: (update: (current: AiSettings) => AiSettings) => void;
+  shownKeys: ReadonlySet<AiProvider>;
+  shownOllama: boolean;
+}) {
+  const secrets = useAiSessionSecrets();
+  const index = indexProviderOf(draft);
+  const ask = askProviderOf(draft);
+  const searching = index && embeddingModels[index] ? index : null;
+  const providers = [...new Set([searching, ask].filter((value): value is AiProvider => Boolean(value)))];
+  return (
+    <>
+      {providers.map((provider) => {
+        const models = [
+          ...(ask === provider ? [draft.askModels[provider]] : []),
+          ...(searching === provider ? [embeddingModels[provider]!] : []),
+        ];
+        const model = models[0] ?? "";
+        if (provider === "ollama") {
+          return (
+            <Fragment key={provider}>
+              {shownOllama ? (
+                <div className={styles.aiConnectionRow}>
+                  <p className={styles.aiGroupNote}>Con el mismo Ollama de arriba.</p>
+                  <ConnectionTest target={ollamaTarget(draft, model)} />
+                </div>
+              ) : (
+                <OllamaFields draft={draft} model={model} onChange={onChange} />
+              )}
+              {models.slice(shownOllama ? 0 : 1).map((name) => (
+                <OllamaModel key={name} model={name} url={draft.ollamaUrl} />
+              ))}
+            </Fragment>
+          );
+        }
+        return shownKeys.has(provider) ? (
+          <div className={styles.aiConnectionRow} key={provider}>
+            <p className={styles.aiGroupNote}>Usa la misma clave de {keyLabels[provider]} que has puesto arriba.</p>
+            <ConnectionTest target={{ apiKey: secrets[provider], model, provider }} />
+          </div>
+        ) : (
+          <ApiKeyField id={`ai-search-api-key-${provider}`} key={provider} model={model} provider={provider} />
+        );
+      })}
+    </>
+  );
+}
+
 export function AiSettingsPanel() {
   const settings = useAiSettings();
   const secrets = useAiSessionSecrets();
@@ -363,6 +442,20 @@ export function AiSettingsPanel() {
     }));
   }
 
+  const askProvider = askProviderOf(draft);
+  // Lo que ya tiene su clave o su Ollama arriba (catalogar y traducir), para no repetirlo.
+  const shownKeys = new Set<AiProvider>(
+    [draft.provider, translationModelProvider].filter((value): value is AiProvider => Boolean(value) && value !== "ollama"),
+  );
+  const shownOllama = draft.provider === "ollama" || translationProvider === "ollama";
+  // Sin clave solo si todas las tareas van con Ollama, el navegador o nadie.
+  const searchProvider = indexProviderOf(draft);
+  const keyless =
+    draft.provider === "ollama" &&
+    (translationProvider === "browser" || translationProvider === "ollama") &&
+    askProvider === "ollama" &&
+    (!searchProvider || searchProvider === "ollama");
+
   function chooseTranslation(choice: TranslationProviderChoice) {
     editDraft((current) => ({ ...current, translationProvider: choice }));
   }
@@ -395,21 +488,20 @@ export function AiSettingsPanel() {
     <Card aria-labelledby="ai-settings-title" as="section" className={styles.aiSettingsPanel}>
       <div className={styles.aiSettingsIntro}>
         <div>
-          <Tag>IA · catálogo y traducción BYOK</Tag>
+          <Tag>IA · catálogo, traducción y búsqueda BYOK</Tag>
           <h2 id="ai-settings-title">Elige tu proveedor de IA</h2>
           <p>
-            Con tu propia clave, Pliegue cataloga tus documentos. Para traducir libros usa, por
-            defecto, el traductor de Chrome o Edge, gratis y en tu equipo; una IA es opcional y puede
-            ser otra que la de catalogar. Para catalogar se envía un extracto limitado; para
-            traducir con una IA, el texto de la página que se traduce. Nunca el archivo completo.
+            Con tu propia clave, Pliegue cataloga tus documentos, busca en ellos y responde con
+            citas. Para traducir libros usa, por defecto, el traductor de Chrome o Edge, gratis y en
+            tu equipo. Cada tarea puede ir con un proveedor distinto. Para catalogar se envía un
+            extracto limitado; para traducir con una IA, el texto de la página que se traduce; para
+            buscar por significado, el texto en fragmentos. Nunca el archivo.
           </p>
         </div>
         <div className={styles.aiPrivacyStamp}>
           <span>Credencial</span>
           <strong>
-            {draft.provider === "ollama" && (translationProvider === "browser" || translationProvider === "ollama")
-              ? "No requerida"
-              : "Solo esta sesión"}
+            {keyless ? "No requerida" : "Solo esta sesión"}
           </strong>
           <small>Se elimina al recargar o cerrar la pestaña.</small>
         </div>
@@ -640,6 +732,74 @@ export function AiSettingsPanel() {
         )}
 
         <TranslationComparison onChoose={chooseTranslation} selected={translationProvider} />
+
+        {/* ---- Buscar y preguntar (04.3) ------------------------------------------- */}
+        <div className={styles.aiGroupHead} id="ai-buscar">
+          <h3>Buscar y preguntar</h3>
+          <p>
+            En IA, «Buscar en tus libros». Por defecto, con el proveedor de catalogar; cada cosa puede ir con otro.
+            Por ejemplo, Claude para preguntar y Ollama, en tu equipo, para buscar por significado, que Claude no hace.
+          </p>
+        </div>
+
+        <Field
+          description="Al cambiarlo, hay que volver a indexar para buscar por significado; por palabras se sigue buscando."
+          label="Buscar por significado con"
+          labelFor="ai-index-provider"
+        >
+          <Select
+            id="ai-index-provider"
+            onChange={(event) => {
+              const indexProvider = event.target.value as IndexProviderChoice;
+              editDraft((current) => ({ ...current, indexProvider }));
+            }}
+            value={draft.indexProvider}
+          >
+            {indexProviderChoices.map((choice) => (
+              <option key={choice} value={choice}>
+                {indexChoiceLabel(choice, draft.provider)}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field label="Preguntar con" labelFor="ai-ask-provider">
+          <Select
+            id="ai-ask-provider"
+            onChange={(event) => {
+              const choice = event.target.value as AskProviderChoice;
+              editDraft((current) => ({ ...current, askProvider: choice }));
+            }}
+            value={draft.askProvider}
+          >
+            {askProviderChoices.map((choice) => (
+              <option key={choice} value={choice}>
+                {askChoiceLabel(choice, draft.provider)}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field
+          description="Responder con citas pide más que una ficha: aquí puedes poner un modelo mejor solo para esto."
+          label="Modelo para preguntar"
+          labelFor="ai-ask-model"
+        >
+          <Input
+            autoComplete="off"
+            id="ai-ask-model"
+            name="pliegue-ai-ask-model"
+            onChange={(event) => {
+              const model = event.target.value;
+              editDraft((current) => ({ ...current, askModels: { ...current.askModels, [askProviderOf(current)]: model } }));
+            }}
+            placeholder="Identificador del modelo"
+            spellCheck={false}
+            value={draft.askModels[askProvider]}
+          />
+        </Field>
+
+        <SearchAskConnections draft={draft} onChange={editDraft} shownKeys={shownKeys} shownOllama={shownOllama} />
 
         <div className={styles.aiSettingsActions}>
           <Button type="submit">Guardar ajustes de IA</Button>
