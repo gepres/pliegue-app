@@ -78,6 +78,11 @@ interface Unit<Meta> {
   /** Un título: cierra el fragmento anterior y va al principio del siguiente. */
   heading?: boolean;
   meta: Meta;
+  /**
+   * Cuando un párrafo enorme se parte, qué le toca a cada trozo (`from` y `to`, en caracteres
+   * dentro de `text`). En PDF, su propio tramo de la página; si no se da, el mismo que el párrafo.
+   */
+  slice?: (from: number, to: number) => Meta;
   text: string;
 }
 
@@ -106,10 +111,20 @@ function pack<Meta>(units: readonly Unit<Meta>[]): Packed<Meta>[] {
     if (!text) continue;
     // Un título empieza fragmento, salvo que lo anterior sean solo títulos (capítulo y subtítulo).
     if (unit.heading && !onlyHeadings) flush();
-    for (const piece of splitLongText(text)) {
+    const pieces = splitLongText(text);
+    const leading = unit.text.length - unit.text.trimStart().length;
+    let cursor = 0;
+    for (const piece of pieces) {
       if (length && length + piece.length + 1 > chunkTargetCharacters && !onlyHeadings) flush();
+      let meta = unit.meta;
+      if (pieces.length > 1 && unit.slice) {
+        const at = text.indexOf(piece, cursor);
+        const from = at >= 0 ? at : cursor;
+        cursor = from + piece.length;
+        meta = unit.slice(leading + from, leading + from + piece.length);
+      }
       texts.push(piece);
-      metas.push(unit.meta);
+      metas.push(meta);
       length += piece.length + 1;
       if (!unit.heading) onlyHeadings = false;
     }
@@ -134,6 +149,8 @@ export interface PdfLayoutPage {
 }
 
 const maxRects = 48;
+/** Más hueco que esto entre dos trozos a la misma altura (un 3 % del ancho) es otra columna. */
+const columnGap = 0.03;
 
 /** Los rectángulos de los trozos que tocan un tramo, juntados por renglón. */
 export function rectsForRange(items: readonly PdfLayoutItem[], start: number, end: number): ChunkRect[] {
@@ -141,10 +158,12 @@ export function rectsForRange(items: readonly PdfLayoutItem[], start: number, en
   for (const item of items) {
     if (item.end <= start || item.start >= end) continue;
     const { rect } = item;
-    // Mismo renglón: se solapan en vertical más de la mitad del más bajo.
+    // Mismo renglón: se solapan en vertical más de la mitad del más bajo y están cerca en
+    // horizontal. Dos columnas a la misma altura son dos renglones, no uno que cruza el medianil.
     const line = lines.find((other) => {
       const overlap = Math.min(other.y + other.h, rect.y + rect.h) - Math.max(other.y, rect.y);
-      return overlap > Math.min(other.h, rect.h) / 2;
+      const gap = Math.max(rect.x - (other.x + other.w), other.x - (rect.x + rect.w), 0);
+      return overlap > Math.min(other.h, rect.h) / 2 && gap < columnGap;
     });
     if (!line) {
       lines.push({ ...rect });
@@ -169,7 +188,13 @@ export function chunkPdfPages(pages: readonly PdfLayoutPage[]): TextChunk[] {
     const units: Unit<{ end: number; start: number }>[] = [];
     const pattern = /[^\n]+(?:\n(?!\n)[^\n]+)*/g;
     for (let match = pattern.exec(page.text); match; match = pattern.exec(page.text)) {
-      units.push({ meta: { end: match.index + match[0].length, start: match.index }, text: match[0].replace(/\n/g, " ") });
+      const start = match.index;
+      // Mismo largo que en la página (un salto de renglón pasa a ser un espacio): los tramos cuadran.
+      units.push({
+        meta: { end: start + match[0].length, start },
+        slice: (from, to) => ({ end: start + to, start: start + from }),
+        text: match[0].replace(/\n/g, " "),
+      });
     }
     for (const packed of pack(units)) {
       const start = Math.min(...packed.metas.map((meta) => meta.start));

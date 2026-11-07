@@ -193,19 +193,23 @@ export async function replaceDocumentChunks(
   return next;
 }
 
-/** Guarda los vectores recién calculados de unos fragmentos y actualiza la ficha del libro. */
+/**
+ * Guarda los vectores recién calculados de unos fragmentos y actualiza la ficha del libro. Si el
+ * fragmento cambió mientras tanto (se volvió a trocear), su texto ya no es el del vector: no se
+ * guarda.
+ */
 export async function saveChunkVectors(
   documentId: string,
   key: string,
-  vectors: ReadonlyArray<{ id: string; vector: QuantizedVector }>,
+  vectors: ReadonlyArray<{ hash: string; id: string; vector: QuantizedVector }>,
 ) {
   const database = await openDatabase();
   try {
     const transaction = database.transaction([chunkStore, documentStore], "readwrite");
     const chunks = transaction.objectStore(chunkStore);
-    for (const { id, vector } of vectors) {
+    for (const { hash, id, vector } of vectors) {
       const record = await requestResult(chunks.get(id) as IDBRequest<SemanticChunkRecord | undefined>);
-      if (record) chunks.put({ ...record, vector: { data: vector.data, key, scale: vector.scale } });
+      if (record?.hash === hash) chunks.put({ ...record, vector: { data: vector.data, key, scale: vector.scale } });
     }
     const all = await requestResult(chunks.index(byDocument).getAll(documentId) as IDBRequest<SemanticChunkRecord[]>);
     const documents = transaction.objectStore(documentStore);

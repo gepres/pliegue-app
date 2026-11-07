@@ -5,7 +5,7 @@ import type { LibraryDocument } from "../library/documents";
 import type { SemanticDocumentRecord } from "../library/semantic-index-store";
 import { defaultAiSettings } from "./ai-settings";
 import { embeddingBatches, embeddingConfigOf, embeddingKey, estimateTokens } from "./embeddings";
-import { documentVersion, indexNeeds, isIndexable, plainTextSections } from "./semantic-indexer";
+import { chunkInScope, documentVersion, indexNeeds, isIndexable, plainTextSections } from "./semantic-indexer";
 
 const book = (extra: Partial<LibraryDocument> = {}) =>
   ({ format: "epub", id: "libro", indexedAt: "2026-11-01T00:00:00.000Z", searchText: "texto", title: "Libro", ...extra }) as LibraryDocument;
@@ -56,6 +56,8 @@ describe("indexar la biblioteca (04.4)", () => {
     // Un confidencial con un proveedor en la nube no espera vectores: no queda pendiente.
     expect(indexNeeds(book(), record({ embeddedCount: 0, embeddingKey: null }), key, false)).toEqual({ chunk: false, embed: false });
     expect(indexNeeds(book(), undefined, key, false)).toEqual({ chunk: true, embed: false });
+    // Un libro que falló (sin permiso para abrirlo) se vuelve a intentar.
+    expect(indexNeeds(book(), record({ chunkCount: 0, embeddedCount: 0, status: "error" }), key)).toEqual({ chunk: true, embed: true });
     // Un libro sin texto no pide vectores.
     expect(indexNeeds(book(), record({ chunkCount: 0, embeddedCount: 0, status: "no-text" }), key)).toEqual({ chunk: false, embed: false });
   });
@@ -83,5 +85,14 @@ describe("indexar la biblioteca (04.4)", () => {
     const big = Array.from({ length: 10 }, () => ({ text: "x".repeat(20_000) }));
     expect(embeddingBatches(big).map((batch) => batch.length)).toEqual([2, 2, 2, 2, 2]);
     expect(estimateTokens(10)).toBe(3);
+  });
+
+  it("el alcance: sin él no limita; vacío, no deja nada", () => {
+    const chunk = { documentId: "a", sourceKey: "copies" };
+    expect(chunkInScope(chunk, {})).toBe(true);
+    expect(chunkInScope(chunk, { documentIds: new Set(["a"]) })).toBe(true);
+    expect(chunkInScope(chunk, { documentIds: new Set() })).toBe(false);
+    expect(chunkInScope(chunk, { sourceKeys: new Set(["files"]) })).toBe(false);
+    expect(chunkInScope(chunk, { documentIds: new Set(["a"]), sourceKeys: new Set(["copies"]) })).toBe(true);
   });
 });

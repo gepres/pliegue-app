@@ -97,11 +97,46 @@ describe("trocear un libro (04.4)", () => {
     expect(describeLocation(chunks[0]!.location)).toBe("p. 1");
   });
 
+  it("un párrafo enorme de un PDF se parte y cada trozo lleva su propio tramo y sus renglones", () => {
+    const text = paragraph(1, 60);
+    // Un trozo por frase, cada uno en su renglón.
+    const items: PdfLayoutPage["items"] = [];
+    let at = 0;
+    let line = 0;
+    for (const match of text.matchAll(/[^.]+\.\s*/g)) {
+      items.push({ end: at + match[0].trimEnd().length, rect: { h: 0.01, w: 0.8, x: 0.1, y: 0.05 + line * 0.012 }, start: at });
+      at += match[0].length;
+      line += 1;
+    }
+    const chunks = chunkPdfPages([{ items, number: 1, text }]);
+    expect(chunks.length).toBeGreaterThan(1);
+    const ranges = chunks.map((chunk) => chunk.location as { end: number; rects: unknown[]; start: number });
+    for (const [index, chunk] of chunks.entries()) {
+      const range = ranges[index]!;
+      expect(text.slice(range.start, range.end)).toBe(chunk.text);
+      // Solo sus renglones, no los del párrafo entero.
+      expect(range.rects.length).toBeLessThan(items.length);
+    }
+    for (let index = 1; index < ranges.length; index += 1) expect(ranges[index]!.start).toBeGreaterThanOrEqual(ranges[index - 1]!.end);
+  });
+
+  it("dos columnas a la misma altura no se juntan en un renglón", () => {
+    const rects = rectsForRange(
+      [
+        { end: 5, rect: { h: 0.02, w: 0.4, x: 0.05, y: 0.1 }, start: 0 },
+        { end: 10, rect: { h: 0.02, w: 0.4, x: 0.55, y: 0.1 }, start: 5 },
+      ],
+      0,
+      10,
+    );
+    expect(rects).toHaveLength(2);
+  });
+
   it("junta en un rectángulo los trozos del mismo renglón", () => {
     const rects = rectsForRange(
       [
         { end: 5, rect: { h: 0.02, w: 0.1, x: 0.1, y: 0.1 }, start: 0 },
-        { end: 10, rect: { h: 0.02, w: 0.1, x: 0.25, y: 0.101 }, start: 5 },
+        { end: 10, rect: { h: 0.02, w: 0.1, x: 0.21, y: 0.101 }, start: 5 },
         { end: 15, rect: { h: 0.02, w: 0.3, x: 0.1, y: 0.2 }, start: 10 },
         { end: 25, rect: { h: 0.02, w: 0.3, x: 0.1, y: 0.3 }, start: 20 },
       ],
@@ -109,7 +144,7 @@ describe("trocear un libro (04.4)", () => {
       15,
     );
     expect(rects).toEqual([
-      { h: 0.021, w: 0.25, x: 0.1, y: 0.1 },
+      { h: 0.021, w: 0.21, x: 0.1, y: 0.1 },
       { h: 0.02, w: 0.3, x: 0.1, y: 0.2 },
     ]);
   });

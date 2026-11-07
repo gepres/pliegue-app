@@ -108,7 +108,9 @@ export function providerPlace(
   settings: { libreTranslateUrl: string; ollamaMode: "local" | "remote"; ollamaUrl: string },
 ): ProviderPlace {
   if (provider === "browser") return "device";
-  if (provider === "ollama") return settings.ollamaMode === "local" || isLoopbackUrl(settings.ollamaUrl) ? "device" : "cloud";
+  // Por la dirección y no por el modo: en modo local la URL ya es `localhost`, y si no lo fuera,
+  // el texto saldría del equipo (con 04.4, el libro entero).
+  if (provider === "ollama") return isLoopbackUrl(settings.ollamaUrl) ? "device" : "cloud";
   if (provider === "libretranslate") return isLoopbackUrl(settings.libreTranslateUrl) ? "device" : "cloud";
   return "cloud";
 }

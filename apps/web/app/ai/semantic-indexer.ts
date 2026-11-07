@@ -127,7 +127,9 @@ function errorMessage(error: unknown) {
  * vectores: se queda con la búsqueda por palabras y no cuenta como pendiente.
  */
 export function indexNeeds(document: LibraryDocument, record: SemanticDocumentRecord | undefined, key: string | null, canEmbed = true) {
-  const chunk = !record || record.version !== documentVersion(document) || record.chunkerVersion !== chunkerVersion;
+  // Un libro que falló (sin permiso, sin conexión) se vuelve a intentar.
+  const chunk =
+    !record || record.status === "error" || record.version !== documentVersion(document) || record.chunkerVersion !== chunkerVersion;
   const embed =
     Boolean(key) && canEmbed && (chunk || (record?.status === "ready" && (record.embeddingKey !== key || record.embeddedCount < record.chunkCount)));
   return { chunk, embed };
@@ -161,6 +163,8 @@ async function embedChunks(
   };
   for (const batch of embeddingBatches(pending)) {
     signal?.throwIfAborted();
+    // Antes de cada lote, otra vez: si la persona lo marca confidencial a mitad, no sale más.
+    if (routeFor(documentSensitivity(document), config.place, hasConsent(document.id, "index")) !== "allow") return;
     // El tope del presupuesto: el lote en curso termina; el siguiente no empieza (04.6).
     assertWithinBudget(config.provider, document.id);
     const characters = batch.reduce((sum, chunk) => sum + chunk.text.length, 0);
@@ -173,13 +177,17 @@ async function embedChunks(
         ...(signal ? { signal } : {}),
       });
       progress.waiting = null;
+      const expected = config.dimensions ?? vectors[0]?.length ?? 0;
+      if (!expected || vectors.some((vector) => vector.length !== expected || vector.some((value) => !Number.isFinite(value)))) {
+        throw new Error("El proveedor devolvió vectores vacíos o de otra dimensión.");
+      }
       const tokens = usage.inputTokens || estimateTokens(characters);
       recordAiUsage(config.provider, config.model, { inputTokens: tokens, outputTokens: 0 });
       recordProcessing({ ...audit, characters, route: auditRoute("allow", sensitivity, config.place), sent: batch.length, tokens });
       await saveChunkVectors(
         document.id,
         key,
-        batch.map((chunk, position) => ({ id: chunk.id, vector: quantize(vectors[position] ?? []) })),
+        batch.map((chunk, position) => ({ hash: chunk.hash, id: chunk.id, vector: quantize(vectors[position] ?? []) })),
       );
       progress.embedded += batch.length;
       publish();
@@ -260,6 +268,8 @@ export async function indexDocuments(
     const previousRecord = records.get(document.id);
     const needs = indexNeeds(document, previousRecord, key, canEmbedDocument(document, config));
     const sourceKey = sourceKeyOf(document);
+    // Si falla después de trocear (al calcular vectores), los fragmentos se quedan: se busca por palabras.
+    let chunked = false;
     try {
       let chunks = await readDocumentChunks(document.id);
       if (needs.chunk) {
@@ -286,6 +296,7 @@ export async function indexDocuments(
         }
         chunks = await replaceDocumentChunks({ ...base, status: "ready" }, fresh, chunks);
       }
+      chunked = true;
       if (config && chunks.length) {
         // Sensibilidad (04.3): el texto entero sale del equipo solo si el router lo deja.
         const sensitivity = documentSensitivity(document);
@@ -318,8 +329,9 @@ export async function indexDocuments(
       }
       const message = errorMessage(error);
       progress.errors.push({ documentId: document.id, message });
-      // Si ya estaba troceado, se queda; si no, la ficha dice por qué falló.
-      if (!previousRecord || needs.chunk) {
+      // Si falló al trocear, la ficha dice por qué (y se reintenta la próxima vez); si falló al
+      // calcular vectores, los fragmentos se quedan y faltan solo los vectores.
+      if (!chunked) {
         await saveSemanticDocument({
           chunkCount: 0,
           chunkerVersion,
@@ -347,10 +359,18 @@ export async function indexDocuments(
 /* ---- Buscar --------------------------------------------------------------------------------------- */
 
 export interface SearchScope {
-  /** Solo estos libros (los que se ven en la biblioteca); vacío no limita. */
+  /** Solo estos libros (los que se ven en la biblioteca); sin él, no limita; vacío, ninguno. */
   documentIds?: ReadonlySet<string>;
-  /** Solo estas fuentes (`sourceKeyOf`); vacío no limita. */
+  /** Solo estas fuentes (`sourceKeyOf`); sin él, no limita; vacío, ninguna. */
   sourceKeys?: ReadonlySet<string>;
+}
+
+/**
+ * Si un fragmento entra en el alcance. Un conjunto vacío es «nada», no «todo»: sin libros
+ * visibles (la biblioteca aún cargando, o todo desvinculado) no se busca en ninguno.
+ */
+export function chunkInScope(chunk: Pick<SemanticChunkRecord, "documentId" | "sourceKey">, scope: SearchScope) {
+  return (!scope.sourceKeys || scope.sourceKeys.has(chunk.sourceKey)) && (!scope.documentIds || scope.documentIds.has(chunk.documentId));
 }
 
 /** Por significado entran los fragmentos con al menos el 75 % del parecido del mejor. */
@@ -383,11 +403,7 @@ export async function searchLibrary(
   { limit = 12, signal }: { limit?: number; signal?: AbortSignal } = {},
 ): Promise<SearchResult> {
   const corpus = await loadSearchCorpus();
-  const inScope = (chunk: SemanticChunkRecord | undefined) =>
-    Boolean(chunk) &&
-    (!scope.sourceKeys?.size || scope.sourceKeys.has(chunk!.sourceKey)) &&
-    (!scope.documentIds?.size || scope.documentIds.has(chunk!.documentId));
-  const allowed = corpus.chunks.map((chunk) => inScope(chunk));
+  const allowed = corpus.chunks.map((chunk) => chunkInScope(chunk, scope));
   const searched = allowed.filter(Boolean).length;
   const lexical = lexicalScores(corpus.lexical, query, (index) => allowed[index] === true);
 
@@ -402,8 +418,9 @@ export async function searchLibrary(
     else if (config.provider !== "ollama" && !apiKey) semanticNote = "Falta la clave de tu proveedor en esta sesión: se busca solo por palabras.";
     else {
       try {
-        const { usage, vectors } = await requestEmbeddings(config, settings, apiKey, [query], "query", signal ? { signal } : {});
-        recordAiUsage(config.provider, config.model, { inputTokens: usage.inputTokens || estimateTokens(query.length), outputTokens: 0 });
+        const asked = query.slice(0, 2_000);
+        const { usage, vectors } = await requestEmbeddings(config, settings, apiKey, [asked], "query", signal ? { signal } : {});
+        recordAiUsage(config.provider, config.model, { inputTokens: usage.inputTokens || estimateTokens(asked.length), outputTokens: 0 });
         const vector = normalizeVector(vectors[0] ?? []);
         const scores = candidates.map((index) => {
           const chunk = corpus.chunks[index]!;
