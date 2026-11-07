@@ -9,7 +9,7 @@ import {
   maxQuestionCharacters,
   type AnswerFragment,
 } from "../../../ai/library-answer";
-import type { ChunkLocation } from "../../../library/chunking";
+import { isRecord, validLocation } from "../../../ai/route-fragments";
 
 /**
  * Responder a una pregunta con fragmentos de los libros (04.5), con la clave de la sesión. Solo
@@ -27,23 +27,6 @@ interface AnswerRouteRequest {
 
 const maxFragmentCharacters = 2_200;
 const maxTotalCharacters = 18_000;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-/** Solo lo que hace falta para citar: página, o sección con su título. */
-function validLocation(value: unknown): ChunkLocation | null {
-  if (!isRecord(value)) return null;
-  if (value.kind === "page" && Number.isInteger(value.page) && (value.page as number) > 0) {
-    return { end: 0, kind: "page", page: value.page as number, rects: [], start: 0 };
-  }
-  if (value.kind === "section" && Number.isInteger(value.section) && (value.section as number) >= 0) {
-    const title = typeof value.title === "string" ? value.title.slice(0, 200) : "";
-    return { blockEnd: 0, blockStart: 0, kind: "section", section: value.section as number, sectionId: "", title };
-  }
-  return null;
-}
 
 function validFragments(value: unknown): AnswerFragment[] | null {
   if (!Array.isArray(value) || !value.length || value.length > maxAnswerFragments) return null;
