@@ -1,0 +1,166 @@
+/* Ajustes → IA: registro de la IA (04.6). */
+.panel {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  grid-template-columns: minmax(0, 1fr);
+  margin-bottom: var(--pliegue-spacing-lg);
+}
+
+.intro {
+  min-width: 0;
+}
+
+.intro h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.intro p {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.55;
+  margin: var(--pliegue-spacing-xs) 0 0;
+  max-width: 48rem;
+}
+
+.note {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 48rem;
+}
+
+.note:empty {
+  display: none;
+}
+
+.muted {
+  color: var(--pliegue-color-text-secondary);
+}
+
+.summary {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
+  margin: 0;
+  max-width: 48rem;
+}
+
+.summary div {
+  border-left: 3px solid var(--pliegue-color-border-default);
+  min-width: 0;
+  padding: 2px 0 2px var(--pliegue-spacing-sm);
+}
+
+.summary dt {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summary dd {
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.list {
+  display: grid;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  max-width: 48rem;
+  padding: 0;
+}
+
+.entry {
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--pliegue-spacing-sm) 0 var(--pliegue-spacing-sm) var(--pliegue-spacing-sm);
+  position: relative;
+}
+
+/* Una marca a la izquierda dice dónde se procesó: no solo con color, también con el texto. */
+.entry::before {
+  background: var(--pliegue-color-border-default);
+  border-radius: 2px;
+  bottom: var(--pliegue-spacing-sm);
+  content: "";
+  left: 0;
+  position: absolute;
+  top: var(--pliegue-spacing-sm);
+  width: 3px;
+}
+
+.entry[data-place="cloud"]::before {
+  background: var(--pliegue-color-accent-warm);
+}
+
+.entry[data-route="kept-local"]::before,
+.entry[data-route="needs-consent"]::before {
+  background: var(--pliegue-color-text-secondary);
+}
+
+.entry p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm);
+  justify-content: space-between;
+}
+
+.flow {
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.head time {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.book {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.line,
+.route {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.place {
+  color: var(--pliegue-color-text-secondary);
+  margin-left: 0.3em;
+}
+
+.place::before {
+  content: "· ";
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm);
+}

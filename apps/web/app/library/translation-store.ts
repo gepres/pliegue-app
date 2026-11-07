@@ -1,5 +1,6 @@
 "use client";
 
+import { pairBelongsToEngine } from "../ai/processing-log";
 import type { TranslatedBlock } from "./translation";
 
 /**
@@ -193,6 +194,19 @@ export async function clearTranslation(documentId: string, pairId: string) {
     database.close();
   }
   return units.size;
+}
+
+/**
+ * Borra lo que tradujo un motor en un libro, a cualquier idioma (04.6, desde el registro de la
+ * IA). Lo de otros motores se queda. Dice cuántas páginas o secciones borró.
+ */
+export async function clearEngineTranslations(documentId: string, engine: string) {
+  const pairs = (await translationPairs()).filter(
+    (entry) => entry.documentId === documentId && pairBelongsToEngine(entry.pairId, engine),
+  );
+  let removed = 0;
+  for (const { pairId } of pairs) removed += await clearTranslation(documentId, pairId);
+  return removed;
 }
 
 /** Todas las traducciones de un documento, con cualquier motor y par de idiomas. */

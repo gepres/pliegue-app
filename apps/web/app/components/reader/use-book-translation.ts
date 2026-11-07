@@ -10,6 +10,8 @@ import {
   type TranslationSnapshot,
 } from "../../library/translation-session";
 import { assertWithinBudget } from "../../ai/ai-usage-store";
+import { auditRoute, auditTranslator, engineIdentity, type ProcessingEvent } from "../../ai/processing-log";
+import { recordProcessing } from "../../ai/processing-log-store";
 import { routeFor, type ProviderPlace, type Sensitivity } from "../../library/sensitivity";
 import { hasConsent } from "../../library/sensitivity-store";
 import { confirmPersonalSend } from "../ai/sensitive-consent";
@@ -203,8 +205,20 @@ export function useBookTranslation<Block extends { text: string }>({
       setEngineKind(kind);
       // Sensibilidad (04.3): confidencial, solo en el equipo; personal, con permiso una vez. Al
       // retomar un libro sin pulsar nada no se pregunta: espera al botón.
-      const route = routeFor(sensitivity, kind === "browser" ? "device" : aiPlace, hasConsent(documentId, "translate"));
+      const place = kind === "browser" ? "device" : aiPlace;
+      const route = routeFor(sensitivity, place, hasConsent(documentId, "translate"));
+      // El registro de la IA (04.6): qué pasó por qué motor, sin textos.
+      const audit: ProcessingEvent = {
+        documentId,
+        engine: chosen.id,
+        flow: "translate",
+        ...engineIdentity(chosen.id),
+        place,
+        route: auditRoute(route, sensitivity, place),
+        sensitivity,
+      };
       if (route === "block") {
+        if (interactive) recordProcessing(audit);
         setPhase({ kind: "sensitive" });
         return;
       }
@@ -212,9 +226,11 @@ export function useBookTranslation<Block extends { text: string }>({
         const accepted = interactive && (await confirmPersonalSend([{ id: documentId, title }], "translate", aiProviderName));
         if (attempt !== attemptRef.current) return;
         if (!accepted) {
+          if (interactive) recordProcessing(audit);
           setPhase({ kind: "off" });
           return;
         }
+        audit.route = auditRoute("allow", sensitivity, place);
       }
       setPhase({ kind: "checking" });
       const availability = await chosen.availability(next);
@@ -230,9 +246,11 @@ export function useBookTranslation<Block extends { text: string }>({
       }
       try {
         if (availability !== "available") setPhase({ fraction: 0, kind: "downloading" });
-        const translator = await chosen.create(next, (fraction) => {
+        const opened = await chosen.create(next, (fraction) => {
           if (attempt === attemptRef.current) setPhase({ fraction, kind: "downloading" });
         });
+        const audited = auditTranslator(opened, (characters) => recordProcessing({ ...audit, characters, failed: 1 }));
+        const translator = audited.translator;
         const pairId = translationPairId(chosen.id, next);
         const storedIds = await listTranslatedUnits(documentId, pairId).catch(() => new Set<string>());
         if (attempt !== attemptRef.current) {
@@ -258,6 +276,7 @@ export function useBookTranslation<Block extends { text: string }>({
                   translatedAt: new Date().toISOString(),
                   unitId: id,
                 });
+                recordProcessing({ ...audit, characters: audited.flush(), sent: 1 });
                 // Con el tope lleno se van las traducciones más antiguas de otros libros (05.6).
                 // No frena la lectura: si falla, se queda como estaba.
                 void trimTranslations(documentId).catch(() => undefined);

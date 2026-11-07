@@ -11,6 +11,8 @@ import { providerModel, type AiSettings } from "./ai-settings";
 import { checkApiKey } from "./api-key";
 import { getSessionApiKey } from "./ai-session-secret-store";
 import { assertWithinBudget, recordAiUsage } from "./ai-usage-store";
+import { auditRoute } from "./processing-log";
+import { recordProcessing } from "./processing-log-store";
 import { providerPlace, routeFor } from "../library/sensitivity";
 import { documentSensitivity, hasConsent } from "../library/sensitivity-store";
 import { requestCatalogFromProvider } from "./catalog-provider-client";
@@ -417,10 +419,22 @@ async function runCatalogAnalysis(
   async function analyzeOne(document: LibraryDocument) {
     // Sensibilidad (04.3): lo confidencial no sale del equipo y lo personal, solo con permiso.
     // No se escribe ficha: el libro queda como estaba y se cuenta aparte.
-    const route = routeFor(documentSensitivity(document), place, hasConsent(document.id, "catalog"));
+    const sensitivity = documentSensitivity(document);
+    const route = routeFor(sensitivity, place, hasConsent(document.id, "catalog"));
+    // El registro de la IA (04.6): qué libro pasó por qué proveedor, sin textos.
+    const audit = {
+      documentId: document.id,
+      flow: "catalog" as const,
+      model,
+      place,
+      provider: settings.provider,
+      route: auditRoute(route, sensitivity, place),
+      sensitivity,
+    };
     if (route !== "allow") {
       if (route === "block") progress.keptLocal.confidential += 1;
       else progress.keptLocal.personal += 1;
+      recordProcessing(audit);
       return;
     }
     const fingerprint = createCatalogInputFingerprint(
@@ -520,6 +534,12 @@ async function runCatalogAnalysis(
       progress.analyzed += 1;
       progress.usage = addCatalogUsage(progress.usage, usage);
       recordAiUsage(settings.provider, model, usage);
+      recordProcessing({
+        ...audit,
+        characters: input.excerpt.length,
+        sent: 1,
+        tokens: usage.inputTokens + usage.outputTokens,
+      });
     } catch (error) {
       progress.waiting = null;
       // Detenido a mitad: el documento se queda como estaba, ni «en análisis» ni con un error
@@ -532,6 +552,8 @@ async function runCatalogAnalysis(
       // Si se esperó y reintentó, se dice: un límite que sigue tras los reintentos no es lo
       // mismo que uno que no dejó ni intentarlo.
       const tried = retries ? ` Se reintentó ${retries === 1 ? "1 vez" : `${retries} veces`}.` : "";
+      // El extracto pudo salir aunque la respuesta fallara: se apunta como enviado.
+      recordProcessing({ ...audit, characters: input.excerpt.length, failed: 1 });
       await saveDocumentCatalogRecord(
         createRecord(document, settings, fingerprint, "error", {
           error: `${errorMessage(error)}${tried}`.slice(0, 400),

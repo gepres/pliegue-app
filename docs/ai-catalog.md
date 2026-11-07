@@ -177,6 +177,33 @@ Decisión del 6-nov en Foundry (04.6). Ajustes → IA, «Gasto y presupuesto».
 - **Registros:** las rutas `/api/ai/*` no escriben en la consola (`api/ai/no-logs.test.ts`):
   reciben textos de libros y claves.
 
+## Registro de la IA (04.6)
+
+Ajustes → IA, «Registro de la IA». Cierra el criterio «retención y fallback auditables y borrado
+de derivados» de 04.6.
+
+- **Qué apunta:** por libro, flujo (catalogar, traducir), proveedor, modelo y día: cuándo,
+  dónde se procesó (en el equipo o fuera), su sensibilidad, qué decidió el router (enviado,
+  enviado con permiso, no salió por confidencial, no salió por ser personal sin permiso) y
+  cuánto se envió (fichas o páginas, caracteres, tokens si el proveedor los da, fallos).
+- **Qué no apunta:** textos, títulos ni claves. El título se busca al enseñarlo, en la
+  biblioteca de este equipo; si el libro ya no está, se dice. Lo que se cancela («Detener»)
+  no cuenta como fallo.
+- **Retención:** 90 días y 1.000 entradas como mucho, en `localStorage`
+  (`pliegue-ai-processing-v1`). Lo caducado se va al escribir y al abrir el panel. No viaja con
+  la cuenta. «Borrar los datos de este navegador» se lo lleva, por su prefijo.
+- **Fallback:** no hay cambios automáticos de proveedor. Si uno falla, se para y queda el fallo;
+  si el router no deja salir un libro, queda con su razón. Ningún flujo cruza del equipo a la
+  nube sin que lo pida la persona.
+- **Borrado de derivados:** desde cada fila, «Borrar la ficha» (la de la IA; el libro vuelve a
+  la cola) o «Borrar lo traducido» (solo lo de ese motor, a cualquier idioma). Borrar
+  derivados no borra el registro: sigue diciendo qué se envió. También se puede borrar el
+  registro entero y descargarlo en JSON (con el título de hoy de cada libro).
+- **Código:** `ai/processing-log.ts` (modelo, retención y el traductor que cuenta, con pruebas),
+  `ai/processing-log-store.ts`, `components/ai/ai-processing-log.tsx`. Se apunta en la cola del
+  catálogo (`catalog-analysis.ts`) y al traducir (`use-book-translation.ts`). e2e:
+  `apps/web/e2e/registro-ia.mjs`.
+
 ## Datos persistidos
 
 La base IndexedDB `pliegue-document-catalog` guarda una fila por `documentId`:
