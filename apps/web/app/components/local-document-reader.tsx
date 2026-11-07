@@ -100,6 +100,9 @@ import { readDocumentChunks, type SemanticChunkRecord } from "../library/semanti
 import { confirmAction } from "./app-ui/confirm-dialog";
 import { SnippetTranslationCard, type SnippetRequest } from "./reader/snippet-translation";
 import { TranslationPanel } from "./reader/translation-panel";
+import { BookSummaryPanel } from "./reader/book-summary-panel";
+import { useBookSummaryState } from "./reader/book-summary-store";
+import { isIndexable } from "../ai/semantic-indexer";
 import {
   readTranslationLayout,
   useParallelWidth,
@@ -993,6 +996,8 @@ export function LocalReaderShell({
   const [panelOpen, setPanelOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [translationOpen, setTranslationOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const summaryState = useBookSummaryState(document.id);
   // Con la traducción en marcha, «Original» la esconde sin detenerla: sigue preparando páginas.
   const [translationVisible, setTranslationVisible] = useState(true);
   // Encima del original o a su lado. A su lado solo en pantallas anchas: en el teléfono la
@@ -1493,6 +1498,24 @@ export function LocalReaderShell({
                   view={translationView}
                 />
               )}
+            </Popover>
+          ) : null}
+          {isIndexable(document) ? (
+            <Popover
+              onOpenChange={setSummaryOpen}
+              open={summaryOpen}
+              title="Resumir este libro"
+              trigger={(props) => (
+                <IconButton
+                  {...props}
+                  icon="sparkles"
+                  label={summaryState.status === "running" ? "Resumiendo" : "Resumir"}
+                  tone={summaryState.status === "running" ? "active" : "plain"}
+                />
+              )}
+              width={420}
+            >
+              {() => <BookSummaryPanel document={document} />}
             </Popover>
           ) : null}
           <Popover

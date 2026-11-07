@@ -40,6 +40,7 @@ export const flowTitles: Record<SensitiveFlow, string> = {
   ask: "Preguntar",
   catalog: "Catalogar",
   index: "Buscar por significado",
+  summarize: "Resumir un libro",
   translate: "Traducir",
 };
 
@@ -48,6 +49,7 @@ export const flowSends: Record<SensitiveFlow, string> = {
   ask: "los fragmentos que responden",
   catalog: "un extracto",
   index: "el texto entero, en fragmentos",
+  summarize: "el libro entero, por partes",
   translate: "el texto de lo que se traduce",
 };
 
@@ -76,6 +78,7 @@ export function flowEngine(settings: AiSettings, flow: SensitiveFlow): { engine:
     const model = provider ? embeddingModels[provider] : null;
     return provider && model ? { engine: provider, model } : { engine: null, model: null };
   }
+  // Resumir un libro va con el proveedor y el modelo de preguntar.
   return { engine: askProviderOf(settings), model: askModelOf(settings) };
 }
 
@@ -127,6 +130,8 @@ export function outcomeLabel(flow: SensitiveFlow, outcome: RouteOutcome) {
           ? "No sale: se ofrece el equipo"
           : flow === "index"
             ? "No sale: solo por palabras"
-            : "No sale: se enseña aparte";
+            : flow === "summarize"
+              ? "No sale: no se resume"
+              : "No sale: se enseña aparte";
   }
 }

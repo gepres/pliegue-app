@@ -66,7 +66,7 @@ describe("proveedor por flujo (04.3)", () => {
 describe("la tabla del router (04.3)", () => {
   it("por defecto: cada flujo en la nube del de catalogar, salvo traducir, que va en el equipo", () => {
     const rows = routerMatrix(defaultAiSettings);
-    expect(rows.map((row) => row.flow)).toEqual(["catalog", "translate", "index", "ask"]);
+    expect(rows.map((row) => row.flow)).toEqual(["catalog", "translate", "index", "ask", "summarize"]);
     const translate = rows.find((row) => row.flow === "translate")!;
     expect(translate).toMatchObject({ engine: "browser", place: "device", where: "En este equipo" });
     expect(Object.values(translate.outcomes)).toEqual(["local", "local", "local", "local"]);

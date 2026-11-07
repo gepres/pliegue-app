@@ -1,0 +1,109 @@
+/* Lector: «Resumir este libro» (04.5). */
+.panel {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  max-height: min(70vh, 640px);
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.intro,
+.note {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.running {
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+  justify-items: start;
+}
+
+.running p {
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.running progress {
+  accent-color: var(--pliegue-color-action-primary);
+  width: 100%;
+}
+
+.problem {
+  border-left: 3px solid var(--pliegue-color-accent-warm);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+  padding-left: var(--pliegue-spacing-sm);
+}
+
+.problem[data-status="error"] {
+  border-left-color: var(--pliegue-color-status-danger);
+}
+
+.result {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  min-width: 0;
+  padding-top: var(--pliegue-spacing-sm);
+}
+
+.saved {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.summary {
+  font-family: var(--pliegue-font-reading);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.points {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.points > li > p {
+  font-family: var(--pliegue-font-reading);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.citations {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.citations li {
+  font-size: 0.8125rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.citations a {
+  font-style: italic;
+  margin-right: 6px;
+}
+
+.where {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.75rem;
+}

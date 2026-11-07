@@ -161,6 +161,7 @@ Cada tarea que puede sacar el texto de un libro del equipo tiene su proveedor:
 | Traducir | `translationProvider` + `translationModels` | el traductor del navegador |
 | Buscar por significado | `indexProvider`: `catalog`, `openai`, `gemini`, `ollama` u `off` | el de catalogar |
 | Preguntar | `askProvider`: `catalog` o un proveedor, + `askModels` | el de catalogar |
+| Resumir un libro | el de preguntar | el de catalogar |
 
 - **Buscar** no ofrece Claude, que no calcula embeddings. Con `off` se busca solo por palabras y
   no sale nada. Cambiarlo cambia la firma de los vectores (`embeddingKey`): hay que volver a
@@ -307,7 +308,42 @@ indexados, con citas comprobadas.
 - **Notas:** «Guardar como nota» crea una anotación azul en el libro de la cita, anclada por la
   cita y su contexto (en PDF, en la capa de texto de su página), con el hallazgo como nota. El
   libro no se toca.
+  - El botón pasa a «Nota guardada» y no la duplica.
+  - Junto a él dice dónde quedó, con «Verla en el lector».
 - **Registro y presupuesto:** como los demás flujos; la respuesta no se guarda.
+- **Proveedor:** el de «Preguntar con» (04.3); por defecto, el de catalogar.
+
+### Resumir un libro entero
+
+Opción «b» del dueño (7-nov): botón «Resumir» en la barra del lector.
+
+- **Cómo resume:**
+  1. Lee el libro ya troceado por la búsqueda; si no estaba indexado, lo trocea en el equipo,
+     sin enviar nada.
+  2. Lo parte en tandas seguidas de hasta 24 fragmentos y 24.000 caracteres.
+  3. De cada parte, el modelo saca de 2 a 6 ideas, cada una con una cita literal. Las citas se
+     comprueban en su fragmento (`verifySummaryPart`), y una idea sin cita comprobable no sigue.
+  4. Las ideas se juntan (`P1`, `P2`…) en el resumen: de uno a tres párrafos y de 5 a 10 puntos.
+     El modelo solo dice qué ideas sostienen cada punto, y el punto se queda con las citas ya
+     comprobadas de esas ideas (`assembleSummary`). Ninguna cita final la escribe el modelo.
+  5. Con más de 120 ideas, se juntan primero por grupos.
+- **Antes de enviar:** dice a quién, cuántos caracteres, en cuántas partes y cuántos tokens y
+  dólares estimados, con los precios de Ajustes → IA. Más de 2 millones de caracteres no se
+  resumen enteros.
+- **Proveedor y modelo:** los de «Preguntar».
+- **Sensibilidad:** flujo propio, «resumir», porque sale el libro entero:
+  - lo personal pide su permiso;
+  - lo confidencial con un proveedor en la nube no sale, y se ofrece elegir Ollama.
+- **Presupuesto y fallos:** el presupuesto se mira antes de cada parte. Si el proveedor falla,
+  se para y se dice; no se prueba con otro.
+- **Qué se queda:** una nota del libro, anclada a la primera cita, con el resumen y los puntos
+  con sus citas y su sitio. Se sincroniza como cualquier nota. En el registro, «Resumir», sin
+  textos.
+- **Estado:** el resumen en curso vive en memoria por libro (`book-summary-store.ts`). Cerrar la
+  ventanita no lo para ni lo pierde.
+- **Código:** `ai/book-summary.ts` (partes, instrucciones, esquemas, comprobación y nota, con
+  pruebas), `ai/book-summarizer.ts`, `api/ai/summarize/route.ts` (pasos `part` y `whole`) y
+  `components/reader/book-summary-panel.tsx`. e2e: `apps/web/e2e/resumir-libro.mjs`.
 - **Código:** `ai/library-answer.ts` (esquema, instrucciones y comprobación, con pruebas),
   `ai/library-assistant.ts`, `api/ai/answer/route.ts` y
   `components/ai/library-assistant-answer.tsx`. e2e: `apps/web/e2e/asistente-citas.mjs`.

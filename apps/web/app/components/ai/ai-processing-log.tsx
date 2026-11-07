@@ -63,6 +63,7 @@ const sentLabel: Record<ProcessingEntry["flow"], (value: number) => string> = {
   ask: (value) => count(value, "fragmento", "fragmentos"),
   catalog: (value) => count(value, "ficha", "fichas"),
   index: (value) => count(value, "fragmento", "fragmentos"),
+  summarize: (value) => count(value, "fragmento", "fragmentos"),
   translate: (value) => count(value, "página o sección", "páginas o secciones"),
 };
 
@@ -70,6 +71,7 @@ const derivativeLabel: Record<ProcessingEntry["flow"], string> = {
   ask: "",
   catalog: "Borrar la ficha",
   index: "Borrar el índice",
+  summarize: "",
   translate: "Borrar lo traducido",
 };
 
@@ -81,8 +83,8 @@ function placeLabel(entry: ProcessingEntry) {
 
 /** Hay algo que la IA devolvió y se puede borrar: la ficha o lo traducido con ese motor. */
 function hasDerivative(entry: ProcessingEntry) {
-  // Consultar no guarda nada que borrar: la respuesta no se queda (las notas son de la persona).
-  if (entry.flow === "ask") return false;
+  // Consultar y resumir no guardan nada que borrar: lo que se queda son notas, y son de la persona.
+  if (entry.flow === "ask" || entry.flow === "summarize") return false;
   return routeSent(entry.route) && entry.sent > 0 && (entry.flow !== "translate" || Boolean(entry.engine));
 }
 
