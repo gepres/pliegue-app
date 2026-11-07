@@ -36,11 +36,22 @@ export interface MergeOptions {
   resolve?: (local: SyncEntry, remote: SyncEntry, base: SyncEntry | undefined) => ConflictWinner;
 }
 
+/** Un conflicto resuelto: cambiaron los dos lados y uno ganó. Lo que perdió se guarda (06.3). */
+export interface MergeConflict {
+  key: string;
+  /** La versión que no quedó, con su carga: se puede restaurar. */
+  loser: SyncEntry;
+  /** Qué lado perdió: «local» si se quedó la de otro equipo. */
+  lost: ConflictWinner;
+  winner: SyncEntry;
+}
+
 export interface MergeResult {
   /** Lo remoto que hay que escribir en este equipo (los borrados incluidos). */
   apply: SyncEntry[];
   /** La base tras esta sincronización, sin cargas: solo huellas. */
   base: Map<string, SyncEntry>;
+  conflicts: MergeConflict[];
   /** Lo remoto que aún no se puede aplicar aquí, con su carga, para otra vez. */
   pending: Map<string, SyncEntry>;
   /** Lo local que hay que subir. */
@@ -94,7 +105,7 @@ export function mergeCollection(
   remote: ReadonlyMap<string, SyncEntry>,
   options: MergeOptions,
 ): MergeResult {
-  const result: MergeResult = { apply: [], base: new Map(), pending: new Map(), push: [] };
+  const result: MergeResult = { apply: [], base: new Map(), conflicts: [], pending: new Map(), push: [] };
   const resolve = options.resolve ?? lastWriteWins;
   const keys = new Set([...base.keys(), ...local.keys(), ...remote.keys()]);
 
@@ -134,9 +145,12 @@ export function mergeCollection(
         const pushed = stamp(localChange, b, remoteChange, options.now);
         result.push.push(pushed);
         result.base.set(key, withoutPayload(pushed));
+        // Sin base no hay versión común: es un equipo que se une (adopta lo de la cuenta), no un conflicto.
+        if (b) result.conflicts.push({ key, loser: remoteChange, lost: "remote", winner: pushed });
       } else {
         result.apply.push(remoteChange);
         result.base.set(key, withoutPayload(remoteChange));
+        if (b) result.conflicts.push({ key, loser: localChange, lost: "local", winner: remoteChange });
       }
     } else if (localChange) {
       const pushed = stamp(localChange, b, undefined, options.now);

@@ -407,7 +407,7 @@ function SignedIn({ email, provider, userId }: { email: string | null; provider:
               </Button>
             </div>
           ) : null}
-          <SyncDetails status={status} />
+          <SyncDetails status={status} userId={userId} />
           <SyncConsent userId={userId} />
           <div className={styles.row}>
             <Button onClick={() => setSyncChoices(userId, { enabled: false })} size="sm" variant="quiet">

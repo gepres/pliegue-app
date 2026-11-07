@@ -89,6 +89,38 @@ aunque el reloj de este equipo vaya atrasado.
 **Cuándo:** al activar la sincronización, 3 s después de cada cambio, cada 45 s con la ventana
 a la vista, al volver a ella y al recuperar la conexión. Cumple el SLO de 60 s del gate 5.
 
+## Conflictos y su historial (06.3)
+
+Cuando dos equipos cambian lo mismo desde la última versión común, decide la política de la
+colección (el último cambio; el progreso, el avance mayor). La versión que pierde no se tira:
+
+- Se guarda en este equipo, por cuenta, 30 días y como mucho 50 (`sync-history.ts`), con lo que
+  decía (el texto de la nota, el par de idiomas, la ficha) y el libro.
+- Ajustes → Cuenta, «Conflictos recientes»: qué chocó, quién ganó y la otra versión, con
+  «Restaurar esta versión». Restaurar la escribe aquí como un cambio nuevo, y la vuelta siguiente
+  la sube con una hora posterior, así que llega también a los demás equipos.
+- No cuentan:
+  - un equipo que se une (sin versión común adopta lo de la cuenta);
+  - el mismo cambio en los dos lados;
+  - las colecciones donde no tiene sentido recuperar (`history: false`): el avance de lectura,
+    el índice de traducciones y el gasto de IA.
+
+## Rapidez: el SLO de 60 s (06.3)
+
+Gate 5: con conexión, un cambio aparece en otro equipo en menos de 60 s en el p95. Ajustes →
+Cuenta, «Rapidez», lo mide en este equipo (`sync-latency.ts`), en dos tramos con un solo reloj
+cada uno:
+
+- **Subir:** desde que la persona cambia algo aquí (`markLocalChange`, no la carga inicial) hasta
+  que la subida termina. Incluye la espera de 3 s.
+- **Bajar:** desde que la nube tiene lo de otro equipo (su `server_updated_at`) hasta que llega
+  aquí, en hora del servidor. El desfase del reloj de este equipo se estima con la hora que
+  devuelve cada subida (`upsert … select("server_updated_at")`), con la mediana de las últimas.
+- Solo cuenta con el equipo al tanto (la vuelta anterior, hace menos de 90 s) y hasta 10 min.
+  Lo acumulado con la app cerrada no es latencia.
+- El p95 de llegar a otro equipo es el de subir más el de bajar (cota alta). Se guardan las
+  últimas 100 medidas de cada tramo.
+
 ## Base de datos
 
 Una tabla, `public.sync_items` (`supabase/migrations/20260930120000_sincronizacion.sql`):

@@ -26,6 +26,8 @@ import {
 } from "./sync-activity";
 import { isSyncHeld, onSyncReleased } from "./sync-hold";
 import { MassDeletionError, runSync, type SyncSummary } from "./sync-runner";
+import { addConflicts, listConflicts, loadLatency, markRestored, saveLatency } from "./sync-history";
+import { afterPull, afterPush, summarizeLatency, type LatencySummary } from "./sync-latency";
 import {
   localTranslationState,
   pairRef,
@@ -121,6 +123,8 @@ export interface SyncStatus {
   unsynced: number;
   /** Las traducciones en la cuenta, tras la última vuelta que las tocó (con su permiso). */
   translations: TranslationsStatus | null;
+  /** Cuánto tarda un cambio en llegar a otro equipo, medido en este (06.3). */
+  latency: LatencySummary | null;
 }
 
 export interface TranslationsStatus {
@@ -140,6 +144,7 @@ let status: SyncStatus = {
   error: null,
   lastSyncedAt: null,
   state: "idle",
+  latency: null,
   summary: null,
   translations: null,
   unsynced: 0,
@@ -263,6 +268,34 @@ async function syncTranslations(client: NonNullable<ReturnType<typeof cloudClien
   }
 }
 
+/* ---- Latencia y conflictos (06.3) --------------------------------------------------------- */
+
+/** Cuándo cambió algo aquí por primera vez desde la última subida: el principio de «subir». */
+let pendingChangeAt: number | null = null;
+
+/** Lo llama el componente que vigila los almacenes cuando la persona cambia algo. */
+export function markLocalChange() {
+  pendingChangeAt ??= Date.now();
+}
+
+/**
+ * Restaura la versión que perdió en un conflicto: se escribe aquí como un cambio nuevo y la
+ * vuelta siguiente la sube, así que llega también a los demás equipos.
+ */
+export async function restoreConflict(userId: string, id: string) {
+  const conflict = listConflicts(userId).find((item) => item.id === id);
+  const collection = collections.find((item) => item.name === conflict?.collection);
+  const local = readLocal?.();
+  if (!conflict || !collection || !local?.ready) return false;
+  const now = new Date().toISOString();
+  const keys = await indexLibraryKeys(local.documents);
+  await collection.apply([{ ...conflict.loser, updatedAt: now }], { keys, local: local.snapshot, now, userId });
+  markRestored(userId, id);
+  markLocalChange();
+  void requestSync({ reason: "manual" });
+  return true;
+}
+
 /* ---- Registro de las últimas vueltas, por cuenta ----------------------------------------- */
 
 const activityKey = "pliegue-sync-activity-v1";
@@ -340,6 +373,8 @@ async function syncOnce(allowMassDeletion: boolean, reason: SyncReason) {
   // de este equipo se anuncia.
   setStatus(reason === "poll" ? { checking: true } : { checking: true, error: null, state: "syncing" });
   let planned: SyncSummary | null = null;
+  // La vuelta anterior: si fue hace poco, este equipo estaba al tanto y lo que llegue mide latencia.
+  const previousSyncAt = status.lastSyncedAt ? Date.parse(status.lastSyncedAt) : null;
   const keys = await indexLibraryKeys(local.documents);
   const books = countBooks(local.documents, keys.documentByKey.size);
   try {
@@ -347,6 +382,7 @@ async function syncOnce(allowMassDeletion: boolean, reason: SyncReason) {
       allowMassDeletion,
       collections,
       context: { keys, local: local.snapshot, now: new Date().toISOString(), userId },
+      deviceId: deviceId(),
       enabled: (collection) =>
         collection.consent === "catalogAi"
           ? choices.catalogAi
@@ -366,9 +402,17 @@ async function syncOnce(allowMassDeletion: boolean, reason: SyncReason) {
       if (transfer.uploaded) again = true;
     }
     const at = new Date().toISOString();
+    // Latencia (06.3): la subida corrige el reloj y mide «subir»; lo recibido mide «bajar».
+    let latency = loadLatency(userId);
+    if (summary.push) latency = afterPush(latency, summary.push, pendingChangeAt);
+    pendingChangeAt = null;
+    latency = afterPull(latency, summary.fresh, Date.now(), previousSyncAt);
+    saveLatency(userId, latency);
+    addConflicts(userId, summary.conflicts, at);
     setStatus({
       activity: addActivity(userId, activityFromSummary(summary, at)),
       blockedDeletions: null,
+      latency: summarizeLatency(latency),
       books,
       checking: false,
       error: null,

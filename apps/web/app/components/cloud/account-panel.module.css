@@ -400,6 +400,48 @@
   flex: none;
 }
 
+/* Conflictos recientes (06.3): qué chocó, qué versión quedó fuera y cómo recuperarla. */
+.conflicts {
+  display: grid;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  max-width: 40rem;
+  padding: 0;
+}
+
+.conflicts li {
+  align-items: center;
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: var(--pliegue-spacing-xs) 0;
+}
+
+.conflicts li > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.conflicts small {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+}
+
+.conflictLoser {
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .conflicts li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Lo que hay de traducciones en la cuenta, bajo su interruptor. */
 .translationsStatus {
   color: var(--pliegue-color-text-secondary);

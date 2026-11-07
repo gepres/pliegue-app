@@ -19,7 +19,8 @@ function memoryCloud() {
   let clock = Date.parse("2026-09-30T12:00:00.000Z");
   return {
     rows,
-    store(): RemoteStore {
+    /** `deviceId`: quién escribe, como la columna `device_id` de Supabase. */
+    store(deviceId?: string): RemoteStore {
       return {
         async pull(since) {
           return [...rows.values()]
@@ -27,13 +28,17 @@ function memoryCloud() {
             .sort((left, right) => left.server_updated_at.localeCompare(right.server_updated_at));
         },
         async push(outgoing: readonly OutgoingRow[]) {
+          const times: string[] = [];
           for (const row of outgoing) {
             const id = `${row.collection}/${row.item_key}`;
             const current = rows.get(id);
             if (current && row.updated_at < current.updated_at) continue;
             clock += 1000;
-            rows.set(id, { ...row, server_updated_at: new Date(clock).toISOString() });
+            const server_updated_at = new Date(clock).toISOString();
+            rows.set(id, { ...row, ...(deviceId ? { device_id: deviceId } : {}), server_updated_at });
+            times.push(server_updated_at);
           }
+          return times;
         },
       };
     },
@@ -327,6 +332,72 @@ describe("libros que están en otro equipo (06.3)", () => {
     const { cloud } = await seeded();
     const summary = await laptopSync(cloud, false);
     expect(summary.elsewhere).toEqual({ named: [], total: 2 });
+  });
+});
+
+describe("conflictos y latencia en el resumen (06.3)", () => {
+  function notes(name: string, history = true) {
+    const values = new Map<string, string>();
+    const collection: SyncCollection = {
+      async apply(entries) {
+        for (const item of entries) {
+          if (item.deleted) values.delete(item.key);
+          else values.set(item.key, item.payload as string);
+        }
+      },
+      docKeyOf: () => null,
+      ...(history ? {} : { history: false }),
+      name,
+      preview: (payload) => `«${String(payload)}»`,
+      snapshot: (context) => new Map([...values].map(([key, value]) => [key, entry(key, value, context.now, null)])),
+    };
+    return { collection, values };
+  }
+
+  async function round(cloud: ReturnType<typeof memoryCloud>, collection: SyncCollection, state: ReturnType<typeof memoryState>, now: string, deviceId: string) {
+    const context: SyncContext = { keys: await indexLibraryKeys([]), local: {} as LocalSnapshot, now };
+    return runSync({ collections: [collection], context, deviceId, enabled: () => true, remote: cloud.store(deviceId), stateStore: state });
+  }
+
+  it("cuenta el conflicto con la versión que perdió y su descripción; no en las colecciones sin historial", async () => {
+    for (const history of [true, false]) {
+      const cloud = memoryCloud();
+      const pc = notes("annotations", history);
+      const laptop = notes("annotations", history);
+      const pcState = memoryState();
+      const laptopState = memoryState();
+      pc.values.set("n1", "original");
+      await round(cloud, pc.collection, pcState, "2026-11-07T10:00:00.000Z", "pc");
+      await round(cloud, laptop.collection, laptopState, "2026-11-07T10:01:00.000Z", "portatil");
+      // Los dos la cambian antes de sincronizar; el portátil, después.
+      pc.values.set("n1", "versión del PC");
+      laptop.values.set("n1", "versión del portátil");
+      await round(cloud, laptop.collection, laptopState, "2026-11-07T10:05:00.000Z", "portatil");
+      const summary = await round(cloud, pc.collection, pcState, "2026-11-07T10:03:00.000Z", "pc");
+      if (history) {
+        expect(summary.conflicts).toHaveLength(1);
+        expect(summary.conflicts[0]).toMatchObject({ collection: "annotations", key: "n1", lost: "local", preview: "«versión del PC»" });
+        expect(pc.values.get("n1")).toBe("versión del portátil");
+      } else {
+        expect(summary.conflicts).toEqual([]);
+      }
+    }
+  });
+
+  it("dice qué llegó de otros equipos desde la vuelta anterior y la hora del servidor de lo subido", async () => {
+    const cloud = memoryCloud();
+    const pc = notes("annotations");
+    const laptop = notes("annotations");
+    const pcState = memoryState();
+    const laptopState = memoryState();
+    await round(cloud, laptop.collection, laptopState, "2026-11-07T10:00:00.000Z", "portatil");
+    pc.values.set("n1", "hola");
+    const pushed = await round(cloud, pc.collection, pcState, "2026-11-07T10:01:00.000Z", "pc");
+    expect(pushed.push?.serverTimes).toHaveLength(1);
+    const received = await round(cloud, laptop.collection, laptopState, "2026-11-07T10:02:00.000Z", "portatil");
+    expect(received.fresh).toEqual(pushed.push?.serverTimes);
+    // Lo propio no cuenta como «llegado de otro equipo».
+    expect((await round(cloud, pc.collection, pcState, "2026-11-07T10:03:00.000Z", "pc")).fresh).toEqual([]);
   });
 });
 

@@ -84,3 +84,41 @@ describe("fusión a tres vías", () => {
     expect(stableStringify({ b: 1, a: [2, { d: 1, c: 0 }] })).toBe('{"a":[2,{"c":0,"d":1}],"b":1}');
   });
 });
+
+describe("conflictos (06.3)", () => {
+  it("si cambiaron los dos lados, guarda la versión que perdió, con su carga", () => {
+    const base = map(item("nota", "original", "2026-09-30T09:00:00.000Z"));
+    const local = map(item("nota", "de este equipo", "2026-09-30T10:00:00.000Z"));
+    const remote = map(item("nota", "del portátil", "2026-09-30T11:00:00.000Z"));
+    const result = mergeCollection(base, local, remote, everywhere);
+    expect(result.apply.map((entry) => entry.payload)).toEqual(["del portátil"]);
+    expect(result.conflicts).toHaveLength(1);
+    expect(result.conflicts[0]).toMatchObject({ key: "nota", lost: "local" });
+    expect(result.conflicts[0]?.loser.payload).toBe("de este equipo");
+  });
+
+  it("si gana lo de aquí, la perdida es la de otro equipo", () => {
+    const base = map(item("nota", "original", "2026-09-30T09:00:00.000Z"));
+    const result = mergeCollection(
+      base,
+      map(item("nota", "de este equipo", "2026-09-30T11:30:00.000Z")),
+      map(item("nota", "del portátil", "2026-09-30T11:00:00.000Z")),
+      everywhere,
+    );
+    expect(result.conflicts[0]).toMatchObject({ lost: "remote" });
+    expect(result.conflicts[0]?.loser.payload).toBe("del portátil");
+  });
+
+  it("un borrado frente a un cambio también es un conflicto, y se puede deshacer", () => {
+    const base = map(item("nota", "original", "2026-09-30T09:00:00.000Z"));
+    const result = mergeCollection(base, map(), map(item("nota", "editada", "2026-09-30T13:00:00.000Z")), everywhere);
+    expect(result.conflicts[0]).toMatchObject({ lost: "local" });
+    expect(result.conflicts[0]?.loser.deleted).toBe(true);
+  });
+
+  it("sin versión común (un equipo que se une) o con el mismo cambio en los dos, no hay conflicto", () => {
+    expect(mergeCollection(map(), map(item("a", 1)), map(item("a", 2)), everywhere).conflicts).toEqual([]);
+    const base = map(item("a", 1));
+    expect(mergeCollection(base, map(item("a", 2)), map(item("a", 2)), everywhere).conflicts).toEqual([]);
+  });
+});
