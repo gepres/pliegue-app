@@ -244,8 +244,11 @@ siempre y en el equipo, y por significado, con embeddings del proveedor de catal
   `library/semantic-index-store.ts`, `ai/embeddings.ts`, `ai/semantic-indexer.ts`,
   `api/ai/embed/route.ts` y `components/ai/semantic-search-panel.tsx`, con pruebas. e2e:
   `apps/web/e2e/busqueda-semantica.mjs`.
-- **Pendiente:** abrir el lector en la página o el bloque del resultado y resaltarlo (04.5), y
-  los escaneos (sin capa de texto quedan «sin texto» hasta indexar su OCR).
+- **Abrir un resultado:** `/app/lector?document=…&fragmento=…` abre el libro en el fragmento.
+  En PDF salta a su página y pinta sus renglones; en los demás, centra su primer bloque y marca
+  sus bloques (`data-search-hit`).
+- **Pendiente:** los escaneos (sin capa de texto quedan «sin texto» hasta indexar su OCR). Un
+  libro personal sin permiso sigue contando como pendiente: cada «Indexar» vuelve a preguntar.
 
 ## Datos persistidos
 
@@ -266,7 +269,7 @@ visibles asociadas. El archivo original nunca se borra.
   quedan `needs-content` a la espera del OCR de `03.5`. Un PDF con texto sí se cataloga.
 - No hay cola durable entre recargas ni estimación de coste antes de ejecutar (el presupuesto
   frena al llegar al tope, no antes).
-- La búsqueda por significado (04.4) aún no abre el lector en la página del resultado.
+- Los escaneos aún no entran en la búsqueda (04.4): falta indexar su OCR.
 - Ollama Cloud no se trata como equivalente a un servidor Ollama remoto propio; el flujo
   requiere una instancia que acepte el esquema estructurado y CORS.
 - La bóveda persistente y el shell nativo siguen pendientes.
