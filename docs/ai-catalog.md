@@ -151,6 +151,42 @@ Decisión del 6-nov en Foundry (04.3). Los cuatro niveles de 01-product-scope §
   `library/sensitivity-store.ts`, `components/library/sensitivity-picker.tsx` y
   `components/ai/sensitive-consent.ts`. e2e: `apps/web/e2e/sensibilidad.mjs`.
 
+## Proveedor por tarea (04.3)
+
+Cada tarea que puede sacar el texto de un libro del equipo tiene su proveedor:
+
+| Tarea | Ajuste | Por defecto |
+|---|---|---|
+| Catalogar | `provider` + `models` | OpenAI |
+| Traducir | `translationProvider` + `translationModels` | el traductor del navegador |
+| Buscar por significado | `indexProvider`: `catalog`, `openai`, `gemini`, `ollama` u `off` | el de catalogar |
+| Preguntar | `askProvider`: `catalog` o un proveedor, + `askModels` | el de catalogar |
+
+- **Buscar** no ofrece Claude, que no calcula embeddings. Con `off` se busca solo por palabras y
+  no sale nada. Cambiarlo cambia la firma de los vectores (`embeddingKey`): hay que volver a
+  indexar para buscar por significado.
+- **Preguntar** tiene su propio modelo. Responder con citas pide más que una ficha, y así se
+  puede pagar un modelo mejor solo para esto. Los ajustes de antes, sin `askModels`, siguen
+  preguntando con el modelo de catalogar.
+- **Cada tarea, su clave.** En Ajustes → IA, «Buscar y preguntar» enseña la clave o el Ollama
+  de esos proveedores solo si no salen ya arriba. El panel de `/app/ia` manda a cada ruta la
+  clave de su proveedor.
+- **«Quién hace cada tarea»** (Ajustes → IA) enseña el router entero con lo guardado:
+  - por cada tarea, quién la hace, con qué modelo y dónde (en este equipo, en tu servidor de
+    Ollama o en la nube del proveedor, con la región de Azure);
+  - qué pasa con un libro de cada nivel. Lo calculan las mismas reglas que se aplican al enviar
+    (`routeFor`, `providerPlace`) en `ai/flow-router.ts`, que tiene pruebas.
+- **Sin respaldo automático** (decisión `f8c90d3b`): si el proveedor de una tarea falla, no se
+  prueba con otro. Se dice y la persona elige, así que un libro nunca acaba en un proveedor que
+  no eligió.
+- **Región:** Pliegue no elige la región en la que procesa cada proveedor; la fija el proveedor
+  o la cuenta de la persona con él. Azure usa la de su recurso.
+- **Código:** `ai/ai-settings.ts` (`indexProviderOf`, `askProviderOf`, `askModelOf`),
+  `ai/flow-router.ts` y `components/ai/ai-router-matrix.tsx`. e2e:
+  `apps/web/e2e/router-flujo.mjs`. Simula Claude y Ollama: Claude cataloga y responde, Ollama
+  busca. Comprueba que, si Claude falla, no se llama a nadie más, y que con `off` no se pide
+  ningún vector.
+
 ## Presupuesto y gasto (04.6)
 
 Decisión del 6-nov en Foundry (04.6). Ajustes → IA, «Gasto y presupuesto».

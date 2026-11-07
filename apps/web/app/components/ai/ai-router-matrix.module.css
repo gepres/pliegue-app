@@ -1,0 +1,174 @@
+/* Ajustes → IA: quién hace cada tarea (04.3). */
+.panel {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  grid-template-columns: minmax(0, 1fr);
+  margin-bottom: var(--pliegue-spacing-lg);
+}
+
+.intro {
+  min-width: 0;
+}
+
+.intro h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.intro p {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.55;
+  margin: var(--pliegue-spacing-xs) 0 0;
+  max-width: 48rem;
+}
+
+.matrix {
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  width: 100%;
+}
+
+.matrix th,
+.matrix td {
+  border-bottom: 1px solid var(--pliegue-color-border-default);
+  padding: 8px 10px 8px 0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.matrix thead th {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.matrix tbody th {
+  font-weight: 600;
+}
+
+.matrix small {
+  color: var(--pliegue-color-text-secondary);
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  margin-top: 2px;
+}
+
+.engine strong {
+  display: block;
+  font-weight: 600;
+}
+
+.model {
+  display: block;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+/* Lo que pasa con un libro: el texto lo dice; la marca de la izquierda lo refuerza. */
+.matrix td[data-outcome] .outcome::before {
+  content: "";
+  display: inline-block;
+  height: 0.5rem;
+  margin-right: 6px;
+  vertical-align: 0.1em;
+  width: 0.5rem;
+}
+
+.matrix td[data-outcome="local"] .outcome::before {
+  background: var(--pliegue-color-action-primary);
+  border-radius: 50%;
+}
+
+.matrix td[data-outcome="allow"] .outcome::before {
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+
+.matrix td[data-outcome="ask"] .outcome::before {
+  background: var(--pliegue-color-accent-warm);
+  transform: rotate(45deg);
+}
+
+.matrix td[data-outcome="block"] .outcome::before,
+.matrix td[data-outcome="off"] .outcome::before {
+  background: var(--pliegue-color-text-secondary);
+  height: 2px;
+  vertical-align: 0.25em;
+}
+
+.matrix td[data-outcome="block"] {
+  color: var(--pliegue-color-text-secondary);
+}
+
+/* El nivel, solo en estrecho: en ancho lo dice la cabecera de la columna. */
+.level {
+  display: none;
+}
+
+.rules {
+  color: var(--pliegue-color-text-secondary);
+  display: grid;
+  font-size: 0.875rem;
+  gap: var(--pliegue-spacing-xs);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 52rem;
+  padding-left: 1.1rem;
+}
+
+.rules strong {
+  color: var(--pliegue-color-text-primary);
+  font-weight: 600;
+}
+
+/* En estrecho, cada tarea es un bloque: la tarea y quién arriba, los cuatro niveles debajo. */
+@media (max-width: 720px) {
+  .matrix thead {
+    display: none;
+  }
+
+  .matrix,
+  .matrix tbody {
+    display: block;
+  }
+
+  .matrix tr {
+    border-bottom: 1px solid var(--pliegue-color-border-default);
+    display: grid;
+    gap: 6px 12px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    padding: 10px 0;
+  }
+
+  .matrix th,
+  .matrix td {
+    border: 0;
+    padding: 0;
+  }
+
+  .matrix tbody th,
+  .engine {
+    grid-column: 1 / -1;
+  }
+
+  .matrix td[data-outcome] {
+    font-size: 0.875rem;
+  }
+
+  /* Sin la cabecera, el nivel va encima de lo que pasa: es lo que da sentido a la celda. */
+  .level {
+    color: var(--pliegue-color-text-secondary);
+    display: block;
+    font-family: var(--pliegue-font-data);
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+}

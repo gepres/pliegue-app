@@ -2,12 +2,13 @@ import type { ProviderPlace } from "../library/sensitivity";
 import { providerPlace } from "../library/sensitivity";
 import { adapterFor } from "./adapters";
 import { fetchWithRetry, type RetryWait } from "./ai-retry";
-import type { AiSettings } from "./ai-settings";
+import { indexProviderOf, type AiSettings } from "./ai-settings";
 import type { AiProvider, CatalogUsage } from "./document-catalog";
 
 /**
- * Embeddings para la búsqueda por significado (04.4). Se calculan con el proveedor de catalogar,
- * con un modelo de embeddings fijo por proveedor:
+ * Embeddings para la búsqueda por significado (04.4). Se calculan con el proveedor de buscar (el
+ * de catalogar, salvo que se elija otro en Ajustes → IA, 04.3), con un
+ * modelo de embeddings fijo por proveedor:
  *
  * - OpenAI: `text-embedding-3-small`, recortado a 768 dimensiones.
  * - Gemini: `gemini-embedding-001`, recortado a 768 y distinguiendo fragmento y pregunta.
@@ -34,16 +35,20 @@ export interface EmbeddingConfig {
   provider: AiProvider;
 }
 
-/** Con qué se calculan los embeddings; null si el proveedor no los ofrece. */
+/**
+ * Con qué se calculan los embeddings: el proveedor elegido para buscar (04.3), que por defecto
+ * es el de catalogar. null si se busca solo por palabras o si ese proveedor no los ofrece.
+ */
 export function embeddingConfigOf(settings: AiSettings): EmbeddingConfig | null {
-  const model = embeddingModels[settings.provider];
-  if (!model) return null;
+  const provider = indexProviderOf(settings);
+  const model = provider ? embeddingModels[provider] : null;
+  if (!provider || !model) return null;
   return {
     // Ollama da las del modelo: pedir otras no siempre se respeta.
-    dimensions: settings.provider === "ollama" ? null : embeddingDimensions,
+    dimensions: provider === "ollama" ? null : embeddingDimensions,
     model,
-    place: providerPlace(settings.provider, settings),
-    provider: settings.provider,
+    place: providerPlace(provider, settings),
+    provider,
   };
 }
 

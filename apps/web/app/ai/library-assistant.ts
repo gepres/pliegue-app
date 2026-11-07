@@ -8,7 +8,7 @@ import { providerPlace, routeFor } from "../library/sensitivity";
 import { documentSensitivity, hasConsent } from "../library/sensitivity-store";
 import { adapterFor } from "./adapters";
 import { fetchWithRetry } from "./ai-retry";
-import { providerModel, type AiSettings } from "./ai-settings";
+import { askModelOf, askProviderOf, type AiSettings } from "./ai-settings";
 import { assertWithinBudget, recordAiUsage } from "./ai-usage-store";
 import {
   answerJsonSchema,
@@ -32,8 +32,10 @@ import { searchLibrary, type SearchScope } from "./semantic-indexer";
  * 1. La búsqueda (04.4) elige hasta 8 fragmentos del alcance.
  * 2. Cada fragmento pasa por el router de sensibilidad del flujo «consultar»: lo confidencial no
  *    sale hacia un proveedor en la nube; lo personal, con permiso.
- * 3. Se pregunta al proveedor de catalogar con su modelo, con el presupuesto y el registro de la
- *    IA, y se comprueban las citas antes de enseñar nada.
+ * 3. Se pregunta al proveedor de «Preguntar» con su modelo (04.3; por defecto, el de catalogar),
+ *    con el presupuesto y el registro de la IA, y se comprueban las citas antes de enseñar nada.
+ *
+ * Si el proveedor falla, no se prueba otro por su cuenta: se dice y la persona decide.
  */
 
 export interface AssistantFragment extends AnswerFragment {
@@ -60,18 +62,21 @@ export interface AssistantResult {
 }
 
 function route(document: Pick<LibraryDocument, "id" | "reference">, settings: AiSettings) {
-  return routeFor(documentSensitivity(document), providerPlace(settings.provider, settings), hasConsent(document.id, "ask"));
+  return routeFor(documentSensitivity(document), providerPlace(askProviderOf(settings), settings), hasConsent(document.id, "ask"));
 }
 
-/** Busca los fragmentos de la pregunta y los separa según puedan salir o no. */
+/**
+ * Busca los fragmentos de la pregunta y los separa según puedan salir o no. `searchKey` es la
+ * clave del proveedor de buscar, que puede ser otro que el de responder.
+ */
 export async function prepareQuestion(
   question: string,
   scope: SearchScope,
   documents: ReadonlyMap<string, LibraryDocument>,
   settings: AiSettings,
-  apiKey: string,
+  searchKey: string,
 ): Promise<PreparedQuestion> {
-  const found = await searchLibrary(question, scope, settings, apiKey, { limit: maxAnswerFragments });
+  const found = await searchLibrary(question, scope, settings, searchKey, { limit: maxAnswerFragments });
   const prepared: PreparedQuestion = { allowed: [], keptLocal: [], needsConsent: [], question, semanticNote: found.semanticNote };
   const asking = new Map<string, Pick<LibraryDocument, "id" | "title">>();
   found.hits.forEach((hit, index) => {
@@ -105,7 +110,8 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 
 /**
  * Pregunta con los fragmentos que pueden salir (se vuelve a mirar el permiso: la persona pudo
- * darlo entre medias) y comprueba las citas. Sin fragmentos, no se llama a nadie.
+ * darlo entre medias) y comprueba las citas. Sin fragmentos, no se llama a nadie. `apiKey` es la
+ * del proveedor de «Preguntar».
  */
 export async function answerPrepared(
   prepared: PreparedQuestion,
@@ -122,7 +128,9 @@ export async function answerPrepared(
     if (document && route(document, settings) === "allow") outgoing.push(fragment);
     else keptLocal.push(fragment);
   }
-  const place = providerPlace(settings.provider, settings);
+  const provider = askProviderOf(settings);
+  const model = askModelOf(settings);
+  const place = providerPlace(provider, settings);
   for (const fragment of keptLocal) {
     const document = documents.get(fragment.chunk.documentId);
     if (!document) continue;
@@ -130,9 +138,9 @@ export async function answerPrepared(
     recordProcessing({
       documentId: document.id,
       flow: "ask",
-      model: providerModel(settings),
+      model,
       place,
-      provider: settings.provider,
+      provider,
       route: auditRoute(route(document, settings), sensitivity, place),
       sensitivity,
     });
@@ -141,14 +149,13 @@ export async function answerPrepared(
     return { answer: { findings: [], missing: null, status: "no-evidence", summary: null }, keptLocal, sent: 0 };
   }
 
-  assertWithinBudget(settings.provider);
-  const model = providerModel(settings);
+  assertWithinBudget(provider);
   // Las etiquetas, seguidas en lo que se manda: F1, F2…
   const labeled = outgoing.map((fragment, index) => ({ ...fragment, label: `F${index + 1}` }));
   const payload = labeled.map(({ label, location, text, title }) => ({ label, location, text, title }));
   let json: unknown;
   let usage = { inputTokens: 0, outputTokens: 0 };
-  if (settings.provider === "ollama") {
+  if (provider === "ollama") {
     const result = await adapterFor({ baseUrl: settings.ollamaUrl, model, provider: "ollama" }).generateJson(
       {
         maxOutputTokens: answerMaxOutputTokens,
@@ -165,7 +172,7 @@ export async function answerPrepared(
     const response = await fetchWithRetry(
       "/api/ai/answer",
       {
-        body: JSON.stringify({ fragments: payload, model, provider: settings.provider, question: prepared.question }),
+        body: JSON.stringify({ fragments: payload, model, provider, question: prepared.question }),
         headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
         method: "POST",
       },
@@ -177,7 +184,7 @@ export async function answerPrepared(
     const reported = (body.usage ?? {}) as Partial<typeof usage>;
     usage = { inputTokens: Number(reported.inputTokens) || 0, outputTokens: Number(reported.outputTokens) || 0 };
   }
-  recordAiUsage(settings.provider, model, usage);
+  recordAiUsage(provider, model, usage);
   const perDocument = new Map<string, { characters: number; count: number }>();
   for (const fragment of labeled) {
     const entry = perDocument.get(fragment.chunk.documentId) ?? { characters: 0, count: 0 };
@@ -193,7 +200,7 @@ export async function answerPrepared(
       flow: "ask",
       model,
       place,
-      provider: settings.provider,
+      provider,
       route: auditRoute("allow", sensitivity, place),
       sent: entry.count,
       sensitivity,

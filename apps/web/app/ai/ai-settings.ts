@@ -5,11 +5,30 @@ import { translationProviderChoices, type TranslationProviderChoice } from "./tr
 /** Peticiones simultáneas al proveedor durante un análisis por lotes. */
 export const maxCatalogConcurrency = 6;
 
+/**
+ * Con qué se busca por significado (04.3): el proveedor de catalogar, otro que calcule
+ * embeddings, o ninguno («solo por palabras»: nada sale del equipo). Anthropic no está: no los
+ * ofrece.
+ */
+export const indexProviderChoices = ["catalog", "openai", "gemini", "ollama", "off"] as const;
+export type IndexProviderChoice = (typeof indexProviderChoices)[number];
+
+/** Con qué se pregunta a la biblioteca (04.3): el proveedor de catalogar u otro. */
+export const askProviderChoices = ["catalog", "openai", "anthropic", "gemini", "ollama"] as const;
+export type AskProviderChoice = (typeof askProviderChoices)[number];
+
 export interface AiSettings {
+  /**
+   * El modelo con el que se responde en «Preguntar». Aparte del de catalogar: responder con
+   * citas pide más que una ficha, y quien quiera puede pagar un modelo mejor solo para esto.
+   */
+  askModels: Record<AiProvider, string>;
+  askProvider: AskProviderChoice;
   autoAnalyzeAfterLink: boolean;
   /** Límites del mes y tabla de precios (04.6). Viajan con los ajustes a los otros equipos. */
   budget: AiBudget;
   concurrency: number;
+  indexProvider: IndexProviderChoice;
   maxExcerptCharacters: number;
   models: Record<AiProvider, string>;
   /**
@@ -57,9 +76,17 @@ export interface AiSettings {
  * llamada; `provider-error.ts` se encarga de que ese fallo no se confunda con una clave inválida.
  */
 export const defaultAiSettings: AiSettings = {
+  askModels: {
+    anthropic: "claude-haiku-5-5",
+    gemini: "gemini-3.5-flash-lite",
+    ollama: "qwen3:8b",
+    openai: "gpt-6-luna",
+  },
+  askProvider: "catalog",
   autoAnalyzeAfterLink: false,
   budget: defaultAiBudget,
   concurrency: 2,
+  indexProvider: "catalog",
   maxExcerptCharacters: 12_000,
   models: {
     anthropic: "claude-haiku-5-5",
@@ -146,18 +173,36 @@ export function parseAiSettings(value: unknown): AiSettings {
     value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
   const models = recordOf(candidate.models);
   const translationModels = recordOf(candidate.translationModels);
+  // Antes de 04.3 se preguntaba con el modelo de catalogar: quien no tiene los suyos sigue con él.
+  const askFromCatalog = candidate.askModels === undefined;
+  const askModels = askFromCatalog ? models : recordOf(candidate.askModels);
+  // Lo de partida antiguo se cambia solo al heredarlo de catalogar: lo que se eligió para
+  // preguntar se respeta, aunque coincida con un modelo que antes venía de partida.
+  const askLegacy = (provider: AiProvider) => (askFromCatalog ? legacyDefaultModels.models[provider] : undefined);
   const provider = aiProviders.includes(candidate.provider as AiProvider)
     ? (candidate.provider as AiProvider)
     : defaultAiSettings.provider;
   const ollamaMode = candidate.ollamaMode === "remote" ? "remote" : "local";
 
   return {
+    askModels: {
+      anthropic: cleanModel(askModels.anthropic, defaultAiSettings.askModels.anthropic, askLegacy("anthropic")),
+      gemini: cleanModel(askModels.gemini, defaultAiSettings.askModels.gemini, askLegacy("gemini")),
+      ollama: cleanModel(askModels.ollama, defaultAiSettings.askModels.ollama, askLegacy("ollama")),
+      openai: cleanModel(askModels.openai, defaultAiSettings.askModels.openai, askLegacy("openai")),
+    },
+    askProvider: askProviderChoices.includes(candidate.askProvider as AskProviderChoice)
+      ? (candidate.askProvider as AskProviderChoice)
+      : defaultAiSettings.askProvider,
     autoAnalyzeAfterLink: candidate.autoAnalyzeAfterLink === true,
     budget: parseAiBudget(candidate.budget),
     concurrency:
       typeof candidate.concurrency === "number"
         ? Math.min(maxCatalogConcurrency, Math.max(1, Math.round(candidate.concurrency)))
         : defaultAiSettings.concurrency,
+    indexProvider: indexProviderChoices.includes(candidate.indexProvider as IndexProviderChoice)
+      ? (candidate.indexProvider as IndexProviderChoice)
+      : defaultAiSettings.indexProvider,
     maxExcerptCharacters:
       typeof candidate.maxExcerptCharacters === "number"
         ? Math.min(24_000, Math.max(4_000, Math.round(candidate.maxExcerptCharacters)))
@@ -216,4 +261,23 @@ export function normalizeAzureRegion(value: unknown) {
 
 export function providerModel(settings: AiSettings) {
   return settings.models[settings.provider];
+}
+
+/**
+ * Quién calcula los embeddings de la búsqueda por significado; null si se busca solo por
+ * palabras. «El de catalogar» con Anthropic también acaba en palabras: Anthropic no los calcula.
+ */
+export function indexProviderOf(settings: Pick<AiSettings, "indexProvider" | "provider">): AiProvider | null {
+  if (settings.indexProvider === "off") return null;
+  return settings.indexProvider === "catalog" ? settings.provider : settings.indexProvider;
+}
+
+/** Quién responde en «Preguntar». */
+export function askProviderOf(settings: Pick<AiSettings, "askProvider" | "provider">): AiProvider {
+  return settings.askProvider === "catalog" ? settings.provider : settings.askProvider;
+}
+
+/** Con qué modelo responde. */
+export function askModelOf(settings: Pick<AiSettings, "askModels" | "askProvider" | "provider">) {
+  return settings.askModels[askProviderOf(settings)];
 }
