@@ -8,6 +8,7 @@ import { Button } from "@pliegue/ui";
 import { saveFindingAsNote, type AssistantFragment, type AssistantResult } from "../../ai/library-assistant";
 import type { AnswerConfidence, FindingKind, VerifiedFinding } from "../../ai/library-answer";
 import { describeLocation } from "../../library/chunking";
+import { Icon } from "../app-ui/icons";
 import styles from "./semantic-search-panel.module.css";
 
 const count = (value: number, one: string, many: string) => `${value.toLocaleString("es")} ${value === 1 ? one : many}`;
@@ -37,22 +38,26 @@ function statusText(result: AssistantResult) {
   return answer.status === "partial" ? `Respuesta parcial: los fragmentos no lo cubren todo. ${base}` : base;
 }
 
+type NoteState = "saving" | "saved" | "error";
+
 /**
  * La respuesta del asistente (04.5): lo que dice el texto, lo que se deduce y lo que no tiene una
  * cita comprobable, cada cosa con su confianza y sus citas, que abren el libro en su sitio.
  */
 export function LibraryAssistantAnswer({ providerName, question, result }: { providerName: string; question: string; result: AssistantResult }) {
-  const [saved, setSaved] = useState<string | null>(null);
+  // Por hallazgo: el aviso va junto a su botón, no al final de la respuesta, donde no se veía.
+  const [notes, setNotes] = useState<Record<number, NoteState>>({});
   const { answer, keptLocal } = result;
 
-  async function save(finding: VerifiedFinding<AssistantFragment>) {
+  async function save(index: number, finding: VerifiedFinding<AssistantFragment>) {
     const citation = finding.citations[0];
-    if (!citation) return;
+    if (!citation || notes[index] === "saving" || notes[index] === "saved") return;
+    setNotes((current) => ({ ...current, [index]: "saving" }));
     try {
       await saveFindingAsNote(finding, citation);
-      setSaved(`Nota guardada en «${citation.fragment.title}», ${describeLocation(citation.fragment.location)}: la verás en el lector, sobre la cita.`);
+      setNotes((current) => ({ ...current, [index]: "saved" }));
     } catch {
-      setSaved("No se pudo guardar la nota.");
+      setNotes((current) => ({ ...current, [index]: "error" }));
     }
   }
 
@@ -88,11 +93,36 @@ export function LibraryAssistantAnswer({ providerName, question, result }: { pro
                   Se {finding.dropped === 1 ? "quitó 1 cita" : `quitaron ${finding.dropped} citas`} que no estaba{finding.dropped === 1 ? "" : "n"} en el texto.
                 </p>
               ) : null}
-              {finding.citations.length ? (
-                <div>
-                  <Button onClick={() => void save(finding)} size="sm" variant="quiet">
-                    Guardar como nota
+              {finding.citations[0] ? (
+                <div className={styles.noteAction}>
+                  <Button
+                    aria-describedby={`finding-note-${index}`}
+                    // aria-disabled y no disabled: el foco se queda en el botón al guardar.
+                    aria-disabled={notes[index] === "saving" || notes[index] === "saved"}
+                    onClick={() => void save(index, finding)}
+                    size="sm"
+                    variant="quiet"
+                  >
+                    {notes[index] === "saved" ? (
+                      <>
+                        <Icon name="check" size={16} /> Nota guardada
+                      </>
+                    ) : notes[index] === "saving" ? (
+                      "Guardando…"
+                    ) : (
+                      "Guardar como nota"
+                    )}
                   </Button>
+                  <p aria-live="polite" className={styles.noteStatus} data-state={notes[index] ?? "idle"} id={`finding-note-${index}`} role="status">
+                    {notes[index] === "saved" ? (
+                      <>
+                        En «{finding.citations[0].fragment.title}», {describeLocation(finding.citations[0].fragment.location)}, resaltada sobre la
+                        cita. <Link href={fragmentHref(finding.citations[0].fragment)}>Verla en el lector</Link>
+                      </>
+                    ) : notes[index] === "error" ? (
+                      "No se pudo guardar la nota. Vuelve a intentarlo."
+                    ) : null}
+                  </p>
                 </div>
               ) : null}
             </li>
@@ -120,9 +150,6 @@ export function LibraryAssistantAnswer({ providerName, question, result }: { pro
           </ul>
         </div>
       ) : null}
-      <p aria-live="polite" className={styles.note} role="status">
-        {saved}
-      </p>
     </section>
   );
 }
