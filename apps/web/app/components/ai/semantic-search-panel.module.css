@@ -201,6 +201,32 @@
   color: var(--pliegue-color-status-danger);
 }
 
+/* «Guardar como nota» y, a su lado, si se guardó: donde se mira al pulsar. */
+.noteAction {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px var(--pliegue-spacing-sm);
+  min-width: 0;
+}
+
+.noteAction button svg {
+  margin-right: 4px;
+  vertical-align: -3px;
+}
+
+.noteStatus {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.noteStatus[data-state="error"] {
+  color: var(--pliegue-color-status-danger);
+}
+
 .findingText {
   font-family: var(--pliegue-font-reading);
   line-height: 1.55;
