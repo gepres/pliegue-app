@@ -36,12 +36,14 @@ export function isSensitivity(value: unknown): value is Sensitivity {
 
 /**
  * Los flujos que pueden mandar el texto de un libro fuera del equipo. Indexar (04.4) manda el
- * texto entero, en fragmentos, para calcular sus embeddings: pide su propio permiso.
+ * texto entero, en fragmentos, para calcular sus embeddings: pide su propio permiso. Consultar
+ * (04.5) manda los fragmentos que responden a una pregunta del asistente.
  */
-export const sensitiveFlows = ["catalog", "translate", "index"] as const;
+export const sensitiveFlows = ["catalog", "translate", "index", "ask"] as const;
 export type SensitiveFlow = (typeof sensitiveFlows)[number];
 
 export const flowNames: Record<SensitiveFlow, string> = {
+  ask: "consultar",
   catalog: "catalogar",
   index: "indexar",
   translate: "traducir",

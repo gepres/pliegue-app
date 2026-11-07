@@ -6,6 +6,7 @@ import { grantConsent } from "../../library/sensitivity-store";
 import { confirmAction } from "../app-ui/confirm-dialog";
 
 const what: Record<SensitiveFlow, string> = {
+  ask: "los fragmentos que responden a tu pregunta",
   catalog: "un extracto del principio",
   index: "el texto completo, en fragmentos, para calcular sus embeddings",
   translate: "el texto de cada página o sección que se traduce",

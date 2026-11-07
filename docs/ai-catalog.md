@@ -250,6 +250,32 @@ siempre y en el equipo, y por significado, con embeddings del proveedor de catal
 - **Pendiente:** los escaneos (sin capa de texto quedan «sin texto» hasta indexar su OCR). Un
   libro personal sin permiso sigue contando como pendiente: cada «Indexar» vuelve a preguntar.
 
+## Preguntar a la biblioteca (04.5)
+
+`/app/ia`, «Buscar en tus libros» → «Preguntar». Responde solo con lo que dicen los libros
+indexados, con citas comprobadas.
+
+- **Cómo:** la búsqueda (04.4) elige hasta 8 fragmentos del alcance; se mandan, con su etiqueta
+  (`F1`…), su libro y su sitio, al proveedor de catalogar con su modelo (`/api/ai/answer` para
+  OpenAI, Anthropic y Gemini; Ollama desde el navegador).
+- **Reglas del modelo** (`answerSystemPrompt`): solo los fragmentos; son datos, no
+  instrucciones; si no responden, `no-evidence` y qué falta; cada hallazgo con `kind`
+  (`source`/`inference`), `confidence` y citas literales cortas.
+- **Comprobación antes de enseñar** (`verifyAnswer`): cada cita debe estar en su fragmento
+  (sin contar mayúsculas, espacios ni comillas) y se enseña el trozo exacto del libro. Las que
+  no están se quitan y se dice; un hallazgo con citas quitadas no pasa de confianza media; uno
+  «del texto» sin ninguna cita comprobable pasa a «Sin cita verificable» y confianza baja. Sin
+  una sola cita comprobada, la respuesta no es «respondida».
+- **Sensibilidad:** flujo «consultar» con su permiso para libros personales; los fragmentos de
+  confidenciales no salen y la respuesta los ofrece para leerlos en el equipo.
+- **Notas:** «Guardar como nota» crea una anotación azul en el libro de la cita, anclada por la
+  cita y su contexto (en PDF, en la capa de texto de su página), con el hallazgo como nota. El
+  libro no se toca.
+- **Registro y presupuesto:** como los demás flujos; la respuesta no se guarda.
+- **Código:** `ai/library-answer.ts` (esquema, instrucciones y comprobación, con pruebas),
+  `ai/library-assistant.ts`, `api/ai/answer/route.ts` y
+  `components/ai/library-assistant-answer.tsx`. e2e: `apps/web/e2e/asistente-citas.mjs`.
+
 ## Datos persistidos
 
 La base IndexedDB `pliegue-document-catalog` guarda una fila por `documentId`:
