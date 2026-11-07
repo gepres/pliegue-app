@@ -81,6 +81,7 @@ export function BookSummaryPanel({ document }: { document: LibraryDocument }) {
           description: `Se envía a ${name} (${plan.model}) el texto de «${document.title}» en ${count(plan.parts, "parte", "partes")} y, después, sus ideas para juntarlas en el resumen.`,
           details: [
             `${count(plan.characters, "carácter", "caracteres")} · ${count(plan.parts, "parte", "partes")}`,
+            ...(plan.truncated ? ["Solo el principio: el libro es más largo de lo que Pliegue lee, y el resumen no llegará al final."] : []),
             cost !== null
               ? `Unos ${number(inputTokens)} tokens de entrada y ${number(outputTokens)} de salida: ~${dollars.format(cost)}`
               : `Unos ${number(inputTokens)} tokens de entrada y ${number(outputTokens)} de salida (sin precio en la tabla de Ajustes → IA)`,
@@ -164,6 +165,9 @@ export function BookSummaryPanel({ document }: { document: LibraryDocument }) {
               ? "Guardado como nota: está en Índice y detalles → Notas, resaltada sobre la primera cita."
               : "No se pudo guardar como nota; el resumen se ve aquí mientras no cierres el libro."}
           </p>
+          {state.result.partial ? (
+            <p className={styles.note}>Solo del principio: el libro es más largo de lo que Pliegue lee.</p>
+          ) : null}
           {state.result.summary ? <p className={styles.summary}>{state.result.summary}</p> : null}
           <ol className={styles.points}>
             {state.result.points.map((point, index) => (

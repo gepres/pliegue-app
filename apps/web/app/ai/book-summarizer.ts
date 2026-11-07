@@ -3,7 +3,7 @@
 import { saveAnnotation } from "../library/annotation-store";
 import type { ReaderAnnotation } from "../library/annotations";
 import type { LibraryDocument } from "../library/documents";
-import { readDocumentChunks, type SemanticChunkRecord } from "../library/semantic-index-store";
+import { readDocumentChunks, readSemanticDocuments, type SemanticChunkRecord } from "../library/semantic-index-store";
 import { providerPlace, routeFor, type ProviderPlace, type Sensitivity } from "../library/sensitivity";
 import { documentSensitivity, hasConsent } from "../library/sensitivity-store";
 import { adapterFor } from "./adapters";
@@ -36,7 +36,7 @@ import { quoteContext } from "./library-answer";
 import type { AssistantFragment } from "./library-assistant";
 import { auditRoute } from "./processing-log";
 import { recordProcessing } from "./processing-log-store";
-import { indexDocuments, isIndexable } from "./semantic-indexer";
+import { indexDocuments, indexNeeds, isIndexable } from "./semantic-indexer";
 
 /**
  * Resumir un libro entero en el navegador (04.5): con el proveedor y el modelo de «Preguntar»,
@@ -56,6 +56,8 @@ export interface SummaryPlan {
   /** Qué dice el router: seguir, preguntar (personal sin permiso) o no (confidencial fuera). */
   route: "allow" | "ask" | "block";
   sensitivity: Sensitivity;
+  /** El índice solo tiene el principio del libro (el texto pasaba del tope al trocearlo). */
+  truncated: boolean;
 }
 
 export type SummaryPlanResult = { plan: SummaryPlan } | { reason: "no-text" | "too-long" | "not-indexable"; characters?: number };
@@ -67,21 +69,26 @@ export interface SummaryProgress {
   waiting: string | null;
 }
 
-/** Los fragmentos del libro, en orden: los del índice o, si no está indexado, se trocea ahora. */
+/**
+ * Los fragmentos del libro, en orden. Si no está indexado, o el índice es de otra versión del
+ * archivo o falló, se trocea ahora: si no, se resumiría (y se citaría) un texto que ya no es el
+ * del libro. Trocear es local: no sale nada y deja el libro listo también para buscar.
+ */
 async function bookChunks(document: LibraryDocument, settings: AiSettings) {
-  let chunks = await readDocumentChunks(document.id);
-  if (!chunks.length && isIndexable(document)) {
-    // Trocear es local: no sale nada y deja el libro listo también para buscar por palabras.
+  const recordOf = async () => (await readSemanticDocuments()).find((record) => record.documentId === document.id);
+  let record = await recordOf();
+  if (indexNeeds(document, record, null, false).chunk) {
     await indexDocuments([document], settings, "", { embed: false });
-    chunks = await readDocumentChunks(document.id);
+    record = await recordOf();
   }
-  return [...chunks].sort((left, right) => left.index - right.index);
+  const chunks = record?.status === "ready" ? await readDocumentChunks(document.id) : [];
+  return { chunks: [...chunks].sort((left, right) => left.index - right.index), truncated: Boolean(record?.truncated) };
 }
 
 /** Antes de enviar nada: cuánto texto, cuántas partes, cuánto costará y qué dice el router. */
 export async function planBookSummary(document: LibraryDocument, settings: AiSettings): Promise<SummaryPlanResult> {
   if (!isIndexable(document)) return { reason: "not-indexable" };
-  const chunks = await bookChunks(document, settings);
+  const { chunks, truncated } = await bookChunks(document, settings);
   const characters = chunks.reduce((sum, chunk) => sum + chunk.text.length, 0);
   if (!chunks.length || !characters) return { reason: "no-text" };
   if (characters > maxSummaryCharacters) return { characters, reason: "too-long" };
@@ -100,9 +107,18 @@ export async function planBookSummary(document: LibraryDocument, settings: AiSet
       provider,
       route: routeFor(sensitivity, place, hasConsent(document.id, "summarize")),
       sensitivity,
+      truncated,
     },
   };
 }
+
+/** Si la sensibilidad de este libro deja enviarlo ahora a ese proveedor. */
+function stillAllowed(document: LibraryDocument, plan: SummaryPlan) {
+  return routeFor(documentSensitivity(document), plan.place, hasConsent(document.id, "summarize")) === "allow";
+}
+
+/** Se paró a mitad porque el libro dejó de poder salir (se marcó confidencial, por ejemplo). */
+export class SummaryRouteError extends Error {}
 
 /** Lo que el router no dejó salir, al registro de la IA (sin texto). */
 export function recordSummaryKeptLocal(document: Pick<LibraryDocument, "id">, plan: SummaryPlan) {
@@ -170,10 +186,11 @@ export async function summarizeBook(
   apiKey: string,
   { onProgress, signal }: { onProgress?: (progress: SummaryProgress) => void; signal?: AbortSignal } = {},
 ): Promise<BookSummary<AssistantFragment>> {
-  // Otra vez justo antes: la persona pudo marcarlo confidencial con la ventana abierta.
-  if (routeFor(documentSensitivity(document), plan.place, hasConsent(document.id, "summarize")) !== "allow") {
-    throw new Error("La sensibilidad de este libro no deja enviarlo a ese proveedor.");
-  }
+  // Otra vez justo antes, y antes de cada envío: la persona pudo marcarlo confidencial mientras.
+  const checkRoute = () => {
+    if (!stillAllowed(document, plan)) throw new SummaryRouteError("La sensibilidad de este libro ya no deja enviarlo a ese proveedor: se paró.");
+  };
+  checkRoute();
   const title = document.title;
   const groups = summaryParts(plan.chunks);
   const progress: SummaryProgress = { done: 0, stage: "parts", total: groups.length, waiting: null };
@@ -196,6 +213,13 @@ export async function summarizeBook(
     recordAiUsage(plan.provider, plan.model, usage);
     totals.tokens += usage.inputTokens + usage.outputTokens;
   };
+  // Una sola entrada en el registro por resumen, con lo que salió de verdad.
+  let recorded = false;
+  const record = (failed: boolean) => {
+    if (recorded) return;
+    recorded = true;
+    recordProcessing({ ...audit, characters: totals.characters, ...(failed ? { failed: 1 } : {}), sent: totals.sent, tokens: totals.tokens });
+  };
 
   publish();
   try {
@@ -204,6 +228,7 @@ export async function summarizeBook(
     let dropped = 0;
     for (const [position, group] of groups.entries()) {
       signal?.throwIfAborted();
+      checkRoute();
       assertWithinBudget(plan.provider, document.id);
       const fragments: AssistantFragment[] = group.map((chunk, index) => ({ chunk, label: `F${index + 1}`, location: chunk.location, text: chunk.text, title }));
       const payload = fragments.map(({ label, location, text }) => ({ label, location, text }));
@@ -238,6 +263,7 @@ export async function summarizeBook(
     publish();
     const join = async (points: SummaryPoint<AssistantFragment>[]) => {
       signal?.throwIfAborted();
+      checkRoute();
       assertWithinBudget(plan.provider, document.id);
       const labeled: SummaryIdea[] = summaryIdeas(points);
       const { json, usage } = await callModel(
@@ -267,14 +293,16 @@ export async function summarizeBook(
       ideas = next;
     }
     const whole = await join(ideas.slice(0, summaryReduceSize));
-    recordProcessing({ ...audit, characters: totals.characters, sent: totals.sent, tokens: totals.tokens });
     if (!whole.points.length && !whole.summary) throw new Error("El proveedor no devolvió un resumen.");
-    return { dropped: dropped + whole.unsupported, points: whole.points, summary: whole.summary };
+    record(false);
+    return { dropped: dropped + whole.unsupported, partial: plan.truncated, points: whole.points, summary: whole.summary };
   } catch (error) {
     progress.waiting = null;
-    if (!signal?.aborted && !(error instanceof BudgetExceededError)) {
-      recordProcessing({ ...audit, characters: totals.characters, failed: 1, sent: totals.sent, tokens: totals.tokens });
-    }
+    // «Detener», el presupuesto o la sensibilidad no son fallos del proveedor, pero lo que ya
+    // salió se apunta igual: el registro dice qué texto dejó el equipo.
+    const stopped = signal?.aborted || error instanceof BudgetExceededError || error instanceof SummaryRouteError;
+    if (!stopped) record(true);
+    else if (totals.sent) record(false);
     throw error;
   }
 }

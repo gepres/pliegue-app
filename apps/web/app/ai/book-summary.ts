@@ -33,6 +33,8 @@ export interface SummaryPoint<F extends AnswerFragment = AnswerFragment> {
 export interface BookSummary<F extends AnswerFragment = AnswerFragment> {
   /** Citas que el modelo dio y no estaban en el libro: no se enseñan. */
   dropped: number;
+  /** Solo del principio: el libro pasaba del tope de texto que Pliegue lee al trocearlo. */
+  partial?: boolean;
   points: SummaryPoint<F>[];
   summary: string;
 }
@@ -235,7 +237,9 @@ export function summaryNoteText(title: string, summary: BookSummary, model: stri
     return [`${index + 1}. ${point.text}`, ...quotes].join("\n");
   });
   return [
-    `Resumen de «${cleanTitle(title)}»`,
+    summary.partial
+      ? `Resumen de «${cleanTitle(title)}» (solo del principio: el libro es más largo de lo que Pliegue lee)`
+      : `Resumen de «${cleanTitle(title)}»`,
     summary.summary,
     points.join("\n\n"),
     `— Resumen del asistente de Pliegue (${model}). Cada cita se comprobó en el libro.`,
