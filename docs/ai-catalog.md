@@ -204,6 +204,49 @@ de derivados» de 04.6.
   catálogo (`catalog-analysis.ts`) y al traducir (`use-book-translation.ts`). e2e:
   `apps/web/e2e/registro-ia.mjs`.
 
+## Buscar en los libros (04.4)
+
+`/app/ia`, «Buscar en tus libros». Búsqueda híbrida en el texto de los libros: por palabras,
+siempre y en el equipo, y por significado, con embeddings del proveedor de catalogar.
+
+- **Indexar, en dos pasos:**
+  1. *Trocear*, en el equipo: se lee el archivo y se parte en fragmentos de ~1.200 caracteres
+     (2.000 como mucho) que siguen la estructura: un título abre fragmento y un párrafo solo se
+     parte si es enorme (por frases). Con esto ya se busca por palabras.
+  2. *Vectores*: antes de enviar nada se dice a quién, cuántos fragmentos, caracteres y tokens
+     (y dólares, si el modelo tiene precio). Personal pide su permiso (flujo «indexar», aparte
+     de catalogar y traducir); confidencial con un proveedor en la nube no sale: se busca solo
+     por palabras y no cuenta como pendiente.
+- **Dónde está cada fragmento:**
+  - PDF: página, tramo del texto de la página (`start`, `end`) y rectángulos por renglón,
+    normalizados de 0 a 1 desde arriba a la izquierda (`extractPdfLayout`). No cruza de página.
+  - EPUB, DOCX, PPTX, XLSX: sección (índice, id y título) y bloques, contados como las anclas
+    de lectura (sin imágenes). No cruza de sección. TXT y MD, como una sección (en MD, `#` son
+    títulos).
+- **Reindexación incremental:** cada libro guarda la versión que se troceó (`fingerprint`, o
+  fecha del índice y longitud) y cada fragmento la huella de su texto. Si el libro no cambió,
+  no se vuelve a leer; si cambió, un fragmento con el mismo texto conserva su vector. Cambiar
+  de modelo de embeddings pide vectores nuevos.
+- **Modelos:** OpenAI `text-embedding-3-small` y Gemini `gemini-embedding-001`, recortados a
+  768 dimensiones, por `/api/ai/embed`; Ollama `embeddinggemma` desde el navegador. Anthropic
+  no ofrece embeddings: solo palabras. Los vectores se guardan en 8 bits (unos 770 bytes por
+  fragmento).
+- **Aislamiento:** por fuente (`sourceKeyOf`, como la sensibilidad) y por los libros que se ven.
+  El alcance se aplica dentro de la consulta, antes de puntuar: lo de fuera ni compite. Aún no
+  hay Áreas: cuando las haya, serán otro filtro del mismo sitio.
+- **Puntuación:** BM25 sin mayúsculas ni acentos, coseno entre vectores (solo los que llegan al
+  75 % del mejor), y las dos listas juntas por puesto (Reciprocal Rank Fusion). Como mucho tres
+  fragmentos por libro.
+- **Dónde vive:** IndexedDB `pliegue-semantic-index` (`chunks` y `documents`), sin sincronizar.
+  Se borra al desvincular el libro (`forget-derivatives`), desde el registro de la IA («Borrar
+  el índice») y con «Borrar los datos de este navegador».
+- **Código:** `library/chunking.ts`, `library/semantic-search.ts`,
+  `library/semantic-index-store.ts`, `ai/embeddings.ts`, `ai/semantic-indexer.ts`,
+  `api/ai/embed/route.ts` y `components/ai/semantic-search-panel.tsx`, con pruebas. e2e:
+  `apps/web/e2e/busqueda-semantica.mjs`.
+- **Pendiente:** abrir el lector en la página o el bloque del resultado y resaltarlo (04.5), y
+  los escaneos (sin capa de texto quedan «sin texto» hasta indexar su OCR).
+
 ## Datos persistidos
 
 La base IndexedDB `pliegue-document-catalog` guarda una fila por `documentId`:
@@ -223,7 +266,7 @@ visibles asociadas. El archivo original nunca se borra.
   quedan `needs-content` a la espera del OCR de `03.5`. Un PDF con texto sí se cataloga.
 - No hay cola durable entre recargas ni estimación de coste antes de ejecutar (el presupuesto
   frena al llegar al tope, no antes).
-- No hay embeddings ni búsqueda semántica global.
+- La búsqueda por significado (04.4) aún no abre el lector en la página del resultado.
 - Ollama Cloud no se trata como equivalente a un servidor Ollama remoto propio; el flujo
   requiere una instancia que acepte el esquema estructurado y CORS.
 - La bóveda persistente y el shell nativo siguen pendientes.

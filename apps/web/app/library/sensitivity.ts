@@ -34,13 +34,22 @@ export function isSensitivity(value: unknown): value is Sensitivity {
   return (sensitivityLevels as readonly unknown[]).includes(value);
 }
 
-/** Los flujos que pueden mandar el texto de un libro fuera del equipo. */
-export type SensitiveFlow = "catalog" | "translate";
+/**
+ * Los flujos que pueden mandar el texto de un libro fuera del equipo. Indexar (04.4) manda el
+ * texto entero, en fragmentos, para calcular sus embeddings: pide su propio permiso.
+ */
+export const sensitiveFlows = ["catalog", "translate", "index"] as const;
+export type SensitiveFlow = (typeof sensitiveFlows)[number];
 
 export const flowNames: Record<SensitiveFlow, string> = {
   catalog: "catalogar",
+  index: "indexar",
   translate: "traducir",
 };
+
+export function isSensitiveFlow(value: unknown): value is SensitiveFlow {
+  return (sensitiveFlows as readonly unknown[]).includes(value);
+}
 
 /** De qué fuente sale un libro, para heredar su sensibilidad. */
 export function sourceKeyOf(document: Pick<LibraryDocument, "reference">): string {

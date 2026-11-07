@@ -16,11 +16,12 @@ import type { OpenTranslator } from "../library/translation-engine";
  * del equipo a la nube sin que la persona lo pida.
  */
 
-export const processingFlows = ["catalog", "translate"] as const;
+export const processingFlows = ["catalog", "translate", "index"] as const;
 export type ProcessingFlow = (typeof processingFlows)[number];
 
 export const processingFlowNames: Record<ProcessingFlow, string> = {
   catalog: "Catalogar",
+  index: "Indexar",
   translate: "Traducir",
 };
 

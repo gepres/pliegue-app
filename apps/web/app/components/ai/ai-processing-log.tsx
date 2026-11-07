@@ -19,6 +19,7 @@ import {
   type ProcessingFilter,
 } from "../../ai/processing-log";
 import { clearProcessingLog, readProcessingLog, useProcessingLog } from "../../ai/processing-log-store";
+import { removeSemanticDocuments } from "../../library/semantic-index-store";
 import { sensitivityNames } from "../../library/sensitivity";
 import { clearEngineTranslations } from "../../library/translation-store";
 import { useLibraryDocuments } from "../../library/use-library-documents";
@@ -50,17 +51,25 @@ function providerLabel(entry: ProcessingEntry) {
 function amounts(entry: ProcessingEntry) {
   if (!routeSent(entry.route)) return "No se envió nada.";
   const parts = [
-    entry.sent
-      ? entry.flow === "catalog"
-        ? count(entry.sent, "ficha", "fichas")
-        : count(entry.sent, "página o sección", "páginas o secciones")
-      : "",
+    entry.sent ? sentLabel[entry.flow](entry.sent) : "",
     entry.characters ? count(entry.characters, "carácter enviado", "caracteres enviados") : "",
     entry.tokens ? count(entry.tokens, "token", "tokens") : "",
     entry.failed ? count(entry.failed, "fallo", "fallos") : "",
   ].filter(Boolean);
   return parts.join(" · ");
 }
+
+const sentLabel: Record<ProcessingEntry["flow"], (value: number) => string> = {
+  catalog: (value) => count(value, "ficha", "fichas"),
+  index: (value) => count(value, "fragmento", "fragmentos"),
+  translate: (value) => count(value, "página o sección", "páginas o secciones"),
+};
+
+const derivativeLabel: Record<ProcessingEntry["flow"], string> = {
+  catalog: "Borrar la ficha",
+  index: "Borrar el índice",
+  translate: "Borrar lo traducido",
+};
 
 /** Dónde se procesó; si no salió, dónde habría ido. */
 function placeLabel(entry: ProcessingEntry) {
@@ -70,7 +79,7 @@ function placeLabel(entry: ProcessingEntry) {
 
 /** Hay algo que la IA devolvió y se puede borrar: la ficha o lo traducido con ese motor. */
 function hasDerivative(entry: ProcessingEntry) {
-  return routeSent(entry.route) && entry.sent > 0 && (entry.flow === "catalog" || Boolean(entry.engine));
+  return routeSent(entry.route) && entry.sent > 0 && (entry.flow !== "translate" || Boolean(entry.engine));
 }
 
 /**
@@ -115,6 +124,20 @@ export function AiProcessingLog() {
       if (!confirmed) return;
       const removed = await removeDocumentCatalogRecords([entry.documentId]).catch(() => 0);
       setStatus(removed ? `Se borró la ficha de ${book}.` : `${book[0]?.toUpperCase()}${book.slice(1)} ya no tenía ficha de la IA.`);
+      return;
+    }
+    if (entry.flow === "index") {
+      const confirmed = await confirmAction({
+        confirmLabel: "Borrar el índice",
+        description: `Se borran los fragmentos de ${book} y sus vectores: deja de salir en la búsqueda hasta que lo vuelvas a indexar.`,
+        details: ["El libro y su ficha se quedan.", "Si vuelves a indexarlo, su texto se envía de nuevo."],
+        icon: "trash",
+        title: `¿Borrar el índice de búsqueda de ${book}?`,
+        tone: "danger",
+      });
+      if (!confirmed) return;
+      const removed = await removeSemanticDocuments([entry.documentId]).catch(() => 0);
+      setStatus(removed ? `Se ${removed === 1 ? "borró" : "borraron"} ${count(removed, "fragmento", "fragmentos")} de ${book}.` : `${book[0]?.toUpperCase()}${book.slice(1)} ya no estaba en el índice.`);
       return;
     }
     if (!entry.engine) return;
@@ -224,7 +247,7 @@ export function AiProcessingLog() {
                     {hasDerivative(entry) ? (
                       <div>
                         <Button onClick={() => void removeDerivative(entry)} size="sm" variant="quiet">
-                          {entry.flow === "catalog" ? "Borrar la ficha" : "Borrar lo traducido"}
+                          {derivativeLabel[entry.flow]}
                         </Button>
                       </div>
                     ) : null}

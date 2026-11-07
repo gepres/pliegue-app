@@ -5,6 +5,7 @@ import { useSyncExternalStore } from "react";
 import type { LibraryDocument } from "./documents";
 import {
   effectiveSensitivity,
+  isSensitiveFlow,
   isSensitivity,
   type SensitiveFlow,
   type Sensitivity,
@@ -53,7 +54,7 @@ function read(): StoredSensitivity {
       next.documents = levels(parsed.documents);
       next.sources = levels(parsed.sources);
       for (const [id, flows] of Object.entries(isRecord(parsed.consents) ? parsed.consents : {})) {
-        if (Array.isArray(flows)) next.consents[id] = flows.filter((flow): flow is SensitiveFlow => flow === "catalog" || flow === "translate");
+        if (Array.isArray(flows)) next.consents[id] = flows.filter(isSensitiveFlow);
       }
     }
     cached = next;
