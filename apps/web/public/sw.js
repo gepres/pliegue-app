@@ -13,7 +13,7 @@
  *   otro origen, como Supabase.
  */
 
-const VERSION = "2026-09-30";
+const VERSION = "2026-11-07";
 const PAGES = `pliegue-paginas-${VERSION}`;
 const ASSETS = `pliegue-recursos-${VERSION}`;
 

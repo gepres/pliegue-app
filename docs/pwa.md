@@ -41,6 +41,10 @@ queda para cuando haga falta algo nativo: vigilar carpetas, SQLite o la bóveda 
   - **Resto de estáticos:** la copia, renovada por detrás.
   - **Nunca:** `/api/*` ni lo de otros orígenes, como Supabase.
   - **Caché que falla:** se sigue por la red en vez de dejar de instalarse.
+  - **El lector, para cualquier libro:** `/app/lector` es estática y lee `document`,
+    `resume` y `fragmento` en el navegador (`components/reader/reader-route.tsx`). Antes se
+    decidía en el servidor, y la copia guardada (sin la consulta) era la de «¿Qué quieres
+    leer?» o la de otro libro: sin red, el lector no abría (06.5, `e2e/sin-conexion.mjs`).
 - `app/pwa/pwa-bootstrap.tsx`: registra el service worker **solo en producción**. En
   desarrollo da de baja los que haya, para no servir páginas viejas.
 - `app/pwa/install-store.ts`: guarda el aviso `beforeinstallprompt`, con un script temprano en

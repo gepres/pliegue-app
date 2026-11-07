@@ -54,3 +54,16 @@ catálogo, en claro y en oscuro, con las reglas de WCAG 2.0, 2.1 y 2.2 AA:
 
 Corre con «menos movimiento» emulado: las secciones que entran al desplazarse están al 15 % de
 opacidad hasta llegar a ellas, y axe mediría ese contraste a medio aparecer.
+
+## Secretos, teclado y sin conexión (06.5)
+
+- `secretos.mjs`: el código que llega al navegador no lleva claves privadas (la de Google del
+  navegador es pública por diseño y solo se avisa), y la clave de IA de la sesión solo viaja en
+  `Authorization` hacia `/api/ai/*`: ni en URLs ni en cuerpos, ni guardada en localStorage,
+  sessionStorage, cookies, IndexedDB o la caché. Al recargar, ya no está.
+- `teclado.mjs`: «Saltar al contenido», indicador de foco en cada parada del tabulador
+  (también el que pinta el contenedor con `:focus-within`), el menú de un libro con flechas y
+  Escape, y un diálogo que retiene el foco y lo devuelve. Intro se manda con su carácter
+  (``): sin él, Chrome no activa un `<button>`.
+- `sin-conexion.mjs`: corta la red a la página **y al service worker** (CDP, sesión del
+  `service_worker`) y abre la Biblioteca, el lector y Ajustes desde la caché.
