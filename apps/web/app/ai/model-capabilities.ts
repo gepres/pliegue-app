@@ -45,7 +45,7 @@ const modelFamilies: Record<AiProvider, readonly ModelFamily[]> = {
       pattern: /^gpt-4\.1(?:-mini|-nano)?(?:-\d{4}-\d{2}-\d{2})?$/,
       capabilities: { ...visionModel, contextTokens: 1_047_576, maxOutputTokens: 32_768 },
     },
-    { pattern: /^gpt-5(?:\.\d+)?(?:-mini|-nano|-luna|-sol|-astra)?(?:-\d{4}-\d{2}-\d{2})?$/, capabilities: visionModel },
+    { pattern: /^gpt-[56](?:\.\d+)?(?:-mini|-nano|-luna|-sol|-astra)?(?:-\d{4}-\d{2}-\d{2})?$/, capabilities: visionModel },
     { pattern: /^o1-(?:mini|preview)(?:-\d{4}-\d{2}-\d{2})?$/, capabilities: { ...textModel, structuredOutput: false } },
     { pattern: /^o3-mini(?:-\d{4}-\d{2}-\d{2})?$/, capabilities: textModel },
     { pattern: /^(?:o1|o3|o4-mini)(?:-\d{4}-\d{2}-\d{2})?$/, capabilities: visionModel },

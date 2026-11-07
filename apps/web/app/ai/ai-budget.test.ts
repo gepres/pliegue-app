@@ -49,8 +49,8 @@ describe("el importe estimado", () => {
   });
 
   it("un modelo sin precio cuenta tokens, no dólares, y se dice cuál", () => {
-    const spend = spendOf(addUsage({}, "openai", "gpt-5.6-luna", { inputTokens: 4000, outputTokens: 1000 }), budget());
-    expect(spend.byProvider.openai).toMatchObject({ missingPrices: ["gpt-5.6-luna"], tokens: 5000, usd: 0 });
+    const spend = spendOf(addUsage({}, "openai", "gpt-9-nube", { inputTokens: 4000, outputTokens: 1000 }), budget());
+    expect(spend.byProvider.openai).toMatchObject({ missingPrices: ["gpt-9-nube"], tokens: 5000, usd: 0 });
   });
 
   it("Ollama y LibreTranslate se cuentan pero no entran en el total que cobra", () => {

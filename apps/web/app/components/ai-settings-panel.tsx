@@ -34,6 +34,8 @@ import styles from "../(workspace)/app/workspace.module.css";
 import { IconButton } from "./app-ui/controls";
 import { suggestNextStep } from "./app-ui/next-step-dialog";
 import { ModelCapabilityTags } from "./model-capability-tags";
+import { ModelUpdateNotice } from "./ai/model-update-notice";
+import { OllamaModel } from "./ai/ollama-model";
 import { TranslationComparison } from "./translation-comparison";
 
 const providerLabels: Record<AiProvider, string> = {
@@ -307,6 +309,7 @@ function OllamaFields({
       <div className={styles.aiConnectionRow}>
         <ConnectionTest target={ollamaTarget(draft, model)} />
       </div>
+      <OllamaModel model={model} url={draft.ollamaUrl} />
     </>
   );
 }
@@ -411,6 +414,8 @@ export function AiSettingsPanel() {
           <small>Se elimina al recargar o cerrar la pestaña.</small>
         </div>
       </div>
+
+      <ModelUpdateNotice />
 
       <form className={styles.aiSettingsForm} onSubmit={save}>
         {/* ---- Catalogar ------------------------------------------------------------ */}

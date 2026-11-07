@@ -29,12 +29,12 @@ describe("lo que cuesta traducir un libro", () => {
     const openai = costPerBook(option("openai").pricing);
     const gemini = costPerBook(option("gemini").pricing);
     const claude = costPerBook(option("anthropic").pricing);
+    // Precios del 6-nov-2026: gpt-6-luna y Claude Haiku 5.5 cuestan lo mismo (0,10 / 0,50).
     expect(openai).toBeCloseTo(0.0942, 3);
+    expect(claude).toBeCloseTo(0.0942, 3);
     expect(gemini).toBeCloseTo(0.4406, 3);
-    expect(claude).toBeCloseTo(0.9419, 3);
-    expect(openai).toBeLessThan(gemini);
-    expect(gemini).toBeLessThan(claude);
-    expect(claude).toBeLessThan(costPerBook(option("azure").pricing));
+    expect(claude).toBeLessThan(gemini);
+    expect(gemini).toBeLessThan(costPerBook(option("azure").pricing));
   });
 
   it("escribe el coste en dólares con la coma decimal", () => {

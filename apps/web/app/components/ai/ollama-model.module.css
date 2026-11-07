@@ -1,0 +1,90 @@
+/* El modelo de Ollama en Ajustes → IA (04.2b): recomendado, descargado o por descargar. */
+.box {
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+  grid-column: 1 / -1;
+}
+
+.note,
+.ok,
+.error {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.note {
+  color: var(--pliegue-color-text-secondary);
+}
+
+.note strong {
+  color: var(--pliegue-color-text-primary);
+  font-weight: 600;
+}
+
+.ok {
+  color: var(--pliegue-color-action-primary);
+}
+
+.error {
+  color: var(--pliegue-color-status-danger);
+}
+
+.row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-sm);
+}
+
+.pull {
+  display: grid;
+  gap: 6px;
+  max-width: 32rem;
+}
+
+.track {
+  background: var(--pliegue-color-bg-subtle);
+  border-radius: var(--pliegue-radius-full);
+  height: 6px;
+  overflow: hidden;
+}
+
+.track span {
+  background: var(--pliegue-color-action-primary);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width var(--pliegue-motion-base) var(--pliegue-ease-standard);
+}
+
+/* Sin saber cuánto pesa todavía: la barra va y viene en vez de quedarse quieta. */
+.track span[data-indeterminate] {
+  animation: wander 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes wander {
+  from {
+    transform: translateX(-60%);
+  }
+
+  to {
+    transform: translateX(260%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track span[data-indeterminate] {
+    animation: none;
+  }
+}
+
+.link {
+  background: none;
+  border: 0;
+  color: var(--pliegue-color-action-primary);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
