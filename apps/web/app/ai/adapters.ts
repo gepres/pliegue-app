@@ -50,6 +50,13 @@ export interface ImageRequest {
 }
 
 export interface EmbedRequest {
+  /**
+   * Dimensiones pedidas (04.4): OpenAI (`text-embedding-3-*`) y Gemini recortan el vector sin
+   * perder mucho. Ollama devuelve las del modelo.
+   */
+  dimensions?: number;
+  /** Para qué es el texto: Gemini calcula distinto un fragmento que se guarda y una pregunta. */
+  purpose?: "document" | "query";
   texts: readonly string[];
   timeoutMs?: number;
 }
@@ -304,14 +311,22 @@ export function adapterFor(config: AdapterConfig): AiAdapter {
       let payload: Record<string, unknown>;
 
       if (provider === "openai") {
-        payload = await post("https://api.openai.com/v1/embeddings", { input: texts, model }, openAiHeaders, timeoutMs, signal);
+        const dimensions = request.dimensions && /^text-embedding-3-/.test(model) ? { dimensions: request.dimensions } : {};
+        payload = await post("https://api.openai.com/v1/embeddings", { input: texts, model, ...dimensions }, openAiHeaders, timeoutMs, signal);
         const data = payload.data as Array<{ embedding?: unknown; index?: number }> | undefined;
         const ordered = [...(data ?? [])].sort((left, right) => (left.index ?? 0) - (right.index ?? 0));
         vectors = vectorsOf(ordered.map((item) => item.embedding));
       } else if (provider === "gemini") {
         payload = await post(
           geminiUrl("batchEmbedContents"),
-          { requests: texts.map((text) => ({ content: { parts: [{ text }] }, model: `models/${model}` })) },
+          {
+            requests: texts.map((text) => ({
+              content: { parts: [{ text }] },
+              model: `models/${model}`,
+              ...(request.dimensions ? { outputDimensionality: request.dimensions } : {}),
+              ...(request.purpose ? { taskType: request.purpose === "query" ? "RETRIEVAL_QUERY" : "RETRIEVAL_DOCUMENT" } : {}),
+            })),
+          },
           geminiHeaders,
           timeoutMs,
           signal,
