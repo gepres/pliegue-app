@@ -168,9 +168,29 @@ t.check("y se ofrece leerlo en el equipo", /no se envió a Gemini|no se enviaron
 
 // ---- Guardar un hallazgo como nota --------------------------------------------------------------------------------
 ({ view } = await ask("¿Qué hay en el centro del jardín?"));
-await page.eval(`([...document.querySelectorAll("section[aria-label^='Respuesta a'] ol > li")][0].querySelector("button").click(), true)`);
-await page.waitFor(`/Nota guardada en «Jardin», El laberinto/.test(document.querySelector("section[aria-label^='Respuesta a']").textContent)`, { timeout: 10000 }).catch(() => {});
+const firstFinding = `[...document.querySelectorAll("section[aria-label^='Respuesta a'] ol > li")][0]`;
+await page.eval(`(${firstFinding}.querySelector("button").focus(), ${firstFinding}.querySelector("button").click(), true)`);
+const savedFeedback = await page
+  .waitFor(`(() => { const li = ${firstFinding}; return /Nota guardada/.test(li.querySelector("button").textContent) && /En «Jardin», El laberinto, resaltada sobre la cita/.test(li.querySelector("[role=status]")?.textContent ?? ""); })()`, { timeout: 10000 })
+  .then(() => true, () => false);
+const feedback = await page.eval(`(() => {
+  const li = ${firstFinding};
+  const button = li.querySelector("button").getBoundingClientRect();
+  const status = li.querySelector("[role=status]");
+  const box = status.getBoundingClientRect();
+  return { gap: Math.round(box.top - button.bottom), focus: document.activeElement === li.querySelector("button"), link: status.querySelector("a")?.getAttribute("href") ?? "", text: status.textContent };
+})()`);
+t.check(
+  "al guardar, el aviso sale junto a su botón («Nota guardada», dónde está y un enlace al lector) y el foco no se pierde",
+  savedFeedback && feedback.gap < 40 && feedback.focus && feedback.link.startsWith(`/app/lector?document=${encodeURIComponent(ids.Jardin)}&fragmento=`),
+  JSON.stringify(feedback),
+);
+await page.eval(`(${firstFinding}.scrollIntoView({ block: "center" }), true)`);
+await page.screenshot(`${work}/1b-nota-guardada.png`);
+await page.eval(`(${firstFinding}.querySelector("button").click(), true)`);
+await page.sleep(500);
 const notes = await page.eval(`new Promise((ok) => { const r = indexedDB.open("pliegue-annotations"); r.onsuccess = () => { const db = r.result; const all = db.transaction("annotations").objectStore("annotations").getAll(); all.onsuccess = () => { ok(all.result); db.close(); }; }; r.onerror = () => ok([]); })`);
+t.check("pulsar otra vez no la duplica", notes.filter((item) => item.documentId === ids.Jardin).length === 1, String(notes.length));
 const note = notes.find((item) => item.documentId === ids.Jardin);
 t.check(
   "la nota se guarda en el libro de la cita, con el hallazgo y la cita del libro",
