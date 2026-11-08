@@ -38,7 +38,7 @@ como en el CI (`.github/workflows/ci.yml`): Supabase se simula entero.
   `Fetch.enable` y `Fetch.fulfillRequest`. Ninguna prueba toca una cuenta real ni usa claves.
 - **Los libros se generan** en la propia prueba (un PDF con `Page.printToPDF`, un EPUB o un DOCX
   con `fflate`): no dependen de archivos de este equipo.
-- **Cada prueba tiene su puerto de depuración** (9382–9417) y su perfil (`<tmp>/pl-e2e-<nombre>`),
+- **Cada prueba tiene su puerto de depuración** (9382–9418) y su perfil (`<tmp>/pl-e2e-<nombre>`),
   que se borra al terminar. Una prueba nueva toma el siguiente puerto libre.
 - **Sin errores de consola.** Casi todas terminan comprobándolo.
 - `run.mjs` corre todas las que haya en la carpeta (menos ella misma) y sale con 1 si alguna falla.
@@ -170,6 +170,22 @@ Comprueba:
 
 Pliegue nunca pide nada a Buscalibre: la prueba bloquea cualquier petición a sus dominios y
 comprueba que no hubo ninguna.
+
+## Precios de Buscalibre para el admin (06.2b)
+
+`precios-buscalibre.mjs` (puerto 9418) abre «Dónde conseguirlo» desde «Para ti», en un libro con
+ISBN. Supabase (sesión y `is_pliegue_admin`), Open Library, Google y las rutas `/api/buscalibre/*`
+se simulan por CDP. El navegador nunca habla con Buscalibre: lo hace el servidor, que se prueba
+con vitest (`buscalibre-server.test.ts`). Comprueba:
+- **Quien no es admin:** ve el enlace como siempre, sin precio ni bloque del admin, y no llama a
+  las rutas.
+- **El admin, sin lista:** se le explica qué se descarga y dónde se guarda. Al prepararla, se pide
+  el índice y luego parte a parte, siempre con su sesión.
+- **El admin, con lista:**
+  - ve el precio de Perú, la disponibilidad, la fecha de la consulta y el enlace a la ficha;
+  - en Chile ve el precio en pesos chilenos, sin volver a descargar la lista;
+  - al volver, el precio del día no se vuelve a pedir.
+- **Móvil (390 px):** el bloque cabe sin desplazamiento lateral, y no hay errores en la consola.
 
 ## Para ti (06.1)
 

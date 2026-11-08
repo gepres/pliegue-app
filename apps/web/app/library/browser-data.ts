@@ -12,6 +12,7 @@
 /** Las bases que crea Pliegue, por si el navegador no sabe listarlas (`databases()`). */
 export const knownDatabases = [
   "pliegue-annotations",
+  "pliegue-buscalibre",
   "pliegue-catalog-import",
   "pliegue-content-hashes",
   "pliegue-covers",

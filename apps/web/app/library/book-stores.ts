@@ -2,9 +2,11 @@
  * Dónde conseguir un libro (06.2). Dos fuentes, las dos permitidas:
  *
  * - **Buscalibre**, un enlace a la búsqueda del libro en la tienda del país, por ISBN o por título
- *   y autor. Buscalibre no tiene API pública y su `robots.txt` veta recorrer sus búsquedas con
- *   programas, así que Pliegue no lee sus precios: el precio, el formato, el envío y las
- *   promociones se ven en su web. El enlace no lleva código de afiliado: Pliegue no gana nada.
+ *   y autor. Buscalibre no tiene API pública, su `robots.txt` veta sus búsquedas y sus términos
+ *   prohíben reutilizar los datos de su catálogo sin autorización, así que para todos el precio,
+ *   el formato, el envío y las promociones se ven en su web. La excepción es el admin, que por
+ *   decisión del dueño ve el precio dentro de Pliegue (06.2b, `buscalibre-prices.ts`). El enlace
+ *   no lleva código de afiliado: Pliegue no gana nada.
  * - **Google Play Libros**, por la Books API de Google (`saleInfo`): precio, moneda, país y
  *   formato de los libros digitales, con la fecha de la consulta. Necesita la clave pública de
  *   Google de Pliegue con la Books API activada; sin ella, esa parte no aparece.

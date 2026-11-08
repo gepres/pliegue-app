@@ -50,7 +50,7 @@ export interface LibraryServerDeps<Config extends LibraryBaseConfig = LibraryBas
 }
 
 /** Las claves nuevas de Supabase (`sb_secret_…`) van solo en `apikey`; la `service_role` antigua es un JWT y va también como portador. */
-function supabaseHeaders(secretKey: string): Record<string, string> {
+export function supabaseHeaders(secretKey: string): Record<string, string> {
   return {
     apikey: secretKey,
     ...(secretKey.startsWith("eyJ") ? { Authorization: `Bearer ${secretKey}` } : {}),
