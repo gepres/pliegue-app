@@ -217,6 +217,15 @@ export function WorkspaceDashboard() {
           </div>
         </section>
       ) : null}
+
+      {/* Recomendaciones (06.1): al final, para no quitar sitio a la biblioteca. */}
+      <section aria-labelledby="para-ti-inicio" className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 id="para-ti-inicio">Libros para ti</h2>
+          <Link href="/app/para-ti">Ver recomendaciones</Link>
+        </div>
+        <p>Recomendaciones según tus gustos, cada una con su porqué y dónde conseguirla. Tú decides con qué se recomienda.</p>
+      </section>
     </>
   );
 }

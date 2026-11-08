@@ -38,7 +38,7 @@ como en el CI (`.github/workflows/ci.yml`): Supabase se simula entero.
   `Fetch.enable` y `Fetch.fulfillRequest`. Ninguna prueba toca una cuenta real ni usa claves.
 - **Los libros se generan** en la propia prueba (un PDF con `Page.printToPDF`, un EPUB o un DOCX
   con `fflate`): no dependen de archivos de este equipo.
-- **Cada prueba tiene su puerto de depuración** (9382–9416) y su perfil (`<tmp>/pl-e2e-<nombre>`),
+- **Cada prueba tiene su puerto de depuración** (9382–9417) y su perfil (`<tmp>/pl-e2e-<nombre>`),
   que se borra al terminar. Una prueba nueva toma el siguiente puerto libre.
 - **Sin errores de consola.** Casi todas terminan comprobándolo.
 - `run.mjs` corre todas las que haya en la carpeta (menos ella misma) y sale con 1 si alguna falla.
@@ -170,3 +170,21 @@ Comprueba:
 
 Pliegue nunca pide nada a Buscalibre: la prueba bloquea cualquier petición a sus dominios y
 comprueba que no hubo ninguna.
+
+## Para ti (06.1)
+
+`para-ti.mjs` importa dos libros («Rayuela - Julio Cortázar» y «Diario intimo - Ana Secreta»,
+marcado confidencial) y simula Open Library, las portadas y la IA. Comprueba:
+- **Solo con gustos declarados:** busca el tema y el autor elegidos y nada de la biblioteca;
+  cada tarjeta dice por qué; lo que ya se tiene (Rayuela) no sale y una obra en japonés se
+  enseña con el título de su edición en español.
+- **«No me interesa»:** desaparece y no vuelve al recargar.
+- **Con la biblioteca:** busca también a Cortázar, nunca a la autora del libro confidencial ni
+  ningún título.
+- **Afinar con IA:** el aviso lista temas y autores; a la IA no le llega ningún título ni nada
+  del confidencial, y la sugerencia inventada (que no está en Open Library) no se enseña.
+- **Desactivar y borrar:** se deja de recomendar, y se borran los gustos.
+
+El título del mosaico de la Biblioteca sale del nombre del archivo («Diario intimo   Ana
+Secreta»): para encontrar su id, la prueba busca por patrón, y comprueba que lo encontró
+antes de marcarlo.
