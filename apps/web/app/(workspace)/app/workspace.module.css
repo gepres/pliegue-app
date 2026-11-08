@@ -836,6 +836,50 @@
   -webkit-text-security: none;
 }
 
+/* «Recordar» (02.5): dónde se guarda la clave, con una línea que lo dice. */
+.aiSecretRemember {
+  align-items: center;
+  display: grid;
+  gap: var(--pliegue-spacing-xs) var(--pliegue-spacing-sm);
+  grid-template-columns: auto minmax(0, 18rem);
+  margin-top: var(--pliegue-spacing-sm);
+}
+
+.aiSecretRemember label {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.aiSecretRemember p {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.8125rem;
+  grid-column: 1 / -1;
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* Las claves de la cuenta, sin abrir en este equipo. */
+.aiAccountKeys {
+  border: 1px solid var(--pliegue-color-border-default);
+  border-left: 3px solid var(--pliegue-color-accent-warm);
+  border-radius: var(--pliegue-radius-md, 12px);
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+  padding: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
+}
+
+.aiAccountKeys p {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.aiAccountKeys div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-xs);
+}
+
 .aiSecretIssue {
   color: var(--pliegue-color-text-secondary);
   font-size: 0.8125rem;

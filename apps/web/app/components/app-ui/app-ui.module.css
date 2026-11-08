@@ -744,6 +744,14 @@
   padding: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
 }
 
+.confirmProblem {
+  border-left: 3px solid var(--pliegue-color-status-danger);
+  color: var(--pliegue-color-status-danger);
+  font-size: 0.875rem;
+  margin: 0;
+  padding-left: var(--pliegue-spacing-sm);
+}
+
 .confirmBody > .confirmNote {
   border-top: 1px solid var(--pliegue-color-border-default);
   font-size: 0.8125rem;

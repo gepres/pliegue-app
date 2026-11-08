@@ -65,20 +65,54 @@ Estados visibles:
 
 | Proveedor | Transporte actual | Secreto |
 | --- | --- | --- |
-| OpenAI | ruta fija de servidor → Responses API con Structured Outputs | API key solo en memoria de la pestaña |
-| Anthropic | ruta fija de servidor → Messages API con JSON Schema | API key solo en memoria de la pestaña |
+| OpenAI | ruta fija de servidor → Responses API con Structured Outputs | API key en la memoria de la pestaña; guardada cifrada si se elige (02.5) |
+| Anthropic | ruta fija de servidor → Messages API con JSON Schema | API key en la memoria de la pestaña; guardada cifrada si se elige (02.5) |
 | Ollama local | navegador → `http://localhost:11434/api/chat` | no requiere API key |
 | Ollama remoto | navegador → URL HTTP(S) configurada | el servidor debe permitir CORS para Pliegue |
 
-OpenAI y Anthropic reciben la API key en un header de la solicitud a Pliegue; la ruta la
-reenvía al proveedor y no persiste ni registra la clave o el cuerpo. Esto es una credencial
-de sesión, no una bóveda web: en un despliegue hospedado la clave y el extracto atraviesan
-el servidor de Pliegue. La bóveda persistente, cifrado y recuperación siguen pendientes en
-`02.5`.
+OpenAI y Anthropic reciben la API key en un header de la solicitud a Pliegue. La ruta la
+reenvía al proveedor y no persiste ni registra la clave ni el cuerpo. En un despliegue alojado,
+la clave y el extracto atraviesan el servidor de Pliegue.
 
 Los ajustes no sensibles viven en la clave versionada `pliegue-ai-settings-v1` de
-`localStorage`. Las claves no entran en `localStorage`, IndexedDB, variables
-`NEXT_PUBLIC_`, repositorio o telemetría.
+`localStorage`. Las claves nunca van en claro a `localStorage`, IndexedDB, variables
+`NEXT_PUBLIC_`, el repositorio, los registros ni la telemetría.
+
+### Bóveda de claves (02.5)
+
+Decisión del dueño del 8-nov, que cambia el «gate 3» de ADR-0002. Cada clave tiene, en
+Ajustes → IA, un «Recordar» con cuatro niveles:
+
+| Nivel | Dónde queda | Hasta cuándo |
+|---|---|---|
+| Solo esta pestaña (por defecto) | en la memoria de la pestaña | al recargar o cerrarla |
+| Hasta cerrar sesión | cifrada en este navegador | al cerrar sesión en Pliegue, o si la sesión es de otra cuenta |
+| En este navegador | cifrada en este navegador | hasta «Borrar» |
+| En mi cuenta, con mi frase | cifrada con la frase, en Supabase (`user_secrets`), y una copia cifrada aquí | hasta «Borrar»; la copia de aquí, hasta cerrar sesión |
+
+- **En claro** la clave solo está en la memoria de la pestaña (`ai-session-secret-store`), y
+  de ahí la toman las peticiones.
+- **En este navegador** se cifra con AES-GCM y una llave que el navegador crea no exportable.
+  La llave se guarda en IndexedDB (`pliegue-key-vault`) como `CryptoKey`: sirve para descifrar,
+  pero no se puede leer ni copiar.
+- **En la cuenta** se cifra en el navegador con una llave derivada de la frase de la persona
+  (PBKDF2-SHA256, 600.000 vueltas, sal aleatoria):
+  - a Supabase llegan el texto cifrado, el vector y los parámetros con la sal; la frase nunca
+    sale del navegador, y ni Pliegue ni Supabase pueden descifrarla;
+  - la tabla `user_secrets` tiene RLS (solo su dueño), está fuera de `sync_items` y se borra
+    con la cuenta (migración `20261108120000_boveda_claves.sql`);
+  - en otro equipo, Ajustes → IA avisa de las claves de la cuenta y las abre con la frase. La
+    llave derivada, no exportable, se queda en ese navegador hasta cerrar sesión;
+  - si se olvida la frase, «Olvidé la frase» borra las claves de la cuenta y se vuelven a pegar.
+- **Cada texto cifrado lleva como datos asociados su proveedor y su cuenta.** Copiado a otra
+  fila no se descifra.
+- **Al cerrar sesión** se borran de este navegador las de «hasta cerrar sesión», la copia de
+  las de la cuenta y la llave de la frase. «Borrar los datos de Pliegue» (Ajustes → Datos) borra
+  también la bóveda.
+- **Código:** `ai/key-vault-crypto.ts` (cifrado, con pruebas), `ai/key-vault.ts` (con pruebas
+  en IndexedDB simulado), `components/app-ui/passphrase-dialog.tsx` y
+  `components/ai/key-vault-loader.tsx`. e2e: `apps/web/e2e/boveda-claves.mjs`, con dos
+  equipos.
 
 ## Modelos de partida (04.2b)
 

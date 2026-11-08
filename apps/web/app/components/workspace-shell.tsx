@@ -23,6 +23,8 @@ import { CloudSync } from "./cloud/cloud-sync";
 import { NoticesBanner } from "./cloud/notices-banner";
 import { InstallAppNavItem } from "./pwa/install-app";
 import { IconButton } from "./app-ui/controls";
+import { PassphraseDialogHost } from "./app-ui/passphrase-dialog";
+import { KeyVaultLoader } from "./ai/key-vault-loader";
 import { Icon } from "./app-ui/icons";
 import { ThemeToggle } from "./theme-toggle";
 import styles from "./workspace-shell.module.css";
@@ -212,6 +214,8 @@ export function WorkspaceShell({ children }: Readonly<{ children: ReactNode }>) 
       </nav>
 
       <ConfirmDialogHost />
+      <PassphraseDialogHost />
+      <KeyVaultLoader />
       <NextStepHost />
       <BudgetAlerts />
       <SensitivityPickerHost />
