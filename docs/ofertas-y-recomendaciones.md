@@ -11,6 +11,7 @@ Ninguno más. Si se añade una tienda, se añade aquí.
 | Sitio | Para qué | Cómo |
 |---|---|---|
 | `www.buscalibre.pe`, `.com.co`, `.cl`, `.com.mx`, `.com.ar`, `.us` | Enlace a la búsqueda del libro en la tienda del país | **Solo un enlace** que abre la persona. Pliegue no pide nada a Buscalibre |
+| Los mismos, `/sitemaps/productos*.xml` y `/libro-…/<ISBN>/p/<id>` | **Solo el admin** (06.2b): la lista ISBN → producto y el precio de la ficha | Petición **desde el servidor de Pliegue**, solo si la cuenta es admin. Nunca una URL con `?` |
 | `www.googleapis.com/books/v1/volumes` | Precio de los libros digitales de Google Play | Petición desde el navegador, con la clave pública de Google de Pliegue |
 | `openlibrary.org/search.json` | Recomendaciones (06.1): libros por tema o autor, y comprobar las sugerencias de la IA | Petición desde el navegador, sin clave |
 | `covers.openlibrary.org` | Portadas de lo recomendado | Imagen, sin clave |
@@ -24,8 +25,11 @@ convención «Título - Autor».
 ## Buscalibre
 
 - **Sin API pública.** Su `robots.txt`, para cualquier programa (`User-agent: *`), dice
-  `Disallow: /libros/search*?*` y `Disallow: /*?*`: no se pueden recorrer sus búsquedas. Por
-  eso Pliegue **no lee sus precios** (validado el 8-nov-2026: sin scraping).
+  `Disallow: /libros/search*?*` y `Disallow: /*?*`: no se pueden recorrer sus búsquedas. Sí deja
+  leer las fichas y los sitemaps. Sus **términos** (Perú, «Sobre nuestro catálogo») prohíben
+  extraer datos de su plataforma para reutilizarlos y crear bases propias con su contenido sin
+  su autorización expresa. Por eso, para todos, Pliegue **no enseña sus precios**: solo el
+  admin, por decisión del dueño (ver más abajo).
 - **El enlace** lleva a `https://<tienda>/libros/search?q=<ISBN o título y autor>` y se abre en
   otra pestaña, con `noopener noreferrer`. El precio, el formato, el envío y las promociones se
   ven en Buscalibre, y el panel lo dice.
@@ -52,6 +56,51 @@ convención «Título - Autor».
   igual.
 - **Términos:** el uso de la Books API se rige por los Términos de las API de Google. Se
   muestran sus datos con su enlace de compra, sin guardarlos más de un día.
+
+## El precio de Buscalibre, solo para el admin (06.2b)
+
+**Decisión del dueño (8-nov-2026):** ver el precio de Buscalibre dentro de Pliegue **sabiendo
+que va contra sus términos**, y **solo el admin** (`pliegue_admins`). Nadie más lo ve. El
+interruptor para mostrarlo a los demás queda fuera: exigiría la autorización de Buscalibre.
+
+- **Quién:** el panel lo monta solo si `is_pliegue_admin()` dice que sí. Además, las rutas
+  `/api/buscalibre/*` comprueban en el servidor la sesión (Supabase Auth) y que la cuenta está en
+  `pliegue_admins`. Sin sesión, 401; si no es admin, 403. En ambos casos Buscalibre no recibe
+  nada.
+- **Qué se le pide a Buscalibre**, siempre desde el servidor y solo lo que su `robots.txt`
+  deja leer, **nunca una URL con `?`** (hay una prueba que lo asegura):
+  - el índice de sitemaps (`/sitemaps/productos.xml`, 34 partes de ~25.000 libros);
+  - cada parte (`/sitemaps/productos_N.xml`), de la que se sacan los pares ISBN-13 → número de
+    producto;
+  - la ficha (`/libro-pliegue/<ISBN>/p/<id>`, que redirige a la buena), de cuyo JSON-LD
+    (schema.org Product/Offer) salen el precio, la moneda y la disponibilidad.
+
+  Se identifica como `Pliegue/1.0 (+https://pliegue.genaropretill.com)`, con 15 s de límite, y
+  no lleva la sesión de nadie.
+- **La lista ISBN → producto vive solo en el navegador del admin** (IndexedDB
+  `pliegue-buscalibre`, en 100 grupos, unos 850.000 libros). Ni Supabase ni el servidor guardan
+  nada del catálogo.
+  - Los sitemaps son los mismos en los seis países, así que una lista sirve para todos.
+  - Se prepara con un botón, parte a parte y con progreso; tarda alrededor de un minuto. Si una
+    parte falla dos veces, la lista anterior se queda como estaba.
+  - Se actualiza con «Actualizar la lista» y se borra con «Borrar todo en este navegador».
+- **El precio:** se busca el número de producto en la lista (un ISBN-10 se pasa a ISBN-13) y
+  se pide la ficha de la tienda del país elegido.
+  - Se enseña con su fecha y un enlace directo a la ficha.
+  - Si la ficha no tiene precio en ese país, el panel dice que no se vende ahí; si el ISBN no
+    está en la lista, lo dice también.
+  - Se recuerda **24 horas** por país e ISBN (`pliegue-buscalibre-prices-v1`, hasta 200).
+- **Sin ISBN** no hay precio: queda el enlace de búsqueda.
+- **Código:**
+  - `library/buscalibre-prices.ts`: direcciones, lectura de sitemaps y fichas, y los grupos de
+    la lista;
+  - `library/buscalibre-server.ts`: rutas y comprobación del admin;
+  - `library/buscalibre-index-store.ts`: la lista y los precios en el navegador;
+  - `components/books/buscalibre-admin-price.tsx`.
+
+  Todos tienen pruebas. e2e: `apps/web/e2e/precios-buscalibre.mjs`, con las rutas simuladas.
+  La lectura real se probó a mano el 8-nov: S/ 52 en Perú, $9.990 en Chile, $285 en México y
+  US$16.59 en EE. UU. para el mismo libro.
 
 ## Código
 

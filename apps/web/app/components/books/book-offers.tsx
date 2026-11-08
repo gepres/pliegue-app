@@ -4,11 +4,13 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { Select } from "@pliegue/ui";
 
+import { useIsPliegueAdmin } from "../../cloud/admin-store";
 import { currentBookStore, lookupDigitalOffers, setBookStore, useBookStore, type DigitalOffersResult } from "../../library/book-offers-store";
 import { buscalibreStores, buscalibreUrl, formatPrice, storeById, type BookLookup } from "../../library/book-stores";
 import { Icon } from "../app-ui/icons";
 import { Sheet } from "../app-ui/overlays";
 import styles from "./book-offers.module.css";
+import { BuscalibreAdminPrice } from "./buscalibre-admin-price";
 
 /**
  * «Dónde conseguirlo» (06.2): Buscalibre en el país elegido y, si la clave de Google lo permite,
@@ -56,6 +58,8 @@ export function BookOffersHost() {
 export function BookOffers({ book }: { book: OffersTarget }) {
   const storeId = useBookStore();
   const store = storeById(storeId);
+  // El precio de Buscalibre solo lo ve el admin (06.2b); el servidor lo vuelve a comprobar.
+  const admin = useIsPliegueAdmin() === true;
   const [digital, setDigital] = useState<{ key: string; result: DigitalOffersResult } | null>(null);
   const lookupKey = `${storeId}|${book.isbn ?? book.title}`;
 
@@ -101,9 +105,10 @@ export function BookOffers({ book }: { book: OffersTarget }) {
               <Icon name="link" size={18} />
             </a>
             <p className={styles.note}>
-              Se abre su web, con la búsqueda {book.isbn ? `del ISBN ${book.isbn}` : "por título y autor"}. Buscalibre no ofrece sus
-              precios a otras aplicaciones: el precio, el envío y las promociones los ves allí.
+              Se abre su web, con la búsqueda {book.isbn ? `del ISBN ${book.isbn}` : "por título y autor"}.
+              {admin ? "" : " Buscalibre no ofrece sus precios a otras aplicaciones: el precio, el envío y las promociones los ves allí."}
             </p>
+            {admin ? <BuscalibreAdminPrice isbn={book.isbn} store={store} /> : null}
           </>
         ) : (
           <p className={styles.note}>Elige tu país para ver la tienda de Buscalibre que te corresponde.</p>
