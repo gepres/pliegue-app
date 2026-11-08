@@ -216,7 +216,11 @@ const inView = (selector) =>
 found = await search("espejo");
 await page.eval(`([...document.querySelectorAll("section[aria-label^='Resultados'] li a")].find((a) => a.textContent === "Anaqueles").click(), true)`);
 const pdfHit = await page.waitFor(`document.querySelector("[data-page-number='2'] [data-search-hit]")`, { timeout: 30000 }).then(() => true, () => false);
-await page.sleep(1200);
+// El salto a la página es un desplazamiento suave: en CI, más lento. Se espera a que el resaltado
+// esté a la vista (hasta 10 s) en vez de un tiempo fijo.
+await page
+  .waitFor(`(() => { const r = document.querySelector("[data-page-number='2'] [data-search-hit]")?.getBoundingClientRect(); return Boolean(r) && r.bottom > 0 && r.top < innerHeight; })()`, { timeout: 10000 })
+  .catch(() => {});
 const pdfHits = await page.eval(`document.querySelectorAll("[data-page-number='2'] [data-search-hit]").length`);
 const pdfSpot = await inView("[data-page-number='2'] [data-search-hit]");
 t.check("el resultado del PDF abre la página 2 con sus renglones resaltados", pdfHit && pdfHits >= 2 && pdfSpot?.visible, `${pdfHits} renglones · ${JSON.stringify(pdfSpot)}`);
