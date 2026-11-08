@@ -1,0 +1,380 @@
+/* ==========================================================================
+   El pliego de la portada: un libro abierto con el original y su traducción
+   enfrentados, una pregunta a lápiz en el margen y, debajo, la respuesta de
+   Pliegue en una ficha, con su nota al pie que señala la frase citada.
+   ========================================================================== */
+
+.spread {
+  --pliego-highlight: rgb(124 92 224 / 24%);
+  --pliego-cite: color-mix(in srgb, var(--pliegue-color-accent-warm) 46%, transparent);
+
+  animation: rise 900ms var(--pliegue-ease-standard, ease) 240ms both;
+  display: grid;
+  gap: clamp(1.25rem, 3vw, 1.75rem);
+  justify-items: center;
+  margin: 0;
+  min-width: 0;
+  perspective: 1800px;
+}
+
+.stage {
+  max-width: 640px;
+  position: relative;
+  width: 100%;
+}
+
+.book {
+  animation: unfold 1400ms cubic-bezier(0.2, 0.8, 0.2, 1) 300ms both;
+  background: var(--pliegue-color-bg-surface);
+  border-radius: 4px 4px 6px 6px;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--pliegue-color-text-primary) 8%, transparent),
+    0 30px 60px -20px rgb(40 28 12 / 32%),
+    0 12px 24px -12px rgb(40 28 12 / 22%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr);
+  position: relative;
+  transform: rotateX(7deg) rotateZ(-1.2deg);
+  transform-origin: 50% 100%;
+  width: 100%;
+}
+
+/* El canto de las hojas, debajo del libro. */
+.book::after {
+  background: repeating-linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--pliegue-color-bg-surface) 92%, var(--pliegue-color-text-primary)) 0 1px,
+    var(--pliegue-color-bg-surface) 1px 3px
+  );
+  border-radius: 0 0 6px 6px;
+  bottom: -7px;
+  content: "";
+  height: 8px;
+  left: 1.5%;
+  position: absolute;
+  right: 1.5%;
+  z-index: -1;
+}
+
+.leaf {
+  align-content: start;
+  color: var(--pliegue-color-text-primary);
+  display: grid;
+  font-family: var(--pliegue-font-reading);
+  font-size: clamp(0.72rem, 1.08vw, 0.94rem);
+  gap: 1.1em;
+  hyphens: auto;
+  line-height: 1.66;
+  min-height: clamp(250px, 28vw, 360px);
+  padding: 2.2em 2.2em 4.6em;
+  position: relative;
+  text-align: start;
+}
+
+/* La sombra de la curva de la hoja hacia el lomo. */
+.leaf:first-child {
+  background: linear-gradient(to left, rgb(40 28 12 / 9%), transparent 18%);
+}
+
+.leafTranslated {
+  background: linear-gradient(to right, rgb(40 28 12 / 9%), transparent 18%);
+}
+
+.leaf p {
+  margin: 0;
+}
+
+.gutter {
+  background: linear-gradient(to right, rgb(40 28 12 / 16%), rgb(40 28 12 / 2%) 45%, rgb(40 28 12 / 2%) 55%, rgb(40 28 12 / 16%));
+}
+
+.folio {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.66em;
+  letter-spacing: 0.14em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* Cada pareja de frases se ilumina a la vez en los dos idiomas, por turnos, unas pocas veces. */
+.sentence {
+  animation: pair 9s ease-in-out 3;
+  animation-delay: calc(var(--pair, 0) * 3s + 1.6s);
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* La frase que cita la respuesta: el trazo ocre del rotulador, en los dos idiomas. */
+.cited {
+  background-image: linear-gradient(transparent 60%, var(--pliego-cite) 60%, var(--pliego-cite) 94%, transparent 94%);
+  background-repeat: no-repeat;
+  background-size: 0% 100%;
+  animation:
+    pair 9s ease-in-out 3,
+    mark 700ms cubic-bezier(0.22, 1, 0.36, 1) 3.1s forwards;
+  animation-delay: calc(var(--pair, 0) * 3s + 1.6s), 3.1s;
+}
+
+.book[data-pointing="true"] .cited {
+  animation: none;
+  background-color: var(--pliego-cite);
+  background-size: 100% 100%;
+}
+
+.dogEar {
+  background: linear-gradient(
+    225deg,
+    var(--pliegue-color-bg-canvas) 50%,
+    color-mix(in srgb, var(--pliegue-color-text-primary) 10%, var(--pliegue-color-bg-surface)) 50%
+  );
+  box-shadow: -3px 3px 5px rgb(40 28 12 / 12%);
+  height: 2.6em;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 2.6em;
+}
+
+.visuallyHidden {
+  clip: rect(0 0 0 0);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/* La pregunta, anotada en el margen inferior de la página izquierda: cursiva y en grafito, la
+   segunda tinta del libro junto al ocre. Sin rótulo encima: la nota se explica sola. */
+.question {
+  bottom: clamp(0.9rem, 2.2vw, 1.4rem);
+  color: color-mix(in srgb, var(--pliegue-color-text-primary) 74%, var(--pliegue-color-bg-surface));
+  font-family: var(--pliegue-font-reading);
+  font-size: clamp(0.8rem, 1.1vw, 0.95rem);
+  font-style: italic;
+  left: clamp(1rem, 3vw, 1.9rem);
+  line-height: 1.35;
+  margin: 0;
+  max-width: 44%;
+  position: absolute;
+  rotate: -2deg;
+  text-wrap: balance;
+}
+
+.question::before {
+  border-bottom: 1px solid color-mix(in srgb, var(--pliegue-color-text-primary) 45%, transparent);
+  bottom: -0.25em;
+  content: "";
+  left: 0;
+  position: absolute;
+  right: 12%;
+}
+
+/* La respuesta: una ficha metida entre las hojas, con su nota al pie. */
+.answer {
+  animation: slip 900ms cubic-bezier(0.22, 1, 0.36, 1) 2.2s both;
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: 6px;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--pliegue-color-text-primary) 6%, transparent),
+    0 18px 36px -18px rgb(40 28 12 / 34%);
+  display: grid;
+  gap: 0.65rem;
+  max-width: 520px;
+  padding: 1.1rem 1.25rem 1rem;
+  rotate: 0.6deg;
+  width: min(100%, 520px);
+}
+
+.answerHead {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  justify-content: space-between;
+}
+
+.answerHead strong {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.answerHead span {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+.answerText {
+  font-family: var(--pliegue-font-reading);
+  font-size: clamp(0.98rem, 1.3vw, 1.08rem);
+  line-height: 1.55;
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.quote {
+  background: linear-gradient(transparent 62%, var(--pliego-cite) 62%, var(--pliego-cite) 94%, transparent 94%);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* La llamada de la nota: un botón que señala la frase citada en el libro. */
+.noteCall {
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  color: var(--pliegue-color-action-primary);
+  cursor: pointer;
+  font: 600 0.8em var(--pliegue-font-data);
+  margin-left: 0.1em;
+  padding: 0 0.2em;
+  vertical-align: super;
+}
+
+.noteCall:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.noteCall[aria-pressed="true"] {
+  background: var(--pliego-cite);
+  color: var(--pliegue-color-text-primary);
+}
+
+.footnote {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  color: var(--pliegue-color-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.75rem;
+  gap: 0.35rem 0.9rem;
+  justify-content: space-between;
+  letter-spacing: 0.03em;
+  margin: 0;
+  padding-top: 0.6rem;
+}
+
+.again {
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  color: var(--pliegue-color-action-primary);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-color: var(--pliegue-color-accent-warm);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.noteCall:focus-visible,
+.again:focus-visible {
+  outline: 3px solid var(--pliegue-color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---- Movimiento ------------------------------------------------------------------------ */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@keyframes unfold {
+  from {
+    opacity: 0;
+    transform: rotateX(28deg) rotateZ(-3deg) translateY(30px);
+  }
+}
+
+@keyframes pair {
+  0%,
+  36%,
+  100% {
+    background-color: transparent;
+  }
+
+  6%,
+  30% {
+    background-color: var(--pliego-highlight);
+  }
+}
+
+@keyframes mark {
+  to {
+    background-size: 100% 100%;
+  }
+}
+
+@keyframes slip {
+  from {
+    opacity: 0;
+    transform: translateY(-18px) rotate(-1.5deg);
+  }
+}
+
+/* La portada: al bajar, el libro se aplana. Solo en pantallas anchas: en el móvil, moverlo
+   dejaba un hueco vacío debajo. */
+@supports (animation-timeline: scroll()) {
+  @media (min-width: 901px) {
+    .book {
+      animation:
+        unfold 1400ms cubic-bezier(0.2, 0.8, 0.2, 1) 300ms both,
+        flatten linear both;
+      animation-range: normal, 0 70vh;
+      animation-timeline: auto, scroll(root block);
+    }
+  }
+}
+
+/* Deshace la inclinación de reposo (7°) con `rotate`, que se suma a `transform` sin pisarlo. */
+@keyframes flatten {
+  to {
+    rotate: x -7deg;
+  }
+}
+
+/* En pantallas estrechas la página no deja margen: la pregunta sale del libro y va entre él y
+   la respuesta, como una nota a lápiz suelta. */
+@media (max-width: 600px) {
+  .leaf {
+    padding: 1.6em 1.4em 2.2em;
+  }
+
+  .question {
+    margin: 1.4rem 0 0;
+    max-width: none;
+    padding-inline: 0.5rem;
+    position: static;
+    rotate: -1deg;
+  }
+
+  .question::before {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spread,
+  .book,
+  .answer,
+  .sentence,
+  .cited {
+    animation: none;
+  }
+
+  /* Quieto, el pliego enseña ya la frase citada y la respuesta. */
+  .cited {
+    background-size: 100% 100%;
+  }
+}

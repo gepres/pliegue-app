@@ -1,217 +1,459 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import type { CSSProperties, ReactNode } from "react";
 
 import { buttonClassName } from "@pliegue/ui";
 
+import { BrandMark } from "./components/brand/brand-mark";
+import { AskTheBook } from "./components/home/ask-the-book";
+import { PaperToneSample } from "./components/home/paper-tone-sample";
 import { SmoothScroll } from "./components/home/smooth-scroll";
 import { InstallAppButton } from "./components/pwa/install-app";
 import { ThemeToggle } from "./components/theme-toggle";
 import styles from "./page.module.css";
-import { BrandMark } from "./components/brand/brand-mark";
 
 /**
- * La portada de Pliegue: qué es y qué hace, contado como se cuenta un libro. Arriba, un pliego
- * abierto con el original y su traducción enfrentados —lo que el lector hace de verdad—; debajo,
- * las funciones como un índice de capítulos; después, las bibliotecas compartidas (02.9b), que
- * se anuncian también en la portada, y en el pie, los enlaces a todo: las funciones, la app, el
- * sistema visual y el diseño en Figma. El capítulo 09 cuenta la salida de los datos (06.4): las
- * copias importadas en un ZIP, la copia de seguridad y las notas.
+ * La portada de Pliegue, contada como un libro (02.9d).
+ * - Arriba, un pliego abierto en el que se le pregunta algo al libro y Pliegue responde citándolo.
+ * - Debajo, las «Notas a esta edición»: lo que la app ya hace y la portada aún no contaba.
+ * - Después, el índice y cuatro Partes con el lema de la marca: entendible, legible, conectado y
+ *   «tus reglas». Cada Parte abre con su pliego de ejemplo y lleva sus capítulos.
+ * - Al final, cómo empezar, las preguntas de antes de empezar y el pie.
+ *
+ * Todo lo que se afirma aquí lo hace la app hoy (ver `PRODUCT.md`). Los ejemplos —el libro, la
+ * recomendación, el registro de la IA— son inventados y se dicen ejemplos. El precio de Buscalibre
+ * para el admin (06.2b) no se anuncia.
  */
 
 export const metadata: Metadata = {
   description:
-    "Pliegue reúne tu biblioteca en tu dispositivo: la indexa, la lee en PDF, EPUB y DOCX, la traduce en paralelo y guarda tus marcas. Sin cuentas y sin subir tus libros.",
-  title: { absolute: "Pliegue · Tu biblioteca, por fin legible" },
+    "Pliegue reúne tu biblioteca en tu dispositivo: la lee en PDF, EPUB y DOCX, la traduce junto al original, te contesta citando tus libros y te recomienda qué leer. Gratis y sin subir tus archivos.",
+  title: { absolute: "Pliegue · Todo lo que guardaste, por fin entendible" },
 };
 
-const figmaUrl =
-  "https://www.figma.com/design/2CFIc5079NMSYinTxXXTpS/Pliegue-%E2%80%94-Prototipo-de-validaci%C3%B3n-v0.1?node-id=0-1&p=f&t=t23Jxpn0Xyc2ouRm-0";
-
 interface Chapter {
+  /** Un botón propio del capítulo, con su aclaración. */
+  action?: { href: string; label: string; note: string };
   details: string[];
   id: string;
-  /** Se marca «Nuevo» en el índice. */
-  isNew?: boolean;
   lead: string;
+  /** Notas al margen, en cursiva de lectura. */
   margin: string[];
   number: string;
+  /** Datos de verdad (formatos, proporciones, proveedores), en letra de máquina. */
+  specs?: string[];
   title: string;
 }
 
-const chapters: Chapter[] = [
+type Demo = "ledger" | "pass" | "recommend" | "tone";
+
+interface Part {
+  chapters: Chapter[];
+  demo: Demo;
+  id: string;
+  numeral: string;
+  statement: string;
+  title: string;
+}
+
+const parts: Part[] = [
   {
-    details: [
-      "Vincula carpetas enteras o importa copias: los originales se quedan donde están.",
-      "Un índice local con el texto, la portada y el idioma de cada documento.",
-      "Fichas con autor, año, categoría, serie y tomo; los duplicados, señalados.",
-      "Busca por título, autor o concepto, y ordena y filtra sin salir de la página.",
+    chapters: [
+      {
+        details: [
+          "Vincula carpetas enteras o importa copias: los originales se quedan donde están.",
+          "Un índice en tu equipo con el texto, la portada y el idioma de cada documento.",
+          "Fichas con autor, año, categoría, serie y tomo, con tu IA o con un índice JSON, y vista previa antes de aplicarlas. Los repetidos, señalados.",
+        ],
+        id: "biblioteca",
+        lead: "Todo lo que fuiste guardando, en un solo sitio y con nombre propio.",
+        margin: ["Los originales, intactos"],
+        specs: ["PDF · EPUB · DOCX · PPTX · XLSX · TXT · imágenes"],
+        number: "01",
+        title: "Biblioteca",
+      },
+      {
+        details: [
+          "Busca por palabras, siempre en tu equipo, y por significado con tu IA.",
+          "Responde solo con lo que dicen tus libros: cada idea lleva su cita, comprobada antes de enseñártela, y te lleva al pasaje.",
+          "Resume un libro entero en unos párrafos y puntos, también con sus citas. Antes de enviarlo te dice a quién y cuánto costará.",
+        ],
+        id: "pregunta",
+        lead: "Pregunta con tus palabras y te contesta con las de tus libros.",
+        margin: ["Cada cita, comprobada", "La respuesta se guarda como nota"],
+        specs: ["Por significado: OpenAI · Gemini · Ollama"],
+        number: "02",
+        title: "Pregúntale a tu biblioteca",
+      },
+      {
+        details: [
+          "Recomendaciones a partir de los temas y autores que eliges; con tu permiso, también de tu biblioteca, sin enviar nunca un título.",
+          "Cada libro dice por qué te lo propone, y lo que descartas no vuelve.",
+          "Dónde conseguirlo: Buscalibre en tu país y el precio del libro digital en Google Play, con la fecha de la consulta.",
+        ],
+        id: "para-ti",
+        lead: "Qué leer después, con su porqué, y dónde encontrarlo.",
+        margin: ["Libros de Open Library", "Seis tiendas de Buscalibre", "Sin enlaces de afiliado"],
+        number: "03",
+        title: "Para ti y dónde conseguirlo",
+      },
     ],
-    id: "biblioteca",
-    lead: "Todo lo que fuiste guardando, por fin en un solo sitio y con nombre propio.",
-    margin: ["PDF · EPUB · DOCX", "PPTX · XLSX · TXT", "PNG · JPG", "Índice JSON importable"],
-    number: "01",
-    title: "Biblioteca",
+    demo: "recommend",
+    id: "entendible",
+    numeral: "I",
+    statement: "Tu biblioteca ordenada y dispuesta a contestarte: la buscas por lo que dice, no solo por cómo se llama.",
+    title: "Entendible",
   },
   {
-    details: [
-      "Un visor de PDF propio: páginas nítidas a cualquier zoom, índice y atajos de teclado.",
-      "Modo Lectura: el texto del PDF recompuesto con tu tipografía, tamaño e interlineado.",
-      "EPUB y DOCX por secciones, con el mismo cuidado tipográfico.",
-      "Retoma donde lo dejaste, con la barra recogida mientras lees.",
+    chapters: [
+      {
+        details: [
+          "Un visor de PDF propio, nítido a cualquier zoom, y el modo Lectura: el texto recompuesto con tu tipografía, tamaño e interlineado.",
+          "EPUB y DOCX por secciones, con sus imágenes y los pies de figura en su sitio.",
+          "Tono del papel —sepia, cálido o gris—, atenuar, PDF en modo noche y una banda de enfoque que sigue al puntero.",
+        ],
+        id: "lector",
+        lead: "Fiel a la página o fiel al texto, en el papel que prefieras.",
+        margin: ["Fiel a la página o al texto", "Con atajos de teclado", "Probado con lector de pantalla"],
+        number: "04",
+        title: "Lector y papel",
+      },
+      {
+        details: [
+          "Página a página y por delante de ti: sobre la página o en paralelo, con cada frase iluminada en los dos idiomas.",
+          "Traduce el libro entero, con el coste a la vista antes de empezar.",
+          "Gratis y en tu equipo con el traductor del navegador, o con tu IA. Si quieres, las traducciones se guardan en tu cuenta.",
+        ],
+        id: "traduccion",
+        lead: "Lee en tu idioma sin perder el del libro.",
+        margin: ["En Chrome y Edge, en el dispositivo", "Con tu IA, en cualquier navegador"],
+        number: "05",
+        title: "Traducción",
+      },
+      {
+        details: [
+          "Lee con OCR, en tu equipo, una zona de una imagen o de un escaneo, y tradúcela.",
+          "Una página escaneada se lee con OCR en el modo Lectura y al traducir, y se queda guardada.",
+          "Los PDF escaneados se buscan por lo que ya se leyó, y al catalogarlos se lee su principio.",
+        ],
+        id: "escaneos",
+        lead: "Lo escaneado también se lee, se busca y se traduce.",
+        margin: ["El OCR, en tu equipo", "Una zona o la página entera"],
+        number: "06",
+        title: "Escaneos que se leen",
+      },
+      {
+        details: [
+          "Resaltados en cuatro colores y notas al margen, sobre la página o en el modo Lectura.",
+          "Recorta una zona del PDF y guárdala con su nota; exporta tus notas a Markdown.",
+          "Convierte una cita en postal, con plantillas, formatos para redes y los créditos de la obra.",
+        ],
+        id: "marcas",
+        lead: "Lo que te detuvo al leer, guardado donde pasó y listo para compartir.",
+        margin: ["Ámbar, verde, azul y rosa"],
+        specs: ["Postales 1:1 · 4:5 · 9:16"],
+        number: "07",
+        title: "Marcas y postales",
+      },
     ],
-    id: "lector",
-    lead: "Un lector hecho para leer largo: fiel a la página o fiel al texto, tú eliges.",
-    margin: ["Original · Lectura", "Tema claro y oscuro", "← → páginas · F pantalla completa"],
-    number: "02",
-    title: "Lector",
+    demo: "tone",
+    id: "legible",
+    numeral: "II",
+    statement: "Un lector para leer largo, en tu idioma y en el papel que prefieras.",
+    title: "Legible",
   },
   {
-    details: [
-      "Página a página y por delante de ti: cuando llegas, ya está traducida.",
-      "Sobre la página, respetando imágenes y maquetación, o en paralelo con el original.",
-      "En paralelo, cada frase se ilumina a la vez en los dos idiomas.",
-      "Gratis y privado con el traductor del navegador, o con «Tu IA»: OpenAI, Claude, Gemini u Ollama.",
+    chapters: [
+      {
+        details: [
+          "Instálala como app de escritorio desde Chrome o Edge: su propia ventana, y abre sin conexión.",
+          "Entra con Google o con tu correo, si quieres: favoritos, notas, progreso, fichas y ajustes te siguen. Tus archivos no suben nunca.",
+          "Ves qué libros tienes en otros equipos y, si dos cambian lo mismo, el historial te deja recuperar la otra versión.",
+        ],
+        id: "equipos",
+        lead: "Tu biblioteca en tu escritorio, y contigo en todos tus equipos.",
+        margin: ["Como app de escritorio", "Con Google o con tu correo", "Sin cuenta, todo en tu equipo"],
+        number: "08",
+        title: "En todos tus equipos",
+      },
+      {
+        action: {
+          href: "/app/ajustes/mi-biblioteca",
+          label: "Publicar mi biblioteca",
+          note: "Para publicarla necesitas una cuenta de Pliegue; para leerla, solo el código.",
+        },
+        details: [
+          "Elige una carpeta pública de tu Google Drive: Pliegue la abre como biblioteca, con tu nombre en la dirección.",
+          "Reparte códigos con caducidad y usos máximos; quien lo recibe lee sin cuenta, en el mismo lector.",
+          "Ves quién entró y cuándo, y sacas a quien quieras.",
+        ],
+        id: "compartir",
+        lead: "Tu carpeta de Drive, abierta como biblioteca para quien tú invites.",
+        margin: ["Lectores sin cuenta", "Tus archivos, en tu Drive"],
+        specs: ["/biblioteca/tu-nombre/CÓDIGO"],
+        number: "09",
+        title: "Comparte tu biblioteca",
+      },
     ],
-    id: "traduccion",
-    lead: "Lee en tu idioma sin perder el del libro: los dos, uno al lado del otro.",
-    margin: ["Chrome y Edge: en el dispositivo", "«Tu IA»: cualquier navegador", "Tecla T · Tecla P"],
-    number: "03",
-    title: "Traducción",
+    demo: "pass",
+    id: "conectado",
+    numeral: "III",
+    statement: "Contigo en todos tus equipos, y abierta a quien tú invites: tu club de lectura, tu clase o tu familia.",
+    title: "Conectado",
   },
   {
-    details: [
-      "Resaltados en cuatro colores y notas al margen, sobre la página o en el modo Lectura.",
-      "Recorta una zona del PDF —un gráfico, una ilustración— y guárdala con su nota.",
-      "Exporta tus notas a Markdown, con la cita breve y su página.",
-      "Convierte una cita en postal: plantillas, formatos para redes y créditos de la obra.",
+    chapters: [
+      {
+        details: [
+          "OpenAI, Anthropic, Gemini u Ollama en tu equipo: una para catalogar, otra para traducir, otra para preguntar o recomendar.",
+          "Un presupuesto al mes que avisa al 80 % y se detiene al 100 %, y un registro de qué salió, adónde y cuánto, sin textos ni títulos.",
+          "Tu clave, como quieras: solo en la pestaña, cifrada en el navegador o en tu cuenta con una frase que solo tú sabes.",
+        ],
+        id: "ia",
+        lead: "La inteligencia que tú eliges, una para cada tarea y con tu cuenta.",
+        margin: ["Bóveda de claves cifrada", "Presupuesto y registro"],
+        specs: ["OpenAI · Anthropic · Gemini · Ollama"],
+        number: "10",
+        title: "IA a tu medida",
+      },
+      {
+        details: [
+          "Tus libros, tus marcas y tus traducciones se guardan en tu dispositivo; la cuenta es opcional y ni con ella salen tus archivos.",
+          "Marca una carpeta o un libro como confidencial y no sale a ninguna IA en la nube; lo personal te pide permiso antes.",
+          "Lo que viaja a un proveedor de IA es lo que tú decides enviar, y nada más.",
+        ],
+        id: "privacidad",
+        lead: "Tu biblioteca es tuya. Pliegue solo la ordena.",
+        margin: ["Local primero", "Sin rastreo"],
+        specs: ["Público · interno · personal · confidencial"],
+        number: "11",
+        title: "Privacidad",
+      },
+      {
+        details: [
+          "¿En el móvil, en Safari o en Firefox? Importa tus libros como copias y léelos en el mismo lector; llévatelas todas en un ZIP.",
+          "Una copia de seguridad con favoritos, avance, notas, fichas y ajustes, que restauras en otro equipo con vista previa.",
+          "Y si un día te vas, borras tu cuenta y lo sincronizado, y «Borrar todo» deja el navegador limpio.",
+        ],
+        id: "tus-datos",
+        lead: "Lo que guardas en Pliegue sale de Pliegue cuando tú quieras.",
+        margin: [],
+        specs: ["ZIP · JSON · Markdown"],
+        number: "12",
+        title: "Tus datos, contigo",
+      },
     ],
-    id: "marcas",
-    lead: "Lo que te detuvo al leer, guardado donde pasó y listo para compartir.",
-    margin: ["Ámbar · Verde · Azul · Rosa", "Notas en Markdown", "Postales 1:1 · 4:5 · 9:16"],
-    number: "04",
-    title: "Marcas y postales",
-  },
-  {
-    details: [
-      "Cataloga tus documentos: autor, año, categoría y subcategoría, editorial, serie y tomo, sinopsis.",
-      "Lo que es de la edición —ISBN, editorial, traductor— solo se guarda si figura en el libro.",
-      "Con tu propia clave, que solo vive mientras la pestaña está abierta, o con Ollama en tu equipo.",
-      "Solo se envía un extracto limitado; nunca el archivo completo.",
-    ],
-    id: "ia",
-    lead: "La inteligencia que tú eliges, con tu cuenta y bajo tus reglas.",
-    margin: ["OpenAI · Anthropic", "Gemini · Ollama", "Clave solo en la sesión", "O tu índice JSON"],
-    number: "05",
-    title: "IA con tu clave",
-  },
-  {
-    details: [
-      "Tus libros, tus marcas y tus traducciones se guardan en tu dispositivo.",
-      "La cuenta es opcional, y ni con ella salen tus archivos ni su texto.",
-      "Lo que viaja a un proveedor de IA es lo que tú decides enviar, y nada más.",
-      "El texto de tus libros no se usa para entrenar a nadie.",
-    ],
-    id: "privacidad",
-    lead: "Tu biblioteca es tuya. Pliegue solo la ordena.",
-    margin: ["Local primero", "IndexedDB en tu navegador", "Sin rastreo"],
-    number: "06",
-    title: "Privacidad",
-  },
-  {
-    details: [
-      "Instálala como app de escritorio desde Chrome o Edge: su propia ventana, y abre sin conexión.",
-      "Entra con Google o con tu correo, si quieres: favoritos, notas, progreso y fichas te siguen.",
-      "Tus archivos no suben nunca: viaja lo que sabes de ellos, y en menos de un minuto.",
-      "Sin cuenta, todo sigue en tu equipo, como siempre.",
-    ],
-    id: "equipos",
-    lead: "Tu biblioteca en tu escritorio, y contigo en todos tus equipos.",
-    margin: ["App de escritorio", "Google · correo", "Sincroniza en < 1 min"],
-    number: "07",
-    title: "En todos tus equipos",
-  },
-  {
-    details: [
-      "Elige una carpeta pública de tu Google Drive: Pliegue la abre como biblioteca, con tu nombre en la dirección.",
-      "Reparte códigos de acceso con caducidad y usos máximos; cada uno es un enlace listo para enviar.",
-      "Quien recibe el código entra sin cuenta y lee en el mismo lector, con sus marcas en su navegador.",
-      "Ves quién entró y cuándo, y sacas a quien quieras. Con tu índice JSON, cada libro luce su ficha y su portada.",
-    ],
-    id: "compartir",
-    isNew: true,
-    lead: "Tu carpeta de Drive, abierta como biblioteca para quien tú invites.",
-    margin: ["/biblioteca/tu-nombre/CÓDIGO", "Códigos con caducidad y usos", "Lectores sin cuenta", "Tus archivos, en tu Drive"],
-    number: "08",
-    title: "Comparte tu biblioteca",
-  },
-  {
-    details: [
-      "¿En el móvil, en Safari o en Firefox, donde no se puede vincular? Importa tus libros como copias: se guardan en ese navegador y se leen en el mismo lector.",
-      "Llévate todas tus copias importadas de una vez, en un ZIP y con su nombre original.",
-      "Una copia de seguridad con tus favoritos, avance, notas, fichas y ajustes, que restauras en otro equipo con vista previa.",
-      "Tus notas, en Markdown. Y si un día te vas, «Borrar todo» deja el navegador limpio.",
-    ],
-    id: "tus-datos",
-    isNew: true,
-    lead: "Lo que guardas en Pliegue sale de Pliegue cuando tú quieras.",
-    margin: ["Copias en un ZIP", "Copia de seguridad JSON", "Notas en Markdown", "Sin permanencia"],
-    number: "09",
-    title: "Tus datos, contigo",
+    demo: "ledger",
+    id: "tus-reglas",
+    numeral: "IV",
+    statement: "La IA que tú eliges, con tu clave, y lo que sale de tu equipo, decidido por ti.",
+    title: "Tus reglas",
   },
 ];
 
-/** Publicar una biblioteca compartida: lo que pide Ajustes → Mi biblioteca compartida, en orden. */
-const sharingSteps = [
-  { text: "Una carpeta de tu Google Drive que vea cualquiera con el enlace. Tus archivos no se mueven de ahí.", title: "Elige tu carpeta" },
-  { text: "Con caducidad y usos máximos. Cada código es un enlace listo para enviar.", title: "Reparte códigos" },
-  { text: "Quién entró, cuándo y desde qué navegador. Saca a quien quieras, cuando quieras.", title: "Mira quién lee" },
+/** Lo que la app ya hace y esta portada aún no contaba (02.9d). Cada nota lleva a su capítulo. */
+const editionNotes = [
+  { chapter: "pregunta", text: "Te contesta citando tus libros, y resume uno entero.", title: "Pregúntale a tu biblioteca" },
+  { chapter: "para-ti", text: "Qué leer después, con su porqué, y dónde encontrarlo.", title: "Para ti y dónde conseguirlo" },
+  { chapter: "ia", text: "Una IA para cada tarea, presupuesto, registro y tu clave cifrada.", title: "IA a tu medida" },
+  { chapter: "lector", text: "Sepia, cálido o gris, atenuar y una banda de enfoque.", title: "Tono del papel" },
+  { chapter: "escaneos", text: "OCR en tu equipo, y escaneos que se buscan.", title: "Escaneos que se leen" },
+  { chapter: "traduccion", text: "Con el coste a la vista antes de empezar.", title: "El libro entero, traducido" },
 ];
 
-/** El registro de la tarjeta de ejemplo: nombres inventados. */
+/** El camino de primeros pasos: el mismo que la app propone al terminar cada uno. */
+const steps = [
+  { text: "Elige una carpeta o importa tus archivos. Pliegue los indexa en tu equipo.", title: "Vincula" },
+  { text: "Con tu IA o con un índice JSON: autor, categoría, serie y tomo, con vista previa.", title: "Cataloga" },
+  { text: "Ábrelos en el lector, a tu medida, y pregúntale a tu biblioteca.", title: "Lee y pregunta" },
+  { text: "Tradúcelos, márcalos y comparte lo que te importó.", title: "Hazlos tuyos" },
+];
+
+/** Lo que se pregunta quien decide si empezar. */
+const questions = [
+  {
+    answer: "Pliegue es gratis. Si usas IA, le pagas a tu proveedor con tu propia clave; con Ollama en tu equipo, nada.",
+    question: "¿Cuesta algo?",
+  },
+  {
+    answer:
+      "Funciona en el navegador: importas tus libros como copias y los lees igual. Vincular carpetas y traducir en el dispositivo son de Chrome y Edge en el escritorio.",
+    question: "¿Y en el móvil?",
+  },
+  {
+    answer:
+      "Solo lo que tú decides enviar: un extracto para catalogar, los fragmentos de una pregunta o el texto que traduces. Queda en el registro, y lo confidencial no sale.",
+    question: "¿Qué ve la IA?",
+  },
+];
+
+/** El registro de la tarjeta de ejemplo de una biblioteca compartida: nombres inventados. */
 const sharingLog = [
   { name: "Marta", when: "hace 2 h · volvió" },
   { name: "Julián", when: "ayer" },
   { name: "Clara", when: "el lunes" },
 ];
 
-/** La cinta que corre entre la portada y el índice: lo que Pliegue hace, de un vistazo. */
-const ticker = [
-  "Biblioteca local",
-  "PDF · EPUB · DOCX",
-  "Modo Lectura",
-  "Traducción en paralelo",
-  "Tu IA",
-  "Marcas y notas",
-  "Postales",
-  "App de escritorio",
-  "Cuenta opcional",
-  "Sincroniza entre equipos",
-  "Bibliotecas compartidas",
-  "Códigos de acceso",
-  "Tus copias en un ZIP",
+/** El registro de la IA de ejemplo (Parte IV): inventado, con las columnas del de la app. */
+const ledger = [
+  { kept: false, sent: "12 fichas", task: "Catalogar", via: "Gemini" },
+  { kept: false, sent: "En tu equipo", task: "Traducir", via: "Navegador" },
+  { kept: false, sent: "8 fragmentos", task: "Preguntar", via: "Claude" },
+  { kept: true, sent: "No salió: confidencial", task: "Catalogar", via: "—" },
 ];
 
-/** El camino de primeros pasos: el mismo que la app propone al terminar cada uno. */
-const steps = [
-  { text: "Elige una carpeta o importa tus archivos. Pliegue los indexa en tu equipo.", title: "Vincula" },
-  { text: "Con tu IA o con un índice JSON: autor, categoría, serie y tomo de cada uno.", title: "Catálogo" },
-  { text: "Filtra por categoría, autor o serie y ábrelos en el lector, a tu medida.", title: "Explora y lee" },
-  { text: "Tradúcelos, márcalos y comparte lo que te importó.", title: "Hazlos tuyos" },
-];
+function RecommendDemo() {
+  return (
+    <figure aria-label="Ejemplo: una recomendación de «Para ti» y dónde conseguirla" className={styles.slip}>
+      <div className={styles.slipCard}>
+        <p className={styles.slipLabel}>Para ti · ejemplo</p>
+        <p className={styles.slipTitle}>Kafka en la orilla</p>
+        <p className={styles.slipAuthor}>Haruki Murakami · 2002</p>
+        <ul className={styles.slipReasons}>
+          <li>Porque te interesa: realismo mágico</li>
+          <li>De Haruki Murakami, que te gusta</li>
+        </ul>
+      </div>
+      <div className={styles.slipStore}>
+        <p className={styles.slipLabel}>Dónde conseguirlo</p>
+        <p>
+          <strong>Buscalibre Perú</strong> · precio, envío y promociones
+        </p>
+        <p>
+          <strong>S/ 35,90</strong> · eBook en Google Play · consultado el 8 nov.
+        </p>
+      </div>
+    </figure>
+  );
+}
 
-/** El pliego de la portada: tres frases de un libro inventado, en inglés y en español. */
-const spread = {
-  original: [
-    "The river kept its promises better than the maps.",
-    "Every spring it moved a little to the west, as if it were reading something we could not see.",
-    "My grandmother called it a slow library.",
-  ],
-  translated: [
-    "El río cumplía sus promesas mejor que los mapas.",
-    "Cada primavera se movía un poco hacia el oeste, como si leyera algo que nosotros no veíamos.",
-    "Mi abuela lo llamaba una biblioteca lenta.",
-  ],
+function PassDemo() {
+  return (
+    <figure aria-label="Ejemplo: un código de acceso a una biblioteca compartida y quién entró" className={styles.pass}>
+      <div className={styles.passCard}>
+        <div className={styles.passMain}>
+          <span className={styles.passLabel}>Ejemplo · los libros de Ana · código de acceso</span>
+          <strong className={styles.passCode}>OCT26</strong>
+          <span className={styles.passLink}>/biblioteca/ana/OCT26</span>
+          <span className={styles.passFacts}>
+            <span>
+              <small>Caduca</small> 31 oct
+            </span>
+            <span>
+              <small>Usos</small> 12 de 30
+            </span>
+          </span>
+        </div>
+        <span aria-hidden="true" className={styles.passStub}>
+          Pase de lectura
+        </span>
+      </div>
+      <div className={styles.passRegistry}>
+        <span className={styles.passLabel}>Quién entró</span>
+        <ul>
+          {sharingLog.map((entry) => (
+            <li key={entry.name}>
+              <strong>{entry.name}</strong>
+              <span>{entry.when}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </figure>
+  );
+}
+
+function LedgerDemo() {
+  return (
+    <figure aria-label="Ejemplo: el registro y el gasto de la IA en un mes" className={styles.ledger}>
+      <div className={styles.ledgerCard}>
+        <p className={styles.ledgerTitle}>
+          Registro de la IA <span>ejemplo · noviembre</span>
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Tarea</th>
+              <th scope="col">Con</th>
+              <th scope="col">Qué salió</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ledger.map((row) => (
+              <tr data-kept={row.kept} key={`${row.task}-${row.sent}`}>
+                <td>{row.task}</td>
+                <td>{row.via}</td>
+                <td>{row.sent}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className={styles.ledgerBudget}>
+          Gastado este mes <strong>US$ 0,41</strong> de US$ 5 · avisa al 80{" "}%
+        </p>
+      </div>
+      <span aria-hidden="true" className={styles.stamp}>
+        Confidencial · no sale
+      </span>
+    </figure>
+  );
+}
+
+const demos: Record<Demo, () => ReactNode> = {
+  ledger: LedgerDemo,
+  pass: PassDemo,
+  recommend: RecommendDemo,
+  tone: PaperToneSample,
 };
+
+function ChapterArticle({ chapter }: { chapter: Chapter }) {
+  return (
+    <article aria-labelledby={`${chapter.id}-title`} className={styles.chapter} id={chapter.id}>
+      <header className={styles.chapterHead}>
+        <span aria-hidden="true" className={styles.numeral}>
+          {chapter.number}
+        </span>
+        <h3 id={`${chapter.id}-title`}>{chapter.title}</h3>
+      </header>
+      <p className={styles.chapterLead}>{chapter.lead}</p>
+      <ul className={styles.details}>
+        {chapter.details.map((detail) => (
+          <li key={detail}>{detail}</li>
+        ))}
+      </ul>
+      {chapter.action ? (
+        <div className={styles.chapterAction}>
+          <Link className={buttonClassName({ size: "md", variant: "secondary" })} href={chapter.action.href}>
+            {chapter.action.label}
+          </Link>
+          <p>{chapter.action.note}</p>
+        </div>
+      ) : null}
+      <aside aria-label={`Notas de ${chapter.title}`} className={styles.marginalia}>
+        {chapter.margin.length ? (
+          <ul>
+            {chapter.margin.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        ) : null}
+        {chapter.specs?.map((spec) => (
+          <p className={styles.specs} key={spec}>
+            {spec}
+          </p>
+        ))}
+        {chapter.id === "marcas" ? (
+          <span aria-hidden="true" className={styles.swatches}>
+            <i data-color="amber" />
+            <i data-color="green" />
+            <i data-color="blue" />
+            <i data-color="rose" />
+          </span>
+        ) : null}
+      </aside>
+    </article>
+  );
+}
 
 export default function HomePage() {
   return (
@@ -228,14 +470,20 @@ export default function HomePage() {
           <BrandMark size={30} />
           <span>Pliegue</span>
         </Link>
-        <nav aria-label="Secciones" className={styles.nav}>
-          <a href="#funciones">Funciones</a>
-          <a href="#biblioteca-compartida">Compartir</a>
-          <a href="#como-funciona">Cómo funciona</a>
-          <a href="#privacidad">Privacidad</a>
+        <nav aria-label="Partes" className={styles.nav}>
+          {parts.map((part) => (
+            <a href={`#${part.id}`} key={part.id}>
+              {part.title}
+            </a>
+          ))}
         </nav>
         <div className={styles.headerActions}>
-          <ThemeToggle compact />
+          <a className={styles.navIndex} href="#indice">
+            Índice
+          </a>
+          <span className={styles.headerTheme}>
+            <ThemeToggle compact />
+          </span>
           <InstallAppButton className={styles.install} label="Instalar" labelClassName={styles.installLabel} size="sm" variant="quiet" />
           <Link className={buttonClassName({ size: "sm" })} href="/app">
             Abrir la app
@@ -244,212 +492,123 @@ export default function HomePage() {
       </header>
 
       <main id="contenido">
-        {/* ---- Portada ---------------------------------------------------------------- */}
+        {/* ---- Portada: el lema y un libro al que se le pregunta -------------------------------- */}
+        {/* En este orden también se recorre con el teclado: en el móvil, el libro va entre los
+            botones y los datos, para que asome en la primera pantalla sin esconder la acción. */}
         <section aria-labelledby="hero-title" className={styles.hero}>
-          <div className={styles.heroText}>
-            <a className={styles.announce} href="#biblioteca-compartida" style={{ "--i": 0 } as React.CSSProperties}>
-              <span>Nuevo</span> Comparte tu biblioteca con códigos de acceso <span aria-hidden="true">→</span>
+          <h1 className={styles.heroTitle} id="hero-title" style={{ "--i": 0 } as CSSProperties}>
+            Todo lo que guardaste, por fin <em>entendible, legible y conectado.</em>
+          </h1>
+          <p className={styles.heroLead} style={{ "--i": 1 } as CSSProperties}>
+            Pliegue reúne tus libros y documentos en tu dispositivo, los abre en un lector cuidado, los traduce junto al original
+            y te contesta citándolos.
+          </p>
+          <div className={styles.heroActions} style={{ "--i": 2 } as CSSProperties}>
+            <Link className={buttonClassName({ size: "lg" })} href="/app/biblioteca">
+              Abrir mi biblioteca
+            </Link>
+            <a className={buttonClassName({ size: "lg", variant: "secondary" })} href="#indice">
+              Ver el índice
             </a>
-            <p className={styles.eyebrow} style={{ "--i": 1 } as React.CSSProperties}>
-              Biblioteca personal · local primero
-            </p>
-            <h1 id="hero-title" style={{ "--i": 2 } as React.CSSProperties}>
-              Todo lo que guardaste, <em>por fin legible.</em>
-            </h1>
-            <p className={styles.heroLead} style={{ "--i": 3 } as React.CSSProperties}>
-              Pliegue reúne tus libros y documentos en tu dispositivo, los abre en un lector
-              cuidado, los traduce junto al original y guarda lo que subrayas. Sin cuenta si no la
-              quieres, y sin subir nunca tus archivos.
-            </p>
-            <div className={styles.heroActions} style={{ "--i": 4 } as React.CSSProperties}>
-              <Link className={buttonClassName({ size: "lg" })} href="/app/biblioteca">
-                Abrir mi biblioteca
-              </Link>
-              <a className={buttonClassName({ size: "lg", variant: "secondary" })} href="#funciones">
-                Ver las funciones
-              </a>
-            </div>
-            <dl className={styles.facts} style={{ "--i": 5 } as React.CSSProperties}>
-              <div>
-                <dt>Formatos</dt>
-                <dd>PDF, EPUB, DOCX y más</dd>
-              </div>
-              <div>
-                <dt>Traducción</dt>
-                <dd>En tu equipo o con tu IA</dd>
-              </div>
-              <div>
-                <dt>Cuenta</dt>
-                <dd>Opcional</dd>
-              </div>
-            </dl>
           </div>
-
-          {/* Una ilustración del lector en paralelo: el original y su traducción enfrentados, y
-              cada frase iluminada a la vez en los dos lados. Decorativa: lo que muestra lo dice
-              el texto de la sección de traducción. */}
-          <figure aria-hidden="true" className={styles.spread}>
-            <div className={styles.book}>
-              <div className={styles.leaf} lang="en">
-                <span className={styles.folio}>The Slow Library · 42</span>
-                <p>
-                  {spread.original.map((sentence, index) => (
-                    <span className={styles.sentence} key={sentence} style={{ "--pair": index } as React.CSSProperties}>
-                      {sentence}{" "}
-                    </span>
-                  ))}
-                </p>
-                <span className={styles.marginNote}>releer en voz alta</span>
-              </div>
-              <div className={styles.gutter} />
-              <div className={`${styles.leaf} ${styles.leafTranslated}`} lang="es">
-                <span className={styles.folio}>42 · español</span>
-                <p>
-                  {spread.translated.map((sentence, index) => (
-                    <span className={styles.sentence} key={sentence} style={{ "--pair": index } as React.CSSProperties}>
-                      {sentence}{" "}
-                    </span>
-                  ))}
-                </p>
-                <span className={styles.dogEar} />
-              </div>
+          <div className={styles.heroBook}>
+            <AskTheBook />
+          </div>
+          <dl className={styles.facts} style={{ "--i": 3 } as CSSProperties}>
+            <div>
+              <dt>Precio</dt>
+              <dd>Gratis; la IA, con tu clave</dd>
             </div>
-            <figcaption className={styles.spreadCaption}>
-              <span className={styles.pulse} /> En paralelo · la frase se ilumina en los dos idiomas
-            </figcaption>
-          </figure>
+            <div>
+              <dt>Tus archivos</dt>
+              <dd>Nunca se suben</dd>
+            </div>
+            <div>
+              <dt>Cuenta</dt>
+              <dd>Opcional</dd>
+            </div>
+          </dl>
         </section>
 
-        {/* Dos copias seguidas: al desplazarse la mitad, la cinta vuelve a empezar sin salto. */}
-        <div aria-hidden="true" className={styles.ticker}>
-          <div className={styles.tickerTrack}>
-            {[0, 1].map((copy) => (
-              <span className={styles.tickerRun} key={copy}>
-                {ticker.map((item) => (
-                  <span key={item}>{item}</span>
-                ))}
-              </span>
-            ))}
+        {/* ---- Notas a esta edición: lo nuevo, con su capítulo ------------------------------------ */}
+        <section aria-labelledby="notas-title" className={styles.notes} id="notas">
+          <div className={styles.notesHead}>
+            <h2 id="notas-title">Notas a esta edición</h2>
+            <p>Lo que Pliegue ya hace y esta portada aún no contaba.</p>
           </div>
-        </div>
-
-        {/* ---- Funciones: índice de capítulos -------------------------------------------- */}
-        <section aria-labelledby="funciones-title" className={styles.contents} id="funciones">
-          <header className={styles.sectionHead}>
-            <p className={styles.eyebrow}>Índice</p>
-            <h2 id="funciones-title">Nueve capítulos para tu biblioteca</h2>
-          </header>
-          <ol className={styles.toc}>
-            {chapters.map((chapter) => (
-              <li key={chapter.id}>
-                <a href={`#${chapter.id}`}>
-                  <span>{chapter.number}</span>
-                  {chapter.title}
-                  {chapter.isNew ? <small className={styles.tocNew}>Nuevo</small> : null}
+          <ol className={styles.notesList}>
+            {editionNotes.map((note) => (
+              <li key={note.chapter + note.title}>
+                <a href={`#${note.chapter}`}>
+                  <strong>{note.title}</strong>
+                  <span>{note.text}</span>
                 </a>
               </li>
             ))}
           </ol>
+        </section>
 
-          {chapters.map((chapter) => (
-            <article aria-labelledby={`${chapter.id}-title`} className={styles.chapter} id={chapter.id} key={chapter.id}>
-              <span aria-hidden="true" className={styles.numeral}>
-                {chapter.number}
-              </span>
-              <div className={styles.chapterBody}>
-                <h3 id={`${chapter.id}-title`}>{chapter.title}</h3>
-                <p className={styles.chapterLead}>{chapter.lead}</p>
-                <ul className={styles.details}>
-                  {chapter.details.map((detail) => (
-                    <li key={detail}>{detail}</li>
+        {/* ---- Índice: cuatro Partes y sus capítulos ---------------------------------------------- */}
+        <section aria-labelledby="indice-title" className={styles.contents} id="indice">
+          <h2 id="indice-title">Índice</h2>
+          <ol className={styles.toc}>
+            {parts.map((part) => (
+              <li key={part.id}>
+                <a className={styles.tocPart} href={`#${part.id}`}>
+                  <span>Parte {part.numeral}</span> {part.title}
+                </a>
+                <ol>
+                  {part.chapters.map((chapter) => (
+                    <li key={chapter.id}>
+                      <a href={`#${chapter.id}`}>
+                        {chapter.title}
+                        <span>{chapter.number}</span>
+                      </a>
+                    </li>
                   ))}
-                </ul>
-              </div>
-              <aside aria-label={`Detalles de ${chapter.title}`} className={styles.marginalia}>
-                {chapter.margin.map((note) => (
-                  <span key={note}>{note}</span>
-                ))}
-                {chapter.id === "marcas" ? (
-                  <span aria-hidden="true" className={styles.swatches}>
-                    <i data-color="amber" />
-                    <i data-color="green" />
-                    <i data-color="blue" />
-                    <i data-color="rose" />
-                  </span>
-                ) : null}
-              </aside>
-            </article>
-          ))}
+                </ol>
+              </li>
+            ))}
+          </ol>
         </section>
 
-        {/* ---- Bibliotecas compartidas ---------------------------------------------------- */}
-        <section aria-labelledby="compartida-title" className={styles.shared} id="biblioteca-compartida">
-          <div className={styles.sharedText}>
-            <p className={styles.eyebrow}>Nuevo · Bibliotecas compartidas</p>
-            <h2 id="compartida-title">Abre tu biblioteca a quien tú elijas.</h2>
-            <p className={styles.sharedLead}>
-              Tu club de lectura, tu clase o tu familia leen tus libros en Pliegue con un código, sin
-              crearse una cuenta. Los archivos se quedan en tu Drive y tú decides quién entra y hasta
-              cuándo.
-            </p>
-            <ol className={styles.sharedSteps}>
-              {sharingSteps.map((step) => (
-                <li key={step.title}>
-                  <strong>{step.title}.</strong> {step.text}
-                </li>
-              ))}
-            </ol>
-            <div className={styles.heroActions}>
-              <Link className={buttonClassName({ size: "lg" })} href="/app/ajustes/mi-biblioteca">
-                Crear mi biblioteca
-              </Link>
-            </div>
-            <p className={styles.sharedNote}>Para publicarla necesitas una cuenta de Pliegue; para leerla, solo el código.</p>
-          </div>
-
-          {/* La tarjeta de un código y el registro de quién entró, como los ve el dueño.
-              Decorativa: lo que muestra lo dicen los pasos de al lado. */}
-          <figure aria-hidden="true" className={styles.pass}>
-            <div className={styles.passCard}>
-              <div className={styles.passMain}>
-                <span className={styles.passLabel}>Los libros de Ana · código de acceso</span>
-                <strong className={styles.passCode}>OCT26</strong>
-                <span className={styles.passLink}>/biblioteca/ana/OCT26</span>
-                <span className={styles.passFacts}>
-                  <span>
-                    <small>Caduca</small> 31 oct
+        {/* ---- Las cuatro Partes: cada una abre con su pliego -------------------------------------- */}
+        {parts.map((part) => {
+          const PartDemo = demos[part.demo];
+          return (
+            <section aria-labelledby={`${part.id}-title`} className={styles.part} id={part.id} key={part.id}>
+              <div className={styles.partOpening}>
+                <div className={styles.partText}>
+                  <span aria-hidden="true" className={styles.partNumeral}>
+                    {part.numeral}
                   </span>
-                  <span>
-                    <small>Usos</small> 12 de 30
-                  </span>
-                </span>
+                  <h2 id={`${part.id}-title`}>
+                    <span className={styles.visuallyHidden}>Parte {part.numeral}: </span>
+                    {part.title}
+                  </h2>
+                  <p className={styles.partStatement}>{part.statement}</p>
+                </div>
+                <div className={styles.partDemo}>
+                  <PartDemo />
+                </div>
               </div>
-              <span className={styles.passStub}>Pase de lectura</span>
-            </div>
-            <div className={styles.passRegistry}>
-              <span className={styles.passLabel}>Quién entró</span>
-              <ul>
-                {sharingLog.map((entry) => (
-                  <li key={entry.name}>
-                    <strong>{entry.name}</strong>
-                    <span>{entry.when}</span>
-                  </li>
+              <div className={styles.chapters} data-count={part.chapters.length}>
+                {part.chapters.map((chapter) => (
+                  <ChapterArticle chapter={chapter} key={chapter.id} />
                 ))}
-              </ul>
-            </div>
-          </figure>
-        </section>
+              </div>
+            </section>
+          );
+        })}
 
-        {/* ---- Cómo funciona -------------------------------------------------------------- */}
+        {/* ---- Cómo empezar y lo que se pregunta antes ----------------------------------------------- */}
         <section aria-labelledby="como-funciona-title" className={styles.howto} id="como-funciona">
-          <header className={styles.sectionHead}>
-            <p className={styles.eyebrow}>Cómo funciona</p>
+          <div className={styles.sectionHead}>
             <h2 id="como-funciona-title">Cuatro pasos, y la app te guía</h2>
             <p className={styles.howtoLead}>
-              Al terminar cada paso, Pliegue te propone el siguiente; en Inicio ves siempre por
-              dónde vas. Sin cuenta, si no la quieres.
+              Al terminar cada paso, Pliegue te propone el siguiente; en Inicio ves siempre por dónde vas.
             </p>
-          </header>
+          </div>
           <ol className={styles.steps}>
             {steps.map((step, index) => (
               <li key={step.title}>
@@ -459,15 +618,26 @@ export default function HomePage() {
               </li>
             ))}
           </ol>
+          <div className={styles.faq}>
+            <h3>Antes de empezar</h3>
+            <dl>
+              {questions.map((item) => (
+                <div key={item.question}>
+                  <dt>{item.question}</dt>
+                  <dd>{item.answer}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
         </section>
 
-        {/* ---- Cierre ----------------------------------------------------------------------- */}
+        {/* ---- Cierre ----------------------------------------------------------------------------------- */}
         <section aria-labelledby="cierre-title" className={styles.closing}>
-          <p className={styles.eyebrow}>Tu biblioteca es tuya</p>
-          <h2 id="cierre-title">Ábrela, léela, hazla tuya.</h2>
+          <h2 id="cierre-title">Ábrela, léela, pregúntale.</h2>
           <Link className={buttonClassName({ size: "lg" })} href="/app/biblioteca">
             Abrir mi biblioteca
           </Link>
+          <p>Gratis. En Chrome o Edge vinculas tus carpetas; en cualquier navegador, importas copias.</p>
         </section>
       </main>
 
@@ -480,16 +650,21 @@ export default function HomePage() {
           <p>Todo lo que guardaste, por fin entendible, legible y conectado.</p>
         </div>
 
-        <nav aria-labelledby="footer-funciones" className={styles.footerColumn}>
-          <h2 id="footer-funciones">Funciones</h2>
+        <nav aria-labelledby="footer-portada" className={styles.footerColumn}>
+          <h2 id="footer-portada">La portada</h2>
           <ul>
-            {chapters.map((chapter) => (
-              <li key={chapter.id}>
-                <a href={`#${chapter.id}`}>{chapter.title}</a>
+            <li>
+              <a href="#notas">Notas a esta edición</a>
+            </li>
+            {parts.map((part) => (
+              <li key={part.id}>
+                <a href={`#${part.id}`}>
+                  Parte {part.numeral} · {part.title}
+                </a>
               </li>
             ))}
             <li>
-              <a href="#como-funciona">Cómo funciona</a>
+              <a href="#como-funciona">Cómo empezar</a>
             </li>
           </ul>
         </nav>
@@ -504,7 +679,7 @@ export default function HomePage() {
               <Link href="/app/biblioteca">Biblioteca</Link>
             </li>
             <li>
-              <Link href="/app/biblioteca/fuentes">Fuentes</Link>
+              <Link href="/app/para-ti">Para ti</Link>
             </li>
             <li>
               <Link href="/app/ia">IA</Link>
@@ -513,36 +688,17 @@ export default function HomePage() {
               <Link href="/app/ajustes">Ajustes</Link>
             </li>
             <li>
-              <Link href="/app/ajustes#cuenta">Cuenta y sincronización</Link>
-            </li>
-            <li>
               <Link href="/app/ajustes/mi-biblioteca">Mi biblioteca compartida</Link>
-            </li>
-            <li>
-              <Link href="/app/ajustes#espacio">Instalar la app</Link>
-            </li>
-          </ul>
-        </nav>
-
-        <nav aria-labelledby="footer-diseno" className={styles.footerColumn}>
-          <h2 id="footer-diseno">Diseño</h2>
-          <ul>
-            <li>
-              <Link href="/design-system">Sistema visual</Link>
-            </li>
-            <li>
-              <a href={figmaUrl} rel="noreferrer" target="_blank">
-                Abrir en Figma
-                <span aria-hidden="true"> ↗</span>
-                <span className={styles.visuallyHidden}> (se abre en otra pestaña)</span>
-              </a>
             </li>
           </ul>
         </nav>
 
         <div className={styles.footerBase}>
-          <span>Pliegue · v0.1 · local primero</span>
-          <ThemeToggle />
+          <span>Pliegue · local primero</span>
+          <Link href="/design-system">Sistema visual</Link>
+          <span className={styles.footerTheme}>
+            <ThemeToggle />
+          </span>
         </div>
       </footer>
     </div>

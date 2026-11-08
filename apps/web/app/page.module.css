@@ -1,14 +1,17 @@
 /* ==========================================================================
-   Portada de Pliegue
-   Un libro abierto: papel con grano, un pliego enfrentado con la traducción y
-   las funciones como un índice de capítulos con notas al margen.
+   Portada de Pliegue (02.9d)
+   Un libro: papel con grano, un pliego al que se le pregunta, las notas a esta
+   edición, un índice en cuatro Partes y cada Parte abierta con su propio pliego.
    ========================================================================== */
 
 .page {
   --home-width: 1240px;
   --home-gutter: clamp(1rem, 5vw, 3.5rem);
-  --home-highlight: rgb(124 92 224 / 24%);
+  /* Un solo borde para todo: la cabecera, las secciones y el pie empiezan en el mismo sitio. */
+  --home-inline: max(var(--home-gutter), calc((100% - var(--home-width)) / 2));
   --home-rule: color-mix(in srgb, var(--pliegue-color-accent-warm) 70%, transparent);
+  /* El ocre como texto: mezclado con la tinta, para que se lea (≥ 4,5:1) en claro y en oscuro. */
+  --home-ochre-ink: color-mix(in srgb, var(--pliegue-color-accent-warm) 55%, var(--pliegue-color-text-primary));
 
   background:
     radial-gradient(ellipse 60% 45% at 12% 6%, rgb(201 146 50 / 13%), transparent 70%),
@@ -18,6 +21,11 @@
   min-height: 100vh;
   overflow-x: clip;
   position: relative;
+}
+
+.page ::selection {
+  background: color-mix(in srgb, var(--pliegue-color-accent-warm) 38%, transparent);
+  color: var(--pliegue-color-text-primary);
 }
 
 /* El grano del papel: ruido fino encima de todo, sin recibir clics. Sin modo de fusión: fundirlo
@@ -33,29 +41,17 @@
   z-index: 0;
 }
 
-.page > * {
+/* Todo por encima del grano, menos el enlace de salto: con `position: relative` perdía su
+   `position: fixed` y quedaba tapado por la cabecera. */
+.page > *:not(:global(.skip-link)) {
   position: relative;
   z-index: 1;
 }
 
-.eyebrow {
-  align-items: center;
-  color: var(--pliegue-color-text-secondary);
-  display: inline-flex;
-  font-family: var(--pliegue-font-data);
-  font-size: 0.6875rem;
-  font-weight: 500;
-  gap: 0.75rem;
-  letter-spacing: 0.14em;
-  margin: 0;
-  text-transform: uppercase;
-}
-
-.eyebrow::before {
-  background: var(--pliegue-color-accent-warm);
-  content: "";
-  height: 1px;
-  width: 2rem;
+.page p,
+.page li,
+.page dd {
+  text-wrap: pretty;
 }
 
 .visuallyHidden {
@@ -77,7 +73,7 @@
   display: flex;
   gap: var(--pliegue-spacing-md);
   justify-content: space-between;
-  padding: 0.85rem max(var(--home-gutter), calc((100% - var(--home-width)) / 2));
+  padding: 0.85rem var(--home-inline);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -97,23 +93,28 @@
 
 .nav {
   display: flex;
-  gap: clamp(0.5rem, 2vw, 1.75rem);
+  gap: clamp(0.75rem, 2.2vw, 2rem);
 }
 
-.nav a {
+.nav a,
+.navIndex {
   color: var(--pliegue-color-text-secondary);
-  font-family: var(--pliegue-font-data);
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
+  font-family: var(--pliegue-font-reading);
+  font-size: 1rem;
   padding: 0.4rem 0.1rem;
   text-decoration: none;
-  text-transform: uppercase;
   transition: color var(--pliegue-motion-fast) ease;
   white-space: nowrap;
 }
 
-.nav a:hover {
+.nav a:hover,
+.navIndex:hover {
   color: var(--pliegue-color-text-primary);
+}
+
+/* En el móvil la navegación se queda en «Índice», que lleva al índice de la portada. */
+.navIndex {
+  display: none;
 }
 
 .headerActions {
@@ -122,9 +123,14 @@
   gap: var(--pliegue-spacing-sm);
 }
 
+.headerTheme {
+  display: contents;
+}
+
 .wordmark:focus-visible,
 .nav a:focus-visible,
-.announce:focus-visible,
+.navIndex:focus-visible,
+.notesList a:focus-visible,
 .toc a:focus-visible,
 .footer a:focus-visible {
   border-radius: var(--pliegue-radius-sm);
@@ -134,16 +140,23 @@
 
 /* ---- Portada ------------------------------------------------------------------ */
 
+/* El texto a la izquierda, centrado en alto, y el libro a la derecha ocupando todas las filas. */
 .hero {
-  align-items: center;
+  column-gap: clamp(2.5rem, 6vw, 5rem);
   display: grid;
-  gap: clamp(2.5rem, 6vw, 5rem);
+  grid-template-areas:
+    ". book"
+    "title book"
+    "lead book"
+    "actions book"
+    "facts book"
+    ". book";
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
-  margin: 0 auto;
-  max-width: var(--home-width);
+  grid-template-rows: 1fr auto auto auto auto 1fr;
   isolation: isolate;
+  row-gap: var(--pliegue-spacing-lg);
   min-height: min(860px, calc(100svh - 64px));
-  padding: clamp(3rem, 8vh, 6rem) var(--home-gutter) clamp(3rem, 7vh, 5rem);
+  padding: clamp(3rem, 8vh, 6rem) var(--home-inline) clamp(3rem, 7vh, 5rem);
   position: relative;
 }
 
@@ -164,70 +177,35 @@
   z-index: -1;
 }
 
-.heroText {
-  display: grid;
-  gap: var(--pliegue-spacing-lg);
-}
-
-.heroText > * {
+.heroTitle,
+.heroLead,
+.heroActions,
+.facts {
   animation: rise 800ms var(--pliegue-ease-standard, ease) both;
   animation-delay: calc(var(--i, 0) * 110ms + 60ms);
 }
 
-/* El aviso de lo nuevo, encima del título: lleva a su sección. */
-.announce {
-  align-items: center;
-  background: color-mix(in srgb, var(--pliegue-color-bg-surface) 70%, transparent);
-  border: 1px solid var(--pliegue-color-border-default);
-  border-radius: 1.25rem;
-  color: var(--pliegue-color-text-primary);
-  display: inline-flex;
-  font-size: 0.875rem;
-  gap: 0.6rem;
-  justify-self: start;
-  line-height: 1.35;
-  padding: 0.3rem 0.9rem 0.3rem 0.3rem;
-  text-decoration: none;
-  transition: border-color var(--pliegue-motion-fast) ease;
+.heroBook {
+  align-self: center;
+  grid-area: book;
+  min-width: 0;
 }
 
-.announce:hover {
-  border-color: var(--pliegue-color-accent-warm);
-}
-
-.announce > span:first-child {
-  background: color-mix(in srgb, var(--pliegue-color-accent-warm) 24%, transparent);
-  border-radius: 1rem;
-  flex: none;
-  font-family: var(--pliegue-font-data);
-  font-size: 0.625rem;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  padding: 0.3rem 0.6rem;
-  text-transform: uppercase;
-}
-
-.announce > span:last-child {
-  color: var(--pliegue-color-accent-warm);
-  transition: translate var(--pliegue-motion-fast) ease;
-}
-
-.announce:hover > span:last-child {
-  translate: 3px 0;
-}
-
-.heroText h1 {
+.heroTitle {
+  align-self: end;
   font-family: var(--pliegue-font-brand);
-  font-size: clamp(3.1rem, 6.6vw, 5.9rem);
+  grid-area: title;
+  font-size: clamp(2.6rem, 4.5vw, 4.1rem);
   font-weight: 600;
   letter-spacing: -0.025em;
-  line-height: 0.94;
+  /* A 0.96, el rabo de la «p» de «por» tocaba la «l» de «legible». */
+  line-height: 1.04;
   margin: 0;
   text-wrap: balance;
 }
 
 /* Lo que se subraya al leer: un trazo de rotulador ocre detrás de las palabras. */
-.heroText h1 em {
+.heroTitle em {
   background: linear-gradient(
     transparent 58%,
     color-mix(in srgb, var(--pliegue-color-accent-warm) 42%, transparent) 58%,
@@ -241,6 +219,7 @@
 
 .heroLead {
   color: var(--pliegue-color-text-secondary);
+  grid-area: lead;
   font-family: var(--pliegue-font-reading);
   font-size: clamp(1.05rem, 1.5vw, 1.2rem);
   line-height: 1.6;
@@ -252,11 +231,13 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--pliegue-spacing-sm);
+  grid-area: actions;
 }
 
 .facts {
   border-top: 1px solid var(--pliegue-color-border-default);
   display: grid;
+  grid-area: facts;
   gap: var(--pliegue-spacing-md);
   grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: var(--pliegue-spacing-sm) 0 0;
@@ -266,185 +247,121 @@
 .facts dt {
   color: var(--pliegue-color-text-secondary);
   font-family: var(--pliegue-font-data);
-  font-size: 0.625rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
 }
 
 .facts dd {
   font-family: var(--pliegue-font-reading);
-  font-size: 0.95rem;
+  font-size: 0.98rem;
+  line-height: 1.4;
   margin: 0.3rem 0 0;
 }
 
-/* ---- El pliego: original y traducción enfrentados ------------------------------ */
+/* ---- Notas a esta edición -------------------------------------------------------- */
 
-.spread {
-  animation: rise 900ms var(--pliegue-ease-standard, ease) 240ms both;
+.notes {
+  background: color-mix(in srgb, var(--pliegue-color-bg-subtle) 75%, transparent);
+  border-block: 1px solid var(--pliegue-color-border-default);
   display: grid;
-  gap: var(--pliegue-spacing-md);
-  justify-items: center;
-  margin: 0;
-  perspective: 1800px;
+  gap: clamp(1.5rem, 4vw, 4rem);
+  grid-template-columns: minmax(12rem, 0.7fr) minmax(0, 2fr);
+  padding: clamp(2.5rem, 6vw, 4rem) var(--home-inline);
+  scroll-margin-top: 64px;
 }
 
-.book {
-  animation: unfold 1400ms cubic-bezier(0.2, 0.8, 0.2, 1) 300ms both;
-  background: var(--pliegue-color-bg-surface);
-  border-radius: 4px 4px 6px 6px;
-  box-shadow:
-    0 1px 0 color-mix(in srgb, var(--pliegue-color-text-primary) 8%, transparent),
-    0 30px 60px -20px rgb(40 28 12 / 32%),
-    0 12px 24px -12px rgb(40 28 12 / 22%);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr);
-  max-width: 640px;
-  position: relative;
-  transform: rotateX(7deg) rotateZ(-1.2deg);
-  transform-origin: 50% 100%;
-  width: 100%;
-}
-
-/* El canto de las hojas, debajo del libro. */
-.book::after {
-  background: repeating-linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--pliegue-color-bg-surface) 92%, var(--pliegue-color-text-primary)) 0 1px,
-    var(--pliegue-color-bg-surface) 1px 3px
-  );
-  border-radius: 0 0 6px 6px;
-  bottom: -7px;
-  content: "";
-  height: 8px;
-  left: 1.5%;
-  position: absolute;
-  right: 1.5%;
-  z-index: -1;
-}
-
-.leaf {
-  color: var(--pliegue-color-text-primary);
-  display: grid;
-  font-family: var(--pliegue-font-reading);
-  font-size: clamp(0.68rem, 1.08vw, 0.94rem);
-  gap: 1.1em;
+.notesHead {
   align-content: start;
-  hyphens: auto;
-  line-height: 1.66;
-  min-height: clamp(260px, 30vw, 400px);
-  padding: 2.2em 2.2em 2.8em;
-  position: relative;
-  /* Justificado, en una hoja tan estrecha y sin partir palabras, abría calles entre ellas. */
-  text-align: start;
-}
-
-/* La sombra de la curva de la hoja hacia el lomo. */
-.leaf:first-child {
-  background: linear-gradient(to left, rgb(40 28 12 / 9%), transparent 18%);
-}
-
-.leafTranslated {
-  background: linear-gradient(to right, rgb(40 28 12 / 9%), transparent 18%);
-}
-
-.leaf p {
-  margin: 0;
-}
-
-.gutter {
-  background: linear-gradient(
-    to right,
-    rgb(40 28 12 / 16%),
-    rgb(40 28 12 / 2%) 45%,
-    rgb(40 28 12 / 2%) 55%,
-    rgb(40 28 12 / 16%)
-  );
-}
-
-.folio {
-  color: var(--pliegue-color-text-secondary);
-  font-family: var(--pliegue-font-data);
-  font-size: 0.62em;
-  letter-spacing: 0.14em;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-/* Cada pareja de frases se ilumina a la vez en los dos idiomas, por turnos. */
-.sentence {
-  animation: pair 9s ease-in-out infinite;
-  animation-delay: calc(var(--pair, 0) * 3s + 1.6s);
-  border-radius: 3px;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
-}
-
-.marginNote {
-  background: rgb(255 196 0 / 34%);
-  border-radius: 2px;
-  bottom: 1.1em;
-  box-shadow: 0 2px 6px rgb(40 28 12 / 12%);
-  color: var(--pliegue-color-text-primary);
-  font-family: var(--pliegue-font-data);
-  font-size: 0.58em;
-  left: 1.6em;
-  letter-spacing: 0.06em;
-  padding: 0.4em 0.7em;
-  position: absolute;
-  text-transform: uppercase;
-  transform: rotate(-3deg);
-}
-
-.dogEar {
-  background: linear-gradient(
-    225deg,
-    var(--pliegue-color-bg-canvas) 50%,
-    color-mix(in srgb, var(--pliegue-color-text-primary) 10%, var(--pliegue-color-bg-surface)) 50%
-  );
-  box-shadow: -3px 3px 5px rgb(40 28 12 / 12%);
-  height: 2.6em;
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 2.6em;
-}
-
-.spreadCaption {
-  align-items: center;
-  color: var(--pliegue-color-text-secondary);
-  display: inline-flex;
-  font-family: var(--pliegue-font-data);
-  font-size: 0.68rem;
+  display: grid;
   gap: 0.6rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
-.pulse {
-  animation: pulse 3s ease-in-out infinite;
-  background: rgb(124 92 224 / 70%);
-  border-radius: 50%;
-  height: 8px;
-  width: 8px;
+.notesHead h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(1.9rem, 3.2vw, 2.6rem);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.02;
+  margin: 0;
+  text-wrap: balance;
 }
 
-/* ---- Índice y capítulos ------------------------------------------------------------ */
+.notesHead p {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-reading);
+  font-style: italic;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 18rem;
+}
+
+.notesList {
+  counter-reset: note;
+  display: grid;
+  gap: 0 clamp(1.5rem, 3vw, 2.75rem);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notesList li {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  counter-increment: note;
+}
+
+/* Cada nota lleva su llamada, como las notas de una edición: a, b, c… */
+.notesList a {
+  color: inherit;
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.9rem 0 1.1rem 1.6rem;
+  position: relative;
+  text-decoration: none;
+}
+
+.notesList a::before {
+  color: var(--home-ochre-ink);
+  content: counter(note, lower-alpha);
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.95rem;
+  font-style: italic;
+  left: 0;
+  position: absolute;
+  top: 0.95rem;
+}
+
+.notesList strong {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1.08rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-decoration-color: var(--pliegue-color-accent-warm);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+.notesList a:hover strong {
+  text-decoration-line: underline;
+}
+
+.notesList span {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+/* ---- Índice --------------------------------------------------------------------------- */
 
 .contents,
 .howto {
-  margin: 0 auto;
-  max-width: var(--home-width);
-  padding: clamp(4rem, 9vw, 7rem) var(--home-gutter) 0;
+  padding: clamp(4rem, 9vw, 7rem) var(--home-inline) 0;
+  scroll-margin-top: 48px;
 }
 
-.sectionHead {
-  display: grid;
-  gap: var(--pliegue-spacing-sm);
-  margin-bottom: clamp(2rem, 4vw, 3rem);
-}
-
+.contents > h2,
 .sectionHead h2,
-.sharedText h2,
 .closing h2 {
   font-family: var(--pliegue-font-brand);
   font-size: clamp(2.3rem, 4.6vw, 3.6rem);
@@ -455,18 +372,20 @@
   text-wrap: balance;
 }
 
-/* El índice: título, puntos guía y número, como en la primera página de un libro. */
+/* El índice: cuatro Partes y sus capítulos, con puntos guía y número, como en un libro. */
 .toc {
-  column-gap: clamp(2rem, 6vw, 5rem);
-  columns: 2;
+  display: grid;
+  gap: clamp(1.5rem, 3vw, 2.75rem);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   list-style: none;
-  margin: 0 0 clamp(2.5rem, 6vw, 4.5rem);
-  max-width: 52rem;
+  margin: clamp(1.75rem, 4vw, 2.75rem) 0 0;
   padding: 0;
 }
 
-.toc li {
-  break-inside: avoid;
+.toc ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .toc a {
@@ -474,24 +393,25 @@
   color: inherit;
   display: flex;
   font-family: var(--pliegue-font-reading);
-  font-size: 1.05rem;
-  gap: 0.75rem;
-  padding: 0.55rem 0;
+  font-size: 1rem;
+  gap: 0.6rem;
+  padding: 0.45rem 0;
   text-decoration: none;
 }
 
-.toc a::after {
+.toc ol a::after {
   border-bottom: 1px dotted var(--pliegue-color-border-strong);
   content: "";
   flex: 1;
+  min-width: 1rem;
   order: 1;
   transform: translateY(-0.3em);
 }
 
-.toc a span {
-  color: var(--pliegue-color-accent-warm);
+.toc ol a span {
+  color: var(--home-ochre-ink);
   font-family: var(--pliegue-font-data);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   order: 2;
 }
 
@@ -499,53 +419,136 @@
   color: var(--pliegue-color-action-primary);
 }
 
-.tocNew {
-  align-self: center;
-  border: 1px solid var(--pliegue-color-accent-warm);
-  border-radius: 1rem;
-  color: var(--pliegue-color-text-secondary);
-  font-family: var(--pliegue-font-data);
-  font-size: 0.5625rem;
-  letter-spacing: 0.12em;
-  padding: 0.15rem 0.45rem;
-  text-transform: uppercase;
-}
-
-.chapter {
-  border-top: 1px solid var(--pliegue-color-border-default);
-  display: grid;
-  gap: clamp(1.25rem, 3vw, 3rem);
-  grid-template-columns: minmax(5rem, 9rem) minmax(0, 1fr) minmax(11rem, 15rem);
-  padding: clamp(2.5rem, 5vw, 4rem) 0;
-  scroll-margin-top: 80px;
-}
-
-.numeral {
-  color: var(--pliegue-color-accent-warm);
+.toc .tocPart {
+  border-bottom: 1px solid var(--pliegue-color-text-primary);
+  flex-wrap: wrap;
   font-family: var(--pliegue-font-brand);
-  font-size: clamp(3.6rem, 8vw, 6.8rem);
+  font-size: 1.6rem;
   font-weight: 600;
-  letter-spacing: -0.04em;
-  line-height: 0.78;
+  gap: 0.2rem 0.6rem;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.35rem;
 }
 
-.chapterBody {
+.toc .tocPart span {
+  color: var(--home-ochre-ink);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* ---- Las Partes ---------------------------------------------------------------------- */
+
+.part {
+  padding: clamp(4.5rem, 10vw, 8rem) var(--home-inline) 0;
+  scroll-margin-top: 48px;
+}
+
+/* La apertura de cada Parte: un pliego, el texto en una página y el ejemplo en la otra. */
+.partOpening {
+  align-items: center;
+  border-top: 1px solid var(--pliegue-color-text-primary);
+  display: grid;
+  gap: clamp(2rem, 6vw, 5rem);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  padding: clamp(2rem, 4vw, 3rem) 0 clamp(2.5rem, 5vw, 3.5rem);
+}
+
+.partText {
+  align-content: start;
   display: grid;
   gap: var(--pliegue-spacing-md);
 }
 
-.chapterBody h3 {
+.partNumeral {
+  color: var(--home-ochre-ink);
   font-family: var(--pliegue-font-brand);
-  font-size: clamp(2rem, 3.4vw, 2.75rem);
+  font-size: clamp(4.5rem, 9vw, 7.5rem);
+  font-variant-numeric: lining-nums;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 0.8;
+}
+
+.partText h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(2.6rem, 5.4vw, 4.4rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 0.95;
+  margin: 0;
+}
+
+.partStatement {
+  font-family: var(--pliegue-font-reading);
+  font-size: clamp(1.15rem, 1.7vw, 1.35rem);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 30rem;
+}
+
+.partDemo {
+  display: grid;
+  justify-items: center;
+  min-width: 0;
+}
+
+/* Los capítulos de una Parte, en columnas que no dejan huecos: tres de tres, dos y cuatro de dos. */
+.chapters {
+  column-gap: clamp(2rem, 4vw, 3.5rem);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.chapters[data-count="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.chapter {
+  align-content: start;
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  padding: clamp(1.75rem, 3.5vw, 2.5rem) 0;
+  scroll-margin-top: 80px;
+}
+
+.chapterHead {
+  align-items: baseline;
+  display: flex;
+  gap: 0.9rem;
+}
+
+.numeral {
+  color: var(--home-ochre-ink);
+  flex: none;
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(2.2rem, 3.4vw, 2.9rem);
+  /* Cifras de caja alta: las de estilo antiguo hacían que «01» se leyera «OI». */
+  font-variant-numeric: lining-nums;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  transition: color var(--pliegue-motion-base) ease;
+}
+
+.chapter:hover .numeral {
+  color: var(--pliegue-color-action-primary);
+}
+
+.chapterHead h3 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(1.75rem, 2.8vw, 2.3rem);
   font-weight: 600;
   letter-spacing: -0.015em;
-  line-height: 1;
+  line-height: 1.02;
   margin: 0;
 }
 
 .chapterLead {
   font-family: var(--pliegue-font-reading);
-  font-size: clamp(1.1rem, 1.6vw, 1.3rem);
+  font-size: clamp(1.08rem, 1.5vw, 1.22rem);
   line-height: 1.5;
   margin: 0;
   max-width: 36rem;
@@ -553,10 +556,10 @@
 
 .details {
   display: grid;
-  gap: 0.65rem;
+  gap: 0.6rem;
   list-style: none;
   margin: 0;
-  max-width: 40rem;
+  max-width: 38rem;
   padding: 0;
 }
 
@@ -570,38 +573,72 @@
 }
 
 .details li::before {
-  color: var(--pliegue-color-accent-warm);
-  content: "—";
-  font-family: var(--pliegue-font-data);
+  border-top: 1px solid var(--pliegue-color-accent-warm);
+  content: "";
   left: 0;
   position: absolute;
+  top: 0.78em;
+  width: 0.9rem;
 }
 
-/* Notas al margen: lo concreto de cada capítulo, en letra de máquina. */
+.chapterAction {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+}
+
+.chapterAction p {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  margin: 0;
+  max-width: 24rem;
+}
+
+/* Notas al margen: en cursiva de lectura, con un filete a la izquierda como las de un libro. La
+   letra de máquina queda solo para los datos de verdad (formatos, proporciones, proveedores). */
 .marginalia {
-  align-content: start;
-  border-left: 1px dashed var(--pliegue-color-border-strong);
+  border-left: 1px solid var(--home-rule);
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.25rem 0 0;
+  padding: 0.1rem 0 0.1rem 0.9rem;
+}
+
+.marginalia ul {
   color: var(--pliegue-color-text-secondary);
   display: grid;
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.95rem;
+  font-style: italic;
+  gap: 0.2rem;
+  line-height: 1.4;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.specs {
+  color: var(--pliegue-color-text-secondary);
   font-family: var(--pliegue-font-data);
-  font-size: 0.7rem;
-  gap: 0.55rem;
-  letter-spacing: 0.04em;
-  line-height: 1.45;
-  padding: 0.35rem 0 0 1rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  margin: 0;
 }
 
 .swatches {
   display: flex;
   gap: 0.4rem;
-  margin-top: 0.3rem;
 }
 
 .swatches i {
   border-radius: 50%;
   display: block;
-  height: 16px;
-  width: 16px;
+  height: 14px;
+  width: 14px;
 }
 
 .swatches i[data-color="amber"] {
@@ -620,111 +657,90 @@
   background: rgb(236 95 140 / 65%);
 }
 
-/* Cada capítulo entra al llegar a él, donde el navegador sabe ligarlo al desplazamiento. Se
-   mueve su contenido y no el capítulo: la caja del capítulo es la que miden las anclas, y movida
-   dejaba el destino desplazado según desde dónde se pulsara. */
-@supports (animation-timeline: view()) {
-  .chapterBody,
-  .marginalia,
-  .pass,
-  .steps li {
-    animation: settle linear both;
-    animation-range: entry 0% cover 28%;
-    animation-timeline: view();
-  }
-}
+/* ---- Ejemplo de la Parte I: una ficha de «Para ti» y dónde conseguirla ------------------- */
 
-/* ---- Bibliotecas compartidas ---------------------------------------------------------- */
-
-/* Una banda a todo lo ancho, para que se vea como lo nuevo; el contenido, a la medida de la página. */
-.shared {
-  align-items: center;
-  background: color-mix(in srgb, var(--pliegue-color-bg-subtle) 75%, transparent);
-  border-block: 1px solid var(--pliegue-color-border-default);
+.slip {
   display: grid;
-  gap: clamp(2.5rem, 6vw, 5rem);
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-  margin-top: clamp(4rem, 9vw, 7rem);
-  padding: clamp(3.5rem, 8vw, 6rem) max(var(--home-gutter), calc((100% - var(--home-width)) / 2));
-  scroll-margin-top: 64px;
-}
-
-.sharedText {
-  display: grid;
-  gap: var(--pliegue-spacing-lg);
-}
-
-.sharedLead {
-  color: var(--pliegue-color-text-secondary);
-  font-family: var(--pliegue-font-reading);
-  font-size: clamp(1.05rem, 1.5vw, 1.2rem);
-  line-height: 1.6;
   margin: 0;
-  max-width: 34rem;
+  max-width: 440px;
+  width: 100%;
 }
 
-.sharedSteps {
-  counter-reset: share;
+.slipCard,
+.slipStore {
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: 6px;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--pliegue-color-text-primary) 6%, transparent),
+    0 24px 48px -24px rgb(40 28 12 / 34%);
   display: grid;
-  gap: var(--pliegue-spacing-md);
-  list-style: none;
-  margin: 0;
-  max-width: 34rem;
-  padding: 0;
+  gap: 0.45rem;
+  padding: 1.35rem 1.5rem;
 }
 
-.sharedSteps li {
-  color: var(--pliegue-color-text-secondary);
-  counter-increment: share;
-  font-family: var(--pliegue-font-reading);
-  line-height: 1.55;
-  min-height: 2rem;
-  padding-left: 2.85rem;
-  position: relative;
+.slipCard {
+  rotate: -1.5deg;
 }
 
-.sharedSteps li::before {
-  align-items: center;
-  border: 1px solid var(--pliegue-color-border-strong);
-  border-radius: 50%;
-  color: var(--pliegue-color-text-primary);
-  content: counter(share);
-  display: inline-flex;
-  font-family: var(--pliegue-font-brand);
-  font-size: 1.05rem;
-  font-variant-numeric: lining-nums;
-  font-weight: 600;
-  height: 2rem;
-  justify-content: center;
-  left: 0;
-  position: absolute;
-  top: -0.15rem;
-  width: 2rem;
+/* El talón de la ficha: dónde conseguirlo, metido un poco por debajo. */
+.slipStore {
+  border-style: dashed;
+  margin: -0.6rem 1.25rem 0 2.5rem;
+  rotate: 1.2deg;
 }
 
-.sharedSteps strong {
-  color: var(--pliegue-color-text-primary);
-  font-weight: 600;
-}
-
-.sharedNote {
+.slipLabel {
   color: var(--pliegue-color-text-secondary);
   font-family: var(--pliegue-font-data);
-  font-size: 0.7rem;
-  letter-spacing: 0.04em;
-  line-height: 1.5;
-  margin: calc(var(--pliegue-spacing-sm) * -1) 0 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  margin: 0;
 }
 
-/* La tarjeta de un código, con su talón, y debajo el registro, como en una ficha de préstamo. */
+.slipTitle {
+  font-family: var(--pliegue-font-brand);
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1;
+  margin: 0.2rem 0 0;
+}
+
+.slipAuthor {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-reading);
+  margin: 0;
+}
+
+.slipReasons {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0.7rem 0 0;
+}
+
+.slipReasons li,
+.slipStore p:not(.slipLabel) {
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.98rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* ---- Ejemplo de la Parte III: un código de acceso y quién entró --------------------------- */
+
 .pass {
   display: grid;
   gap: var(--pliegue-spacing-lg);
   justify-items: center;
   margin: 0;
+  width: 100%;
 }
 
-/* El borde la separa de la banda en el tema oscuro, donde la sombra apenas se ve. */
+/* El borde la separa del fondo en el tema oscuro, donde la sombra apenas se ve. */
 .passCard {
   background: var(--pliegue-color-bg-surface);
   border: 1px solid var(--pliegue-color-border-default);
@@ -749,9 +765,8 @@
 .passLabel {
   color: var(--pliegue-color-text-secondary);
   font-family: var(--pliegue-font-data);
-  font-size: 0.625rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
 }
 
 /* El código, con el mismo trazo de rotulador que el título de la portada. */
@@ -775,7 +790,7 @@
 .passLink {
   color: var(--pliegue-color-text-secondary);
   font-family: var(--pliegue-font-data);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   overflow-wrap: anywhere;
 }
 
@@ -784,7 +799,7 @@
   display: flex;
   flex-wrap: wrap;
   font-family: var(--pliegue-font-reading);
-  font-size: 0.95rem;
+  font-size: 0.98rem;
   gap: 0.4rem 1.75rem;
   margin-top: 0.3rem;
   padding-top: 0.8rem;
@@ -794,9 +809,8 @@
   color: var(--pliegue-color-text-secondary);
   display: block;
   font-family: var(--pliegue-font-data);
-  font-size: 0.5625rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
 }
 
 /* El talón, separado por la línea de puntos por donde se cortaría. */
@@ -804,8 +818,8 @@
   border-left: 2px dashed var(--pliegue-color-border-strong);
   color: var(--pliegue-color-text-secondary);
   font-family: var(--pliegue-font-data);
-  font-size: 0.625rem;
-  letter-spacing: 0.18em;
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
   padding: 1.25rem 0.95rem;
   text-align: center;
   text-transform: uppercase;
@@ -833,23 +847,138 @@
   color: var(--pliegue-color-text-secondary);
   display: flex;
   font-family: var(--pliegue-font-data);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   gap: 1rem;
   justify-content: space-between;
-  letter-spacing: 0.04em;
 }
 
 .passRegistry strong {
   color: var(--pliegue-color-text-primary);
   font-family: var(--pliegue-font-reading);
-  font-size: 0.95rem;
+  font-size: 0.98rem;
   font-weight: 500;
-  letter-spacing: 0;
 }
 
-/* ---- Cómo funciona -------------------------------------------------------------------- */
+/* ---- Ejemplo de la Parte IV: el registro de la IA, como un recibo -------------------------- */
+
+/* Abajo deja sitio al sello, que cuelga del recibo sin pisar su texto. */
+.ledger {
+  margin: 0;
+  max-width: 440px;
+  padding-bottom: 2.75rem;
+  position: relative;
+  width: 100%;
+}
+
+.ledgerCard {
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: 6px;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--pliegue-color-text-primary) 6%, transparent),
+    0 24px 48px -24px rgb(40 28 12 / 34%);
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.4rem 1.5rem 1.25rem;
+  rotate: 1deg;
+}
+
+.ledgerTitle {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.55rem;
+  font-weight: 600;
+  gap: 0.2rem 0.75rem;
+  justify-content: space-between;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.ledgerTitle span {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.ledger table {
+  border-collapse: collapse;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  width: 100%;
+}
+
+.ledger th {
+  border-bottom: 1px solid var(--pliegue-color-text-primary);
+  color: var(--pliegue-color-text-secondary);
+  font-weight: 500;
+  padding: 0 0.5rem 0.4rem 0;
+  text-align: start;
+}
+
+.ledger td {
+  border-bottom: 1px dotted var(--pliegue-color-border-strong);
+  padding: 0.55rem 0.5rem 0.55rem 0;
+  vertical-align: top;
+}
+
+.ledger tr[data-kept="true"] td {
+  color: var(--pliegue-color-action-primary);
+  font-weight: 600;
+}
+
+.ledgerBudget {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.ledgerBudget strong {
+  color: var(--pliegue-color-text-primary);
+}
+
+/* El sello: lo confidencial no sale del equipo. */
+.stamp {
+  border: 2px solid var(--home-ochre-ink);
+  background: var(--pliegue-color-bg-canvas);
+  border-radius: 4px;
+  bottom: 0.4rem;
+  box-shadow: inset 0 0 0 2px var(--pliegue-color-bg-canvas), inset 0 0 0 3px var(--home-ochre-ink);
+  color: var(--home-ochre-ink);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  padding: 0.45rem 0.7rem;
+  position: absolute;
+  right: -0.5rem;
+  rotate: -7deg;
+  text-transform: uppercase;
+}
+
+/* ---- Cómo empezar ------------------------------------------------------------------------ */
+
+.sectionHead {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  margin-bottom: clamp(2rem, 4vw, 3rem);
+}
+
+.howtoLead {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-reading);
+  font-size: clamp(1.05rem, 1.4vw, 1.15rem);
+  line-height: 1.6;
+  margin: var(--pliegue-spacing-xs) 0 0;
+  max-width: 40rem;
+}
 
 .steps {
+  align-items: start;
   counter-reset: step;
   display: grid;
   gap: var(--pliegue-spacing-lg);
@@ -870,14 +999,8 @@
   top: 1.5rem;
 }
 
-.howtoLead {
-  color: var(--pliegue-color-text-secondary);
-  line-height: 1.6;
-  margin: var(--pliegue-spacing-sm) 0 0;
-  max-width: 40rem;
-}
-
 .steps li {
+  align-content: start;
   display: grid;
   gap: var(--pliegue-spacing-sm);
   position: relative;
@@ -891,6 +1014,7 @@
   display: inline-flex;
   font-family: var(--pliegue-font-brand);
   font-size: 1.5rem;
+  font-variant-numeric: lining-nums;
   font-weight: 600;
   height: 3rem;
   justify-content: center;
@@ -901,6 +1025,7 @@
   font-family: var(--pliegue-font-brand);
   font-size: 1.9rem;
   font-weight: 600;
+  line-height: 1.05;
   margin: var(--pliegue-spacing-xs) 0 0;
 }
 
@@ -912,6 +1037,46 @@
   max-width: 22rem;
 }
 
+/* Lo que se pregunta antes de empezar. */
+.faq {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: clamp(1.25rem, 3vw, 2rem);
+  grid-template-columns: minmax(12rem, 0.7fr) minmax(0, 2fr);
+  margin-top: clamp(3rem, 7vw, 5rem);
+  padding-top: clamp(1.75rem, 3.5vw, 2.5rem);
+}
+
+.faq h3 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(1.75rem, 2.8vw, 2.3rem);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.02;
+  margin: 0;
+}
+
+.faq dl {
+  display: grid;
+  gap: clamp(1.25rem, 3vw, 2.5rem);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.faq dt {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.faq dd {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-reading);
+  line-height: 1.55;
+  margin: 0;
+}
+
 /* ---- Cierre ---------------------------------------------------------------------------- */
 
 .closing {
@@ -919,9 +1084,7 @@
   display: grid;
   gap: var(--pliegue-spacing-lg);
   justify-items: center;
-  margin: 0 auto;
-  max-width: var(--home-width);
-  padding: clamp(5rem, 11vw, 9rem) var(--home-gutter);
+  padding: clamp(5rem, 11vw, 9rem) var(--home-inline);
   text-align: center;
 }
 
@@ -934,6 +1097,14 @@
   width: 180px;
 }
 
+.closing p {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-reading);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 30rem;
+}
+
 /* ---- Pie ---------------------------------------------------------------------------------- */
 
 .footer {
@@ -941,14 +1112,14 @@
   border-top: 1px solid var(--pliegue-color-border-default);
   display: grid;
   gap: clamp(2rem, 4vw, 3rem);
-  grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr));
-  padding: clamp(3rem, 6vw, 4.5rem) max(var(--home-gutter), calc((100% - var(--home-width)) / 2)) var(--pliegue-spacing-lg);
+  grid-template-columns: minmax(0, 1.6fr) repeat(2, minmax(0, 1fr));
+  padding: clamp(3rem, 6vw, 4.5rem) var(--home-inline) var(--pliegue-spacing-lg);
 }
 
 .footerBrand {
+  align-content: start;
   display: grid;
   gap: var(--pliegue-spacing-sm);
-  align-content: start;
 }
 
 .footerBrand p {
@@ -962,11 +1133,10 @@
 .footerColumn h2 {
   color: var(--pliegue-color-text-secondary);
   font-family: var(--pliegue-font-data);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 500;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.03em;
   margin: 0 0 var(--pliegue-spacing-md);
-  text-transform: uppercase;
 }
 
 .footerColumn ul {
@@ -977,16 +1147,18 @@
   padding: 0;
 }
 
-.footerColumn a {
+.footerColumn a,
+.footerBase a {
   color: var(--pliegue-color-text-primary);
-  font-size: 0.925rem;
+  font-size: 0.95rem;
   text-decoration: none;
   text-decoration-color: var(--pliegue-color-accent-warm);
   text-decoration-thickness: 2px;
   text-underline-offset: 4px;
 }
 
-.footerColumn a:hover {
+.footerColumn a:hover,
+.footerBase a:hover {
   text-decoration-line: underline;
 }
 
@@ -997,13 +1169,20 @@
   display: flex;
   flex-wrap: wrap;
   font-family: var(--pliegue-font-data);
-  font-size: 0.68rem;
+  font-size: 0.8rem;
   gap: var(--pliegue-spacing-md);
   grid-column: 1 / -1;
   justify-content: space-between;
-  letter-spacing: 0.06em;
   padding-top: var(--pliegue-spacing-md);
-  text-transform: uppercase;
+}
+
+.footerBase > span:first-child {
+  margin-right: auto;
+}
+
+/* El botón del tema, sin relleno lateral: así empieza en el mismo borde que el resto. */
+.footerTheme > * {
+  --pliegue-button-padding: 0px;
 }
 
 /* ---- Movimiento -------------------------------------------------------------------------- */
@@ -1015,89 +1194,33 @@
   }
 }
 
-@keyframes unfold {
-  from {
-    opacity: 0;
-    transform: rotateX(28deg) rotateZ(-3deg) translateY(30px);
-  }
-}
-
-@keyframes pair {
-  0%,
-  36%,
-  100% {
-    background-color: transparent;
-  }
-
-  6%,
-  30% {
-    background-color: var(--home-highlight);
-  }
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 0.35;
-    transform: scale(0.8);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1.15);
-  }
-}
-
-@keyframes settle {
-  from {
-    opacity: 0.15;
-    transform: translateY(28px);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .heroText > *,
-  .spread,
-  .book,
-  .pulse,
-  .chapterBody,
-  .marginalia,
-  .pass,
-  .steps li {
+  .heroTitle,
+  .heroLead,
+  .heroActions,
+  .facts {
     animation: none;
-  }
-
-  /* Quieta, la primera pareja se queda iluminada: así se entiende igual. */
-  .sentence {
-    animation: none;
-  }
-
-  .sentence:first-child {
-    background-color: var(--home-highlight);
   }
 }
 
 /* ---- Anchos -------------------------------------------------------------------------------- */
 
 @media (max-width: 1080px) {
-  .chapter {
-    grid-template-columns: minmax(4rem, 6rem) minmax(0, 1fr);
+  .toc {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .marginalia {
-    border-left: 0;
-    border-top: 1px dashed var(--pliegue-color-border-strong);
-    grid-column: 2;
-    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-    padding: 0.9rem 0 0;
+  .notesList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .footer {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .faq dl {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .footerBrand {
-    grid-column: 1 / -1;
+  /* Tres capítulos no caben en tres columnas, y en dos dejarían un hueco: van en una. */
+  .chapters[data-count="3"] {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -1113,40 +1236,49 @@
 }
 
 @media (max-width: 900px) {
-  /* Con cuatro secciones, por debajo de 900 px no caben en una línea junto a los botones. */
-  .nav {
+  /* Por debajo de 900 px las cuatro Partes no caben junto a los botones: queda «Índice». El tema
+     se cambia en el pie; en la cabecera, su icono se confundía con «Instalar». */
+  .nav,
+  .headerTheme {
     display: none;
   }
 
+  .navIndex {
+    display: inline-block;
+  }
+
   .hero {
+    grid-template-areas:
+      "title"
+      "lead"
+      "actions"
+      "book"
+      "facts";
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
     min-height: 0;
+    padding-top: clamp(2rem, 6vh, 3rem);
   }
 
-  .spread {
-    order: 2;
+  .heroBook {
+    margin-block: var(--pliegue-spacing-sm);
   }
 
-  .shared {
+  .notes,
+  .partOpening,
+  .faq {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chapters,
+  .chapters[data-count="3"] {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (max-width: 760px) {
   .toc {
-    columns: 1;
-  }
-
-  .chapter {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .numeral {
-    font-size: 3.4rem;
-  }
-
-  .marginalia {
-    grid-column: 1;
   }
 
   .steps {
@@ -1179,6 +1311,16 @@
   .footer {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .footerBrand {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .notesList {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 480px) {
@@ -1207,12 +1349,12 @@
     flex: 1 1 100%;
   }
 
-  .leaf {
-    padding: 1.6em 1.4em 2.4em;
-  }
-
   .footer {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stamp {
+    right: 0;
   }
 }
 
@@ -1232,78 +1374,13 @@
 /* ==========================================================================
    Efectos ligados al desplazamiento
    Todos en CSS (`animation-timeline`): corren en el hilo del compositor, sin
-   escuchar el desplazamiento desde JavaScript, y solo mueven `translate`,
-   `rotate`, `scale` y `opacity`, que no obligan a volver a maquetar. Donde el
-   navegador no los conoce, la página se queda quieta y se lee igual.
+   escuchar el desplazamiento desde JavaScript. Donde el navegador no los
+   conoce, la página se queda quieta y se lee igual.
    ========================================================================== */
 
 /* El hilo de avance: cuánto de la portada se ha leído. */
 .progress {
   display: none;
-}
-
-/* La cinta: lo que Pliegue hace, corriendo entre la portada y el índice. */
-.ticker {
-  border-block: 1px solid var(--pliegue-color-border-default);
-  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
-  overflow: hidden;
-  padding: clamp(0.9rem, 2vw, 1.3rem) 0;
-}
-
-.tickerTrack {
-  animation: marquee 52s linear infinite;
-  display: flex;
-  width: max-content;
-}
-
-.ticker:hover .tickerTrack {
-  animation-play-state: paused;
-}
-
-.tickerRun {
-  display: flex;
-}
-
-.tickerRun span {
-  align-items: center;
-  display: inline-flex;
-  font-family: var(--pliegue-font-brand);
-  font-size: clamp(1.5rem, 3vw, 2.5rem);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-}
-
-.tickerRun span::after {
-  background: var(--pliegue-color-accent-warm);
-  border-radius: 50%;
-  content: "";
-  height: 0.28em;
-  margin: 0 clamp(1.5rem, 3vw, 2.75rem);
-  width: 0.28em;
-}
-
-@keyframes marquee {
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-/* Detalles al pasar el ratón: el numeral toma el color de la acción y el índice avanza. */
-.numeral {
-  transition: color var(--pliegue-motion-base) ease;
-}
-
-.chapter:hover .numeral {
-  color: var(--pliegue-color-action-primary);
-}
-
-.toc a span {
-  transition: translate var(--pliegue-motion-fast) ease;
-}
-
-.toc a:hover span {
-  translate: -4px 0;
 }
 
 @supports (animation-timeline: scroll()) {
@@ -1319,46 +1396,10 @@
     z-index: 20;
   }
 
-  /* La portada: el libro sube más deprisa que el texto y se aplana al irse. */
-  .heroText {
-    animation: lift linear both;
-    animation-range: 0 90vh;
-    animation-timeline: scroll(root block);
-  }
-
-  .spread {
-    animation:
-      rise 900ms var(--pliegue-ease-standard, ease) 240ms both,
-      drift linear both;
-    animation-range: normal, 0 90vh;
-    animation-timeline: auto, scroll(root block);
-  }
-
-  .book {
-    animation:
-      unfold 1400ms cubic-bezier(0.2, 0.8, 0.2, 1) 300ms both,
-      flatten linear both;
-    animation-range: normal, 0 70vh;
-    animation-timeline: auto, scroll(root block);
-  }
 }
 
 @supports (animation-timeline: view()) {
-  /* Los numerales flotan a otro ritmo que su capítulo, como una capa más cercana. */
-  .numeral {
-    animation: float linear both;
-    animation-range: cover;
-    animation-timeline: view();
-  }
-
-  /* Los títulos de sección emergen al entrar. */
-  .sectionHead h2 {
-    animation: emerge linear both;
-    animation-range: entry 0% cover 30%;
-    animation-timeline: view();
-  }
-
-  /* La línea que une los tres gestos se dibuja al llegar a ella. */
+  /* La línea que une los cuatro pasos se dibuja al llegar a ella. */
   .steps::before {
     animation: draw linear both;
     animation-range: entry 40% cover 55%;
@@ -1383,42 +1424,6 @@
   }
 }
 
-@keyframes lift {
-  to {
-    translate: 0 -40px;
-  }
-}
-
-@keyframes drift {
-  to {
-    translate: 0 -110px;
-  }
-}
-
-/* Deshace la inclinación de reposo (7°) con `rotate`, que se suma a `transform` sin pisarlo. */
-@keyframes flatten {
-  to {
-    rotate: x -7deg;
-  }
-}
-
-@keyframes float {
-  from {
-    translate: 0 48px;
-  }
-
-  to {
-    translate: 0 -48px;
-  }
-}
-
-@keyframes emerge {
-  from {
-    opacity: 0;
-    translate: 0 0.5em;
-  }
-}
-
 @keyframes draw {
   from {
     scale: 0 1;
@@ -1426,7 +1431,7 @@
 }
 
 @media (max-width: 760px) {
-  /* En columna, la línea de los gestos es vertical: se dibuja de arriba abajo. */
+  /* En columna, la línea de los pasos es vertical: se dibuja de arriba abajo. */
   .steps::before {
     animation-name: drawDown;
     transform-origin: 50% 0;
@@ -1441,14 +1446,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .progress,
-  .heroText,
-  .spread,
-  .book,
-  .numeral,
-  .sectionHead h2,
   .steps::before,
-  .closing h2::after,
-  .tickerTrack {
+  .closing h2::after {
     animation: none;
   }
 }
