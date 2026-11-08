@@ -20,3 +20,8 @@ apps/web/public/tesseract/
 .agents/
 .claude/
 skills-lock.json
+
+# Referencias de la regresión visual: en el repositorio solo las de Linux (las del CI); las de
+# cada equipo se crean solas la primera vez.
+apps/web/e2e/visual/*
+!apps/web/e2e/visual/linux/
