@@ -32,6 +32,12 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://pliegue-e2e.supabase.co
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_e2e
+      # Google de mentira, para que la app tenga Drive como en producción: la e2e `drive` simula
+      # la identidad, el selector y la API. La clave no tiene formato de clave de Google a
+      # propósito (la e2e `secretos` las busca en el código).
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: 000000000000-e2e.apps.googleusercontent.com
+      NEXT_PUBLIC_GOOGLE_API_KEY: clave-publica-e2e
+      NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER: "000000000000"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
