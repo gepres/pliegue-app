@@ -1068,6 +1068,9 @@ export function LibraryBrowser() {
           ))}
         </SkeletonGroup>
       ) : filteredDocuments.length ? (
+        <>
+        {/* Para quien navega por encabezados: entre «Biblioteca» (1) y cada libro (3) va este 2. */}
+        <h2 className={libraryStyles.visuallyHidden}>Documentos</h2>
         <section
           aria-label="Documentos de la biblioteca"
           className={
@@ -1128,6 +1131,7 @@ export function LibraryBrowser() {
             );
           })}
         </section>
+        </>
       ) : allDocuments.length ? (
         <div className={libraryStyles.empty}>
           <Icon name="search" size={28} />

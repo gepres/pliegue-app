@@ -121,3 +121,19 @@ Compara cada una píxel a píxel con su referencia, en el propio Chrome (canvas)
   copia a `e2e/visual/linux/`.
 - Tras un cambio de aspecto querido: `VISUAL_UPDATE=1` las rehace en local. Para las de Linux,
   se borran las afectadas y se toman las del artefacto del CI.
+
+## Lector de pantalla (06.5)
+
+`lector-pantalla.mjs` lee con CDP (`Accessibility.getFullAXTree`) lo que recibe un lector de
+pantalla en Inicio, Biblioteca, lector, IA, Ajustes y Fuentes. En cada pantalla comprueba:
+- el idioma y su propio título;
+- una sola región principal, y navegación (en el lector, un enlace para volver);
+- un solo nivel 1 y ningún salto de nivel, leídos en el orden del documento, porque el del
+  árbol de CDP no lo es;
+- que cada control tiene nombre y que ninguna imagen se anuncia sin texto.
+
+También comprueba que el resultado de importar llega a una región que se anuncia, que el menú de
+un libro dice si está abierto, que el diálogo es modal y tiene nombre, y que el avance del lector
+dice cuánto va.
+
+La prueba a mano, con NVDA o VoiceOver, está en `docs/lector-de-pantalla.md`.
