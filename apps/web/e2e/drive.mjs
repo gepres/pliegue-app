@@ -3,7 +3,7 @@
 // carpeta con `drive.readonly` (subcarpetas y un archivo que no se lee), buscar cambios con
 // `changes.list`, quitar un archivo y desconectar. El token va solo a Google, en la cabecera, y no
 // se guarda en ningún almacén del navegador.
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { strToU8, zipSync } from "fflate";
 import { openChrome, checker, WORK, PROFILE_ROOT } from "./lib/cdp.mjs";
 
