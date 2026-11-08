@@ -142,6 +142,11 @@ export const defaultAiBudget: AiBudget = {
     "anthropic:claude-haiku-5-5": { input: 0.1, output: 0.5 },
     "anthropic:claude-sonnet-5-5": { input: 2, output: 10 },
     "gemini:gemini-3.5-flash-lite": { input: 0.3, output: 2.5 },
+    // Recomendar (06.1), 8-nov-2026 en las páginas de precios de Google y OpenAI. Gemini 3.8 Flash
+    // con el precio de 2027 (hasta el 31-dic cuesta la mitad): el presupuesto se pasa de largo, no
+    // se queda corto.
+    "gemini:gemini-3.8-flash": { input: 1.5, output: 7.5 },
+    "openai:gpt-6.1-sol": { input: 2, output: 10 },
     "openai:gpt-5.6-luna": { input: 0.2, output: 1.2 },
     "openai:gpt-6-luna": { input: 0.1, output: 0.5 },
   },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { askModelOf, askProviderOf, defaultAiSettings, indexProviderOf, parseAiSettings, type AiSettings } from "./ai-settings";
+import { askModelOf, askProviderOf, defaultAiSettings, indexProviderOf, parseAiSettings, recommendModelOf, recommendProviderOf, type AiSettings } from "./ai-settings";
 import { embeddingConfigOf } from "./embeddings";
 import { flowEngine, outcomeLabel, routerMatrix } from "./flow-router";
 
@@ -104,5 +104,30 @@ describe("la tabla del router (04.3)", () => {
     expect(outcomeLabel("catalog", "block")).toBe("No sale: sin ficha");
     expect(outcomeLabel("index", "block")).toBe("No sale: solo por palabras");
     expect(outcomeLabel("ask", "ask")).toBe("Pregunta una vez");
+  });
+});
+
+describe("IA de las recomendaciones (06.1)", () => {
+  it("por defecto, la de catalogar, con su modelo de recomendar (gama media: sabe más de libros)", () => {
+    const value = settings({ provider: "gemini" });
+    expect(recommendProviderOf(value)).toBe("gemini");
+    expect(recommendModelOf(value)).toBe("gemini-3.8-flash");
+  });
+
+  it("se elige aparte de preguntar, con su propio modelo", () => {
+    const parsed = parseAiSettings({
+      askProvider: "openai",
+      provider: "gemini",
+      recommendModels: { anthropic: "claude-sonnet-5" },
+      recommendProvider: "anthropic",
+    });
+    expect(recommendProviderOf(parsed)).toBe("anthropic");
+    expect(recommendModelOf(parsed)).toBe("claude-sonnet-5");
+    expect(askProviderOf(parsed)).toBe("openai");
+  });
+
+  it("los ajustes de antes no la tienen: va con la de catalogar; y lo que no existe se descarta", () => {
+    expect(parseAiSettings({ provider: "anthropic" }).recommendProvider).toBe("catalog");
+    expect(parseAiSettings({ recommendProvider: "deepl" }).recommendProvider).toBe("catalog");
   });
 });

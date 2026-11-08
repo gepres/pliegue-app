@@ -59,7 +59,7 @@ const modelFamilies: Record<AiProvider, readonly ModelFamily[]> = {
     { pattern: /^(?:gemini-embedding-001|text-embedding-004|embedding-001)$/, capabilities: embeddingModel },
     { pattern: /^gemini-embedding-/, capabilities: { ...embeddingModel, vision: "desconocido" } },
     {
-      pattern: /^gemini-(?:1\.5|2\.0|2\.5|3|3\.1|3\.5)-(?:pro|flash)(?:-lite)?(?:-latest|-\d{3}|-preview(?:-\d{2}-\d{2})?)?$/,
+      pattern: /^gemini-(?:1\.5|2\.0|2\.5|3(?:\.\d)?)-(?:pro|flash)(?:-lite)?(?:-latest|-\d{3}|-preview(?:-\d{2}-\d{2})?)?$/,
       capabilities: visionModel,
     },
   ],

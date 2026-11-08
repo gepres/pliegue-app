@@ -1,0 +1,387 @@
+/* «Para ti» (06.1). */
+.panel {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.head {
+  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-md);
+  justify-content: space-between;
+}
+
+.intro {
+  max-width: 48rem;
+  min-width: 0;
+}
+
+.intro h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.intro p,
+.note,
+.hint,
+.privacy p {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  margin: var(--pliegue-spacing-xs) 0 0;
+}
+
+.note,
+.hint {
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.problem {
+  border-left: 3px solid var(--pliegue-color-status-danger);
+  font-size: 0.875rem;
+  margin: 0;
+  padding-left: var(--pliegue-spacing-sm);
+}
+
+.form {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+}
+
+.subjects {
+  border: 0;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.subjects legend,
+.authors label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin-bottom: var(--pliegue-spacing-xs);
+}
+
+.subjects div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-xs);
+}
+
+.chip {
+  align-items: center;
+  background: var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-control);
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.875rem;
+  gap: 4px;
+  min-height: 36px;
+  padding: 4px 12px;
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--pliegue-color-action-primary);
+  border-color: var(--pliegue-color-action-primary);
+  color: var(--pliegue-color-text-on-action);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--pliegue-color-focus-ring);
+  outline-offset: 2px;
+}
+
+.authors {
+  display: grid;
+  gap: var(--pliegue-spacing-xs);
+  max-width: 36rem;
+}
+
+.authorRow {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.authorList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-xs);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.authorList li {
+  align-items: center;
+  background: var(--pliegue-color-bg-subtle);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.875rem;
+  gap: 2px;
+  padding: 2px 4px 2px 12px;
+}
+
+.authorList button {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  min-height: 28px;
+  min-width: 28px;
+  justify-content: center;
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pliegue-spacing-xs) var(--pliegue-spacing-sm);
+}
+
+.grid {
+  display: grid;
+  gap: var(--pliegue-spacing-md);
+  grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.card {
+  align-content: start;
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md, 12px);
+  display: grid;
+  gap: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
+  grid-template-columns: 100px minmax(0, 1fr);
+  padding: var(--pliegue-spacing-md);
+}
+
+/* La portada ocupa las dos filas: el texto y, debajo, las acciones. */
+.card > .cover {
+  grid-row: span 2;
+}
+
+.cover {
+  aspect-ratio: 2 / 3;
+  background: var(--pliegue-color-bg-subtle);
+  border-radius: 6px;
+  height: auto;
+  object-fit: cover;
+  width: 100px;
+}
+
+.body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.body h3 {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1.125rem;
+  line-height: 1.3;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.reasons {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+}
+
+.reasons li {
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.reasons li::before {
+  color: var(--pliegue-color-accent-warm);
+  content: "· ";
+  font-weight: 700;
+}
+
+.cardActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px var(--pliegue-spacing-sm);
+  grid-column: 2;
+  min-width: 0;
+}
+
+.cardActions a {
+  font-size: 0.875rem;
+}
+
+.privacy {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  padding-top: var(--pliegue-spacing-sm);
+}
+
+@media (max-width: 480px) {
+  .card {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .cover {
+    width: 72px;
+  }
+
+  /* En estrecho, las acciones van bajo la portada, a todo el ancho de la tarjeta. */
+  .card > .cover {
+    grid-row: auto;
+  }
+
+  .cardActions {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---- «Libros para ti» en Inicio ------------------------------------------------------------- */
+.teaser {
+  align-items: center;
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--pliegue-color-accent-warm) 22%, transparent), transparent 60%),
+    linear-gradient(110deg, var(--pliegue-color-bg-surface), color-mix(in srgb, var(--pliegue-color-accent-warm) 10%, var(--pliegue-color-bg-surface)));
+  border: 1px solid color-mix(in srgb, var(--pliegue-color-accent-warm) 35%, var(--pliegue-color-border-default));
+  display: grid;
+  gap: var(--pliegue-spacing-xl);
+  grid-template-columns: minmax(0, 1fr) auto;
+  /* Como «Primeros pasos»: un respiro respecto a la tarjeta de lectura de encima. */
+  margin-top: var(--pliegue-spacing-lg);
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+.teaserText {
+  min-width: 0;
+}
+
+.teaserText h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 600;
+  line-height: 1.05;
+  margin: var(--pliegue-spacing-sm) 0;
+}
+
+.teaserText p {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.55;
+  margin: 0 0 var(--pliegue-spacing-lg);
+  max-width: 40rem;
+}
+
+.teaserText :global(.pliegue-tag) {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.teaserCovers {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: repeat(4, 84px);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.teaserCovers a {
+  color: inherit;
+  display: grid;
+  gap: 4px;
+  text-decoration: none;
+}
+
+.teaserCovers a:hover .teaserTitle {
+  text-decoration: underline;
+}
+
+.teaserCovers a:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid var(--pliegue-color-focus-ring);
+  outline-offset: 3px;
+}
+
+.teaserCover {
+  aspect-ratio: 2 / 3;
+  background: linear-gradient(160deg, var(--pliegue-forest-500), var(--pliegue-ink-950));
+  border-radius: 6px;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--pliegue-ink-950) 22%, transparent);
+  height: auto;
+  object-fit: cover;
+  width: 84px;
+}
+
+.teaserCover[data-generated] {
+  color: var(--pliegue-paper-50);
+  display: flex;
+  align-items: flex-end;
+  font-family: var(--pliegue-font-brand);
+  font-size: 0.75rem;
+  line-height: 1.15;
+  overflow: hidden;
+  padding: 8px;
+}
+
+.teaserTitle {
+  display: -webkit-box;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.teaserArt {
+  align-items: center;
+  aspect-ratio: 1;
+  background: color-mix(in srgb, var(--pliegue-color-accent-warm) 16%, transparent);
+  border-radius: 999px;
+  color: var(--pliegue-color-accent-warm);
+  display: flex;
+  justify-content: center;
+  width: 148px;
+}
+
+@media (max-width: 800px) {
+  .teaser {
+    grid-template-columns: 1fr;
+  }
+
+  .teaserArt {
+    display: none;
+  }
+
+  .teaserCovers {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .teaserCover {
+    width: 100%;
+  }
+}

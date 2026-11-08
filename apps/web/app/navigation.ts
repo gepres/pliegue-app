@@ -6,6 +6,7 @@
 export const navigationItems = [
   { code: "IN", href: "/app", icon: "home", label: "Inicio" },
   { code: "BI", href: "/app/biblioteca", icon: "library", label: "Biblioteca" },
+  { code: "PT", href: "/app/para-ti", icon: "compass", label: "Para ti" },
   { code: "LE", href: "/app/lector", icon: "book", label: "Lector", wide: true },
   { code: "IA", href: "/app/ia", icon: "sparkles", label: "IA" },
   { code: "AJ", href: "/app/ajustes", icon: "settings", label: "Ajustes" },

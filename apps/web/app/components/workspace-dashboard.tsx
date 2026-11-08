@@ -13,6 +13,7 @@ import { useImportedDocuments } from "../library/local-library-store";
 import { useReadingProgressEntries } from "../library/reading-progress-store";
 import styles from "../(workspace)/app/workspace.module.css";
 import { Skeleton, SkeletonGroup, SkeletonText } from "./app-ui/skeleton";
+import { ForYouTeaser } from "./books/for-you-teaser";
 import { FirstSteps } from "./guide/first-steps";
 import { DocumentCard, MetricCard, PageHeader } from "./workspace-page";
 
@@ -184,6 +185,9 @@ export function WorkspaceDashboard() {
           </div>
         </Card>
       ) : null}
+
+      {/* Recomendaciones (06.1), bien a la vista: tras lo que se está leyendo. */}
+      {storageError || loading ? null : <ForYouTeaser />}
 
       {recentDocuments.length ? (
         <section className={styles.section}>
