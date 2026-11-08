@@ -2,10 +2,13 @@
 // cerrar sesión, en este navegador o en su cuenta (cifrada con una frase suya). Dos equipos:
 // lo guardado en la cuenta se abre en el otro solo con la frase. Nunca se guarda ni se envía en
 // claro: ni la clave ni la frase. Supabase simulado por CDP; la clave es de prueba.
-import { openChrome, checker, PROFILE_ROOT } from "./lib/cdp.mjs";
+import { mkdirSync } from "node:fs";
+import { openChrome, checker, WORK, PROFILE_ROOT } from "./lib/cdp.mjs";
 
 const BASE = process.env.BASE ?? "http://localhost:3300";
 const t = checker(`Bóveda de claves (${BASE})`);
+const work = `${WORK}/boveda-claves`;
+mkdirSync(work, { recursive: true });
 const KEY = "sk-proj-clave-de-prueba-boveda-0123456789abcdefghijklmn";
 const PASSPHRASE = "lluvia sobre el jardín de senderos";
 const userId = "8b8f0c7e-0000-4000-8000-0000000000aa";
@@ -179,7 +182,7 @@ await a.page.waitFor(`/guardada en tu cuenta/.test(${remember}.parentElement.tex
 t.check("se guarda en la cuenta: una fila con texto cifrado, vector y sal", table.length === 1 && table[0].provider === "openai" && table[0].user_id === userId && table[0].ciphertext && table[0].iv && table[0].kdf?.name === "PBKDF2" && table[0].kdf.iterations === 600000, JSON.stringify(table.map((row) => ({ ...row, ciphertext: `${row.ciphertext?.length} car.` }))));
 await openAiSettings(a.page);
 t.check("al recargar en este equipo no vuelve a pedir la frase", (await fieldValue(a.page)) === KEY && !(await a.page.eval(`Boolean(${dialog})`)));
-await a.page.screenshot(`${process.env.E2E_WORK ?? "."}/boveda-a.png`).catch(() => {});
+await a.page.screenshot(`${work}/1-equipo-a.png`);
 
 // ==== Equipo B: la misma cuenta, sin nada guardado aquí =========================================================================
 const b = await device(9415, "b");
@@ -199,7 +202,7 @@ await b.page.eval(`(${dialog}.querySelector("button[type=submit]").click(), true
 await b.page.waitFor(`!document.querySelector("dialog[open]")`, { timeout: 30000 }).catch(() => {});
 await b.page.sleep(500);
 t.check("con la frase, la clave llega a este equipo", (await fieldValue(b.page)) === KEY && (await b.page.eval(`${remember}.value`)) === "account");
-await b.page.screenshot(`${process.env.E2E_WORK ?? "."}/boveda-b.png`).catch(() => {});
+await b.page.screenshot(`${work}/2-equipo-b.png`);
 
 // ---- Ni la clave ni la frase salieron en claro ------------------------------------------------------------------------------------
 const leaked = sent.filter((request) => request.body.includes(KEY) || request.url.includes(KEY) || request.body.includes(PASSPHRASE) || request.url.includes(PASSPHRASE));
