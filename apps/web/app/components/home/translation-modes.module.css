@@ -1,0 +1,190 @@
+/* La página de ejemplo del capítulo destacado de la traducción (portada, 02.9d). */
+
+.sample {
+  display: grid;
+  gap: 1.1rem;
+  justify-items: center;
+  margin: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.page {
+  background: var(--pliegue-color-bg-surface);
+  border-radius: 3px;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--pliegue-color-text-primary) 8%, transparent),
+    0 26px 50px -22px rgb(40 28 12 / 30%);
+  max-width: 460px;
+  min-height: 330px;
+  padding: clamp(1.4rem, 3.5vw, 2rem);
+  rotate: -0.8deg;
+  width: 100%;
+}
+
+.folio {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  margin: 0 0 0.9rem;
+  text-align: center;
+}
+
+.text {
+  font-family: var(--pliegue-font-reading);
+  font-size: 1rem;
+  hyphens: auto;
+  line-height: 1.6;
+  margin: 0;
+  text-wrap: pretty;
+}
+
+/* La figura se queda donde estaba: sobre la página solo cambia el texto. */
+.plate {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+}
+
+/* La lámina: el río de 1902 a trazos en ocre, el de 1958 en tinta verde, y las flechas hacia
+   las curvas abandonadas. Trazo uniforme, sin relleno. */
+.map {
+  aspect-ratio: 320 / 130;
+  background: color-mix(in srgb, var(--pliegue-color-accent-warm) 9%, var(--pliegue-color-bg-surface));
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: 2px;
+  color: var(--pliegue-color-text-secondary);
+  display: block;
+  width: 100%;
+}
+
+.oldCourse,
+.newCourse,
+.arrows path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+.oldCourse {
+  stroke: var(--pliegue-color-accent-warm);
+  stroke-dasharray: 5 5;
+}
+
+.newCourse {
+  stroke: var(--pliegue-color-action-primary);
+}
+
+.arrows path {
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.year,
+.yearNew {
+  font-family: var(--pliegue-font-data);
+  font-size: 12px;
+}
+
+.year {
+  fill: color-mix(in srgb, var(--pliegue-color-accent-warm) 55%, var(--pliegue-color-text-primary));
+}
+
+.yearNew {
+  fill: var(--pliegue-color-action-primary);
+}
+
+.plate figcaption {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.columns {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* La figura, a lo ancho de las dos columnas: en paralelo también se queda en su sitio. */
+.shared {
+  grid-column: 1 / -1;
+}
+
+.columns > [lang] + [lang] {
+  border-left: 1px solid var(--pliegue-color-border-default);
+  padding-left: 1.25rem;
+}
+
+/* El modo del lector, como un interruptor de dos posiciones, con su rótulo encima. */
+.modes {
+  border: 0;
+  display: grid;
+  justify-items: center;
+  margin: 0;
+  padding: 0;
+}
+
+.modes legend {
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-data);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  margin: 0 auto 0.5rem;
+  padding: 0;
+  text-align: center;
+}
+
+.track {
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+}
+
+.modes label {
+  align-items: center;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.95rem;
+  min-height: 40px;
+  padding: 0.45rem 1rem;
+  position: relative;
+  white-space: nowrap;
+}
+
+.modes input {
+  height: 1px;
+  opacity: 0;
+  position: absolute;
+  width: 1px;
+}
+
+.modes label:has(input:checked) {
+  background: var(--pliegue-color-action-primary);
+  color: var(--pliegue-color-text-on-action);
+}
+
+.modes label:has(input:focus-visible) {
+  outline: 3px solid var(--pliegue-color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .columns {
+    gap: 0.9rem;
+  }
+
+  .columns > [lang] + [lang] {
+    padding-left: 0.9rem;
+  }
+
+  .text {
+    font-size: 0.95rem;
+  }
+}
