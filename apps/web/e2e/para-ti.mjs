@@ -145,22 +145,43 @@ for (let attempt = 0; attempt < 20; attempt += 1) {
   await page.sleep(300);
   if ((await page.eval(`document.querySelector("#ai-api-key")?.value?.length ?? 0`)) > 0) break;
 }
-// Sin recargar (la clave vive en la pestaña): a Inicio y a «Ver recomendaciones».
+// La IA de las recomendaciones, aparte: por defecto la de catalogar, con su modelo de recomendar.
+await page.eval(`(document.querySelector("#ai-recomendaciones")?.scrollIntoView(), true)`);
+const recommendSettings = await page.eval(`({ provider: document.querySelector("#ai-recommend-provider")?.value, model: document.querySelector("#ai-recommend-model")?.value, label: document.querySelector("#ai-recommend-provider")?.selectedOptions[0]?.textContent })`);
+t.check("Ajustes → IA tiene «Recomendaciones»: con la de catalogar (Gemini) y Gemini 3.8 Flash", recommendSettings.provider === "catalog" && recommendSettings.model === "gemini-3.8-flash" && /Gemini/.test(recommendSettings.label ?? ""), JSON.stringify(recommendSettings));
+// Sin recargar (la clave vive en la pestaña): a Inicio, donde «Libros para ti» se ve tras lo que se lee.
 await page.eval(`(document.querySelector("a[href='/app']").click(), true)`);
-await page.waitFor(`document.querySelector("a[href='/app/para-ti']")`, { timeout: 20000 });
-await page.eval(`(document.querySelector("a[href='/app/para-ti']").click(), true)`);
+const teaser = `document.querySelector("section[aria-labelledby='para-ti-inicio']")`;
+await page.waitFor(`${teaser}?.querySelector("ul[aria-label='Algunas recomendaciones'] li")`, { timeout: 20000 }).catch(() => {});
+const home = await page.eval(`(() => {
+  const section = ${teaser};
+  const recent = [...document.querySelectorAll("h2")].find((h) => h.textContent === "Documentos recientes");
+  return {
+    covers: section ? section.querySelectorAll("ul[aria-label='Algunas recomendaciones'] li").length : 0,
+    cta: section ? [...section.querySelectorAll("a")].find((a) => a.getAttribute("href") === "/app/para-ti" && /Ver recomendaciones/.test(a.textContent))?.textContent : null,
+    beforeRecent: Boolean(section && recent && section.compareDocumentPosition(recent) & Node.DOCUMENT_POSITION_FOLLOWING),
+  };
+})()`);
+t.check("en Inicio, «Libros para ti» destaca: portadas de lo recomendado y su botón, antes de los recientes", home.covers > 0 && home.cta && home.beforeRecent, JSON.stringify(home));
+await page.eval(`(${teaser}?.scrollIntoView({ block: "center" }), true)`);
+await page.sleep(300);
+await page.screenshot(`${work}/3-inicio.png`);
+const sideLink = `document.querySelector("aside a[href='/app/para-ti'], nav[aria-label] a[href='/app/para-ti']")`;
+t.check("«Para ti» está en el menú lateral", await page.eval(`/Para ti/.test(${sideLink}?.textContent ?? "")`));
+await page.eval(`(${sideLink}.click(), true)`);
 await page.waitFor(`${cards}.length > 0 && !${button("Afinar con IA")}?.disabled`, { timeout: 20000 });
 await page.eval(`(${button("Afinar con IA")}.click(), true)`);
 const dialog = `document.querySelector("dialog[open][role=alertdialog]")`;
 await page.waitFor(dialog, { timeout: 10000 });
 const asked = await page.eval(`(${dialog}).textContent`);
-t.check("antes de enviar, dice qué temas y autores van a la IA (no títulos)", /Temas: Realismo mágico/.test(asked) && /Autores: Isabel Allende, Julio Cortázar/.test(asked) && !/Rayuela|Secreta/.test(asked), asked.slice(0, 260));
+t.check("antes de enviar, dice qué temas y autores van a la IA (no títulos), y con qué modelo", /gemini-3\.8-flash/.test(asked) && /Temas: Realismo mágico/.test(asked) && /Autores: Isabel Allende, Julio Cortázar/.test(asked) && !/Rayuela|Secreta/.test(asked), asked.slice(0, 260));
 await page.eval(`([...(${dialog}).querySelectorAll("button")].find((b) => b.textContent.trim() === "Afinar").click(), true)`);
 await page.waitFor(`/Tu IA propuso/.test(document.body.textContent)`, { timeout: 20000 }).catch(() => {});
 shown = await list();
 t.check("solo enseña lo que existe en Open Library, y primero", shown[0]?.title === "Pedro Páramo" && /Sugerido por tu IA: Un clásico del realismo mágico/.test(shown[0].reasons.join()) && !shown.some((item) => item.title === "El libro inventado"), JSON.stringify(shown[0]));
 t.check("y lo dice: propuso 2, existe 1", /Tu IA propuso 2 libros; 1 existe en Open Library/.test(await page.eval(`document.body.textContent`)));
-t.check("a la IA solo le llegaron gustos, sin títulos de la biblioteca", aiCalls.length === 1 && !/Rayuela|Diario|Secreta/.test(JSON.stringify(aiCalls[0])) && aiCalls[0].provider === "gemini", JSON.stringify(aiCalls[0]));
+t.check("a la IA solo le llegaron gustos, sin títulos de la biblioteca", aiCalls.length === 1 && !/Rayuela|Diario|Secreta/.test(JSON.stringify(aiCalls[0])) && aiCalls[0].provider === "gemini" && aiCalls[0].model === "gemini-3.8-flash", JSON.stringify(aiCalls[0]));
+t.check("y el menú lateral marca «Para ti» como la página actual", await page.eval(`[...document.querySelectorAll("a[href='/app/para-ti'][aria-current=page]")].some((a) => /Para ti/.test(a.textContent))`));
 await page.screenshot(`${work}/2-con-ia.png`);
 
 // ---- En el móvil cabe ----------------------------------------------------------------------------------------------------------
@@ -168,6 +189,15 @@ await page.viewport(390, 844, { dpr: 2, mobile: true });
 await page.sleep(500);
 const fit = await page.eval(`({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth })`);
 t.check("en el móvil, sin desplazamiento lateral", fit.scroll <= fit.width, JSON.stringify(fit));
+for (const width of [390, 320]) {
+  await page.viewport(width, 844, { dpr: 2, mobile: true });
+  await page.sleep(300);
+  const bar = await page.eval(`(() => { const links = [...document.querySelectorAll("nav[aria-label='Navegación principal'] a")]; return { count: links.length, inside: links.every((a) => { const r = a.getBoundingClientRect(); return r.left >= 0 && r.right <= document.documentElement.clientWidth + 0.5; }), labels: links.map((a) => a.textContent.trim()).join("|") }; })()`);
+  t.check(`la barra de abajo del móvil (${width} px) lleva las 6 secciones, «Para ti» incluida, y caben`, bar.count === 6 && bar.inside && /Para ti/.test(bar.labels), JSON.stringify(bar));
+  const spill = await page.eval(`[...document.querySelectorAll("li[data-recommendation]")].flatMap((card) => { const box = card.getBoundingClientRect(); return [...card.querySelectorAll("button, a")].filter((el) => { const r = el.getBoundingClientRect(); return r.width && (r.right > box.right + 0.5 || r.left < box.left - 0.5); }).map((el) => el.textContent.trim()); })`);
+  t.check(`en ${width} px, ningún botón se sale de su tarjeta`, spill.length === 0, spill.slice(0, 3).join(" · "));
+}
+await page.screenshot(`${work}/4-movil.png`);
 await page.viewport(1366, 900);
 await page.sleep(300);
 
@@ -186,6 +216,10 @@ await page.eval(`([...(${dialog}).querySelectorAll("button")].find((b) => b.text
 await page.sleep(500);
 const afterClear = await page.eval(`({ taste: localStorage.getItem("pliegue-taste-v1"), cache: localStorage.getItem("pliegue-recommendations-v1"), form: Boolean(document.querySelector("#taste-author")), pressed: document.querySelectorAll("[aria-pressed=true]").length })`);
 t.check("«Borrar mis gustos» lo borra todo y vuelve a empezar", afterClear.taste === null && afterClear.cache === null && afterClear.form && afterClear.pressed === 0, JSON.stringify(afterClear));
+await page.eval(`(document.querySelector("a[href='/app']").click(), true)`);
+await page.waitFor(`${teaser}`, { timeout: 15000 }).catch(() => {});
+const homeEmpty = await page.eval(`(() => { const section = ${teaser}; return { cta: section?.querySelector("a[href='/app/para-ti']")?.textContent ?? null, covers: section?.querySelectorAll("ul li").length ?? -1 }; })()`);
+t.check("sin gustos, Inicio invita a elegirlos, sin portadas", homeEmpty.cta === "Elegir mis gustos" && homeEmpty.covers === 0, JSON.stringify(homeEmpty));
 
 const errors = page.errors;
 t.check("sin errores en la consola", errors.length === 0, errors.slice(0, 3).join(" · "));

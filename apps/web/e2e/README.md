@@ -183,7 +183,13 @@ marcado confidencial) y simula Open Library, las portadas y la IA. Comprueba:
   ningún título.
 - **Afinar con IA:** el aviso lista temas y autores; a la IA no le llega ningún título ni nada
   del confidencial, y la sugerencia inventada (que no está en Open Library) no se enseña.
-- **Desactivar y borrar:** se deja de recomendar, y se borran los gustos.
+- **Desactivar y borrar:** se deja de recomendar, y se borran los gustos. Después, Inicio invita
+  a elegirlos.
+- **Dónde se ve:** «Para ti» en el menú lateral, marcado como página actual. En Inicio, la
+  tarjeta va antes de los recientes, con las portadas de lo recomendado. En la barra del móvil,
+  a 390 y a 320 px, caben las 6 secciones y ningún botón se sale de su tarjeta.
+- **La IA de recomendar:** Ajustes → IA → «Recomendaciones», por defecto con la de catalogar y
+  `gemini-3.8-flash`. Es el modelo que se anuncia antes de enviar y el que llega a la ruta.
 
 El título del mosaico de la Biblioteca sale del nombre del archivo («Diario intimo   Ana
 Secreta»): para encontrar su id, la prueba busca por patrón, y comprueba que lo encontró

@@ -17,6 +17,10 @@ export type IndexProviderChoice = (typeof indexProviderChoices)[number];
 export const askProviderChoices = ["catalog", "openai", "anthropic", "gemini", "ollama"] as const;
 export type AskProviderChoice = (typeof askProviderChoices)[number];
 
+/** Con qué se afinan las recomendaciones de «Para ti» (06.1): las mismas opciones que preguntar. */
+export const recommendProviderChoices = askProviderChoices;
+export type RecommendProviderChoice = AskProviderChoice;
+
 export interface AiSettings {
   /**
    * El modelo con el que se responde en «Preguntar». Aparte del de catalogar: responder con
@@ -52,6 +56,12 @@ export interface AiSettings {
   ollamaMode: "local" | "remote";
   ollamaUrl: string;
   provider: AiProvider;
+  /**
+   * El modelo con el que se afinan las recomendaciones («Para ti», 06.1). Aquí cuenta lo que el
+   * modelo sabe de libros, no la cantidad de texto: ver `defaultAiSettings.recommendModels`.
+   */
+  recommendModels: Record<AiProvider, string>;
+  recommendProvider: RecommendProviderChoice;
   schemaVersion: 1;
 }
 
@@ -97,6 +107,19 @@ export const defaultAiSettings: AiSettings = {
   ollamaMode: "local",
   ollamaUrl: "http://localhost:11434",
   provider: "openai",
+  // Para recomendar, la gama media de cada uno (8-nov-2026, decisión en APDB-45): proponer libros
+  // que existan pide saber de libros, y los pequeños inventan más (lo inventado se descarta, pero
+  // quedan menos). Cada «Afinar» manda unos cientos de tokens y recibe a lo sumo 4.000, así que
+  // sale por céntimos: GPT-6.1 Sol y Claude Sonnet 5.5, 2 / 10 $ por millón; Gemini 3.8 Flash,
+  // 0,75 / 3,75 hasta el 31-dic-2026 y 1,50 / 7,50 desde 2027 (Gemini 3.6 Flash se retira el
+  // 19-nov-2026). Ollama sigue en el equipo, con el de siempre.
+  recommendModels: {
+    anthropic: "claude-sonnet-5-5",
+    gemini: "gemini-3.8-flash",
+    ollama: "qwen3:8b",
+    openai: "gpt-6.1-sol",
+  },
+  recommendProvider: "catalog",
   schemaVersion: 1,
   // Los de menor coste de cada proveedor (6-nov-2026): con ellos un libro entero sale por
   // céntimos.
@@ -173,6 +196,7 @@ export function parseAiSettings(value: unknown): AiSettings {
     value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
   const models = recordOf(candidate.models);
   const translationModels = recordOf(candidate.translationModels);
+  const recommendModels = recordOf(candidate.recommendModels);
   // Antes de 04.3 se preguntaba con el modelo de catalogar: quien no tiene los suyos sigue con él.
   const askFromCatalog = candidate.askModels === undefined;
   const askModels = askFromCatalog ? models : recordOf(candidate.askModels);
@@ -216,6 +240,15 @@ export function parseAiSettings(value: unknown): AiSettings {
     ollamaMode,
     ollamaUrl: normalizeOllamaUrl(candidate.ollamaUrl, ollamaMode),
     provider,
+    recommendModels: {
+      anthropic: cleanModel(recommendModels.anthropic, defaultAiSettings.recommendModels.anthropic),
+      gemini: cleanModel(recommendModels.gemini, defaultAiSettings.recommendModels.gemini),
+      ollama: cleanModel(recommendModels.ollama, defaultAiSettings.recommendModels.ollama),
+      openai: cleanModel(recommendModels.openai, defaultAiSettings.recommendModels.openai),
+    },
+    recommendProvider: recommendProviderChoices.includes(candidate.recommendProvider as RecommendProviderChoice)
+      ? (candidate.recommendProvider as RecommendProviderChoice)
+      : defaultAiSettings.recommendProvider,
     schemaVersion: 1,
     azureRegion: normalizeAzureRegion(candidate.azureRegion),
     libreTranslateUrl: normalizeServiceUrl(candidate.libreTranslateUrl, defaultAiSettings.libreTranslateUrl),
@@ -280,4 +313,14 @@ export function askProviderOf(settings: Pick<AiSettings, "askProvider" | "provid
 /** Con qué modelo responde. */
 export function askModelOf(settings: Pick<AiSettings, "askModels" | "askProvider" | "provider">) {
   return settings.askModels[askProviderOf(settings)];
+}
+
+/** Con quién se afinan las recomendaciones de «Para ti». */
+export function recommendProviderOf(settings: Pick<AiSettings, "provider" | "recommendProvider">): AiProvider {
+  return settings.recommendProvider === "catalog" ? settings.provider : settings.recommendProvider;
+}
+
+/** Con qué modelo. */
+export function recommendModelOf(settings: Pick<AiSettings, "provider" | "recommendModels" | "recommendProvider">) {
+  return settings.recommendModels[recommendProviderOf(settings)];
 }

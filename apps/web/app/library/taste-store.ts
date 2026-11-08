@@ -45,15 +45,38 @@ function emit() {
   for (const listener of listeners) listener();
 }
 
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
 export function useTasteProfile() {
-  return useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    readProfile,
-    () => emptyTasteProfile,
-  );
+  return useSyncExternalStore(subscribe, readProfile, () => emptyTasteProfile);
+}
+
+function readCachedRaw() {
+  try {
+    return localStorage.getItem(cacheKey);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Lo último que se recomendó, sin preguntar a nadie: el adelanto de Inicio. Lo descartado no
+ * sale; con las recomendaciones desactivadas, nada.
+ */
+export function useCachedRecommendations(current: TasteProfile): Recommendation[] {
+  const raw = useSyncExternalStore(subscribe, readCachedRaw, () => null);
+  if (!current.enabled || !raw) return [];
+  try {
+    const cached = JSON.parse(raw) as CachedRecommendations | null;
+    return (cached?.items ?? []).filter((item) => !current.dismissed.includes(item.key));
+  } catch {
+    return [];
+  }
 }
 
 export function saveTasteProfile(next: Omit<TasteProfile, "updatedAt">) {
@@ -91,6 +114,7 @@ export function disableRecommendations() {
   } catch {
     // Nada que borrar.
   }
+  emit();
 }
 
 /**
@@ -173,6 +197,7 @@ export async function loadRecommendations(
   if (!failed) {
     try {
       localStorage.setItem(cacheKey, JSON.stringify({ fetchedAt, items, signature } satisfies CachedRecommendations));
+      emit();
     } catch {
       // Sin almacenamiento, se busca de nuevo la próxima vez.
     }

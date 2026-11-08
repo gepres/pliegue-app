@@ -8,7 +8,9 @@ import { fold } from "../library/recommendations";
 
 export const maxSuggestions = 8;
 export const maxTasteItems = 12;
-export const suggestionsMaxOutputTokens = 1_500;
+// Con margen para el razonamiento: en OpenAI y Gemini el tope lo incluye, y los modelos de
+// recomendar (Sol, Gemini 3.8 Flash) piensan antes de responder. Ocho libros en JSON son ~600.
+export const suggestionsMaxOutputTokens = 4_000;
 
 export const suggestionsJsonSchema = {
   additionalProperties: false,

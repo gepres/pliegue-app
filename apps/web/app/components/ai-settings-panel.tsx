@@ -12,10 +12,13 @@ import {
   indexProviderOf,
   normalizeAzureRegion,
   normalizeServiceUrl,
+  recommendProviderChoices,
+  recommendProviderOf,
   translationProviderOf,
   type AiSettings,
   type AskProviderChoice,
   type IndexProviderChoice,
+  type RecommendProviderChoice,
 } from "../ai/ai-settings";
 import { saveAiSettings, useAiSettings } from "../ai/ai-settings-store";
 import {
@@ -486,6 +489,50 @@ function SearchAskConnections({
   );
 }
 
+/**
+ * La clave o el Ollama de las recomendaciones (06.1), si no salen ya arriba (catalogar, traducir,
+ * buscar o preguntar): una clave aparece una vez por proveedor.
+ */
+function RecommendConnection({
+  draft,
+  onChange,
+  shownKeys,
+  shownOllama,
+}: {
+  draft: AiSettings;
+  onChange: (update: (current: AiSettings) => AiSettings) => void;
+  shownKeys: ReadonlySet<AiProvider>;
+  shownOllama: boolean;
+}) {
+  const secrets = useAiSessionSecrets();
+  const provider = recommendProviderOf(draft);
+  const model = draft.recommendModels[provider];
+  const index = indexProviderOf(draft);
+  const searching = index && embeddingModels[index] ? index : null;
+  const above = new Set<AiProvider>([...shownKeys, askProviderOf(draft), ...(searching ? [searching] : [])]);
+  if (provider === "ollama") {
+    return shownOllama || above.has("ollama") ? (
+      <>
+        <div className={styles.aiConnectionRow}>
+          <p className={styles.aiGroupNote}>Con el mismo Ollama de arriba.</p>
+          <ConnectionTest target={ollamaTarget(draft, model)} />
+        </div>
+        <OllamaModel model={model} url={draft.ollamaUrl} />
+      </>
+    ) : (
+      <OllamaFields draft={draft} model={model} onChange={onChange} />
+    );
+  }
+  return above.has(provider) ? (
+    <div className={styles.aiConnectionRow}>
+      <p className={styles.aiGroupNote}>Usa la misma clave de {keyLabels[provider]} que has puesto arriba.</p>
+      <ConnectionTest target={{ apiKey: secrets[provider], model, provider }} />
+    </div>
+  ) : (
+    <ApiKeyField id={`ai-recommend-api-key-${provider}`} model={model} provider={provider} />
+  );
+}
+
 /** Dónde queda la clave con cada opción de «Recordar» (02.5). */
 const rememberNotes: Record<KeyPersistence, string> = {
   account: "Cifrada con tu frase y guardada en tu cuenta: en tus otros equipos se abre escribiendo la frase.",
@@ -608,6 +655,7 @@ export function AiSettingsPanel() {
     draft.provider === "ollama" &&
     (translationProvider === "browser" || translationProvider === "ollama") &&
     askProvider === "ollama" &&
+    recommendProviderOf(draft) === "ollama" &&
     (!searchProvider || searchProvider === "ollama");
 
   function chooseTranslation(choice: TranslationProviderChoice) {
@@ -953,6 +1001,56 @@ export function AiSettingsPanel() {
         </Field>
 
         <SearchAskConnections draft={draft} onChange={editDraft} shownKeys={shownKeys} shownOllama={shownOllama} />
+
+        {/* ---- Recomendaciones (06.1) ---------------------------------------------- */}
+        <div className={styles.aiGroupHead} id="ai-recomendaciones">
+          <h3>Recomendaciones</h3>
+          <p>
+            «Afinar con IA» en «Para ti». Solo recibe los temas y los autores que te gustan, nunca un título ni el texto
+            de un libro. Por defecto, con el proveedor de catalogar.
+          </p>
+        </div>
+
+        <Field label="Recomendar con" labelFor="ai-recommend-provider">
+          <Select
+            id="ai-recommend-provider"
+            onChange={(event) => {
+              const choice = event.target.value as RecommendProviderChoice;
+              editDraft((current) => ({ ...current, recommendProvider: choice }));
+            }}
+            value={draft.recommendProvider}
+          >
+            {recommendProviderChoices.map((choice) => (
+              <option key={choice} value={choice}>
+                {askChoiceLabel(choice, draft.provider)}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field
+          description="Proponer libros que existan pide saber de libros: de partida, la gama media de cada proveedor (GPT-6.1 Sol, Claude Sonnet 5.5, Gemini 3.8 Flash). Cada «Afinar» cuesta céntimos."
+          label="Modelo para recomendar"
+          labelFor="ai-recommend-model"
+        >
+          <Input
+            autoComplete="off"
+            id="ai-recommend-model"
+            name="pliegue-ai-recommend-model"
+            onChange={(event) => {
+              const model = event.target.value;
+              editDraft((current) => ({
+                ...current,
+                recommendModels: { ...current.recommendModels, [recommendProviderOf(current)]: model },
+              }));
+            }}
+            placeholder="Identificador del modelo"
+            spellCheck={false}
+            value={draft.recommendModels[recommendProviderOf(draft)]}
+          />
+        </Field>
+
+        <RecommendConnection draft={draft} onChange={editDraft} shownKeys={shownKeys} shownOllama={shownOllama} />
 
         <div className={styles.aiSettingsActions}>
           <Button type="submit">Guardar ajustes de IA</Button>

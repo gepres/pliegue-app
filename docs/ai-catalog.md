@@ -197,6 +197,12 @@ Cada tarea que puede sacar el texto de un libro del equipo tiene su proveedor:
 | Preguntar | `askProvider`: `catalog` o un proveedor, + `askModels` | el de catalogar |
 | Resumir un libro | el de preguntar | el de catalogar |
 
+Las recomendaciones de «Para ti» (06.1) también eligen su IA, aunque no envían texto de ningún
+libro, solo temas y autores: `recommendProvider` (`catalog` o un proveedor) + `recommendModels`,
+en Ajustes → IA → «Recomendaciones». Sus modelos de partida son de gama media (GPT-6.1 Sol,
+Claude Sonnet 5.5, Gemini 3.8 Flash): ver `docs/ofertas-y-recomendaciones.md`. No salen en
+«Quién hace cada tarea», que es el router del texto de los libros.
+
 - **Buscar** no ofrece Claude, que no calcula embeddings. Con `off` se busca solo por palabras y
   no sale nada. Cambiarlo cambia la firma de los vectores (`embeddingKey`): hay que volver a
   indexar para buscar por significado.
@@ -216,7 +222,8 @@ Cada tarea que puede sacar el texto de un libro del equipo tiene su proveedor:
   no eligió.
 - **Región:** Pliegue no elige la región en la que procesa cada proveedor; la fija el proveedor
   o la cuenta de la persona con él. Azure usa la de su recurso.
-- **Código:** `ai/ai-settings.ts` (`indexProviderOf`, `askProviderOf`, `askModelOf`),
+- **Código:** `ai/ai-settings.ts` (`indexProviderOf`, `askProviderOf`, `askModelOf`,
+  `recommendProviderOf`, `recommendModelOf`),
   `ai/flow-router.ts` y `components/ai/ai-router-matrix.tsx`. e2e:
   `apps/web/e2e/router-flujo.mjs`. Simula Claude y Ollama: Claude cataloga y responde, Ollama
   busca. Comprueba que, si Claude falla, no se llama a nadie más, y que con `off` no se pide

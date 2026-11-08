@@ -356,7 +356,9 @@
     border-top: 1px solid var(--pliegue-color-border-default);
     bottom: 0;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    /* Una columna por sección, sean las que sean. */
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
     left: 0;
     padding: 4px 4px env(safe-area-inset-bottom);
     position: fixed;
@@ -385,7 +387,7 @@
     border-radius: var(--pliegue-radius-full);
     height: 30px;
     transition: background-color var(--pliegue-motion-fast) ease;
-    width: 54px;
+    width: min(54px, 100%);
   }
 
   .navigationLinkCompact[aria-current="page"] .navigationIcon {

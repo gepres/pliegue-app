@@ -75,6 +75,13 @@ const paths = {
   star: (
     <path d="m12 3.8 2.5 5.1 5.6.8-4 4 .9 5.6-5-2.7-5 2.7.9-5.6-4-4 5.6-.8z" />
   ),
+  /** Descubrir: «Para ti» (06.1). */
+  compass: (
+    <>
+      <circle cx="12" cy="12" r="8.25" />
+      <path d="m15.2 8.8-1.9 4.5-4.5 1.9 1.9-4.5z" />
+    </>
+  ),
   panel: (
     <>
       <rect height="16" rx="2.5" width="18" x="3" y="4" />

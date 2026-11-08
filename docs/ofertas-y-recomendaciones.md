@@ -61,7 +61,10 @@ convención «Título - Autor».
 
 ## «Para ti»: recomendaciones con su porqué (06.1)
 
-En Inicio, «Libros para ti» lleva a `/app/para-ti`. La persona elige temas (22, en una lista
+«Para ti» está en el menú lateral (y en la barra de abajo del móvil). En Inicio, la tarjeta
+«Libros para ti» aparece tras lo que se está leyendo. Sin gustos, invita a elegirlos. Con
+recomendaciones hechas, enseña las primeras portadas, sacadas de lo guardado en el equipo sin
+volver a buscar. La persona elige temas (22, en una lista
 fija) y autores, y Pliegue busca en Open Library libros en español que encajen. Cada tarjeta
 dice **por qué** se recomienda («Porque te gusta el realismo mágico», «Porque lees a Julio
 Cortázar»), con «Dónde conseguirlo» (el panel de arriba), «No me interesa» y «Ver en Open
@@ -84,9 +87,30 @@ Library».
 
 ### Afinar con IA
 
-Opcional, con el proveedor y el modelo de «Preguntar a tus libros» (para Ollama, en el
-equipo). Antes de enviar, un aviso dice **qué temas y qué autores** van a la IA; ningún
-título. La IA propone hasta 8 libros y **solo se enseñan los que existen en Open Library**
+Opcional, con su propia IA: Ajustes → IA → «Recomendaciones» (`recommendProvider` y
+`recommendModels`). Por defecto, el proveedor de catalogar. «Para ti» dice con cuál se afina y
+enlaza a ese ajuste. Antes de enviar, un aviso dice **con qué modelo** y **qué temas y qué
+autores** van a la IA; ningún título.
+
+**El modelo** (decidido el 8-nov-2026): para recomendar cuenta lo que el modelo sabe de
+libros, no cuánto texto lee. Los modelos pequeños inventan más títulos; lo inventado se
+descarta, pero entonces quedan menos recomendaciones. Por eso, de partida, la gama media de cada
+proveedor:
+
+| Proveedor | Modelo | Precio (USD por millón, entrada / salida) |
+|---|---|---|
+| OpenAI | `gpt-6.1-sol` | 2 / 10 |
+| Anthropic | `claude-sonnet-5-5` | 2 / 10 |
+| Gemini | `gemini-3.8-flash` | 0,75 / 3,75 hasta el 31-dic-2026; 1,50 / 7,50 desde 2027 |
+| Ollama | `qwen3:8b` | en el equipo, sin coste |
+
+- Cada «Afinar» manda unos cientos de tokens y recibe como mucho 4.000, razonamiento
+  incluido. Con OpenAI o Anthropic sale por unos 0,01–0,04 USD.
+- Gemini 3.6 Flash se retira el 19-nov-2026; por eso se usa 3.8 Flash.
+- Precios tomados de las páginas oficiales de OpenAI y de Google el 8-nov-2026. El
+  presupuesto cuenta Gemini 3.8 Flash al precio de 2027, para no quedarse corto.
+- Quien quiera gastar menos puede poner el modelo barato del proveedor (`gpt-6-luna`,
+  `claude-haiku-5-5`, `gemini-3.5-flash-lite`). La IA propone hasta 8 libros y **solo se enseñan los que existen en Open Library**
 (se buscan por título y autor): lo inventado se descarta. Cuenta para el presupuesto de la
 IA. No va al registro de procesamiento, que es por libro: aquí no sale nada de ninguno.
 

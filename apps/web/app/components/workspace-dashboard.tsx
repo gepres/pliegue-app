@@ -13,6 +13,7 @@ import { useImportedDocuments } from "../library/local-library-store";
 import { useReadingProgressEntries } from "../library/reading-progress-store";
 import styles from "../(workspace)/app/workspace.module.css";
 import { Skeleton, SkeletonGroup, SkeletonText } from "./app-ui/skeleton";
+import { ForYouTeaser } from "./books/for-you-teaser";
 import { FirstSteps } from "./guide/first-steps";
 import { DocumentCard, MetricCard, PageHeader } from "./workspace-page";
 
@@ -185,6 +186,9 @@ export function WorkspaceDashboard() {
         </Card>
       ) : null}
 
+      {/* Recomendaciones (06.1), bien a la vista: tras lo que se está leyendo. */}
+      {storageError || loading ? null : <ForYouTeaser />}
+
       {recentDocuments.length ? (
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
@@ -217,15 +221,6 @@ export function WorkspaceDashboard() {
           </div>
         </section>
       ) : null}
-
-      {/* Recomendaciones (06.1): al final, para no quitar sitio a la biblioteca. */}
-      <section aria-labelledby="para-ti-inicio" className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2 id="para-ti-inicio">Libros para ti</h2>
-          <Link href="/app/para-ti">Ver recomendaciones</Link>
-        </div>
-        <p>Recomendaciones según tus gustos, cada una con su porqué y dónde conseguirla. Tú decides con qué se recomienda.</p>
-      </section>
     </>
   );
 }

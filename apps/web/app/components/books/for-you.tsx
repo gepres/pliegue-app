@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { Button, Card, Input, Switch } from "@pliegue/ui";
 
 import { budgetProviderNames } from "../../ai/ai-budget";
 import { getSessionApiKey, useAiSessionSecrets } from "../../ai/ai-session-secret-store";
-import { askModelOf, askProviderOf } from "../../ai/ai-settings";
+import { recommendModelOf, recommendProviderOf } from "../../ai/ai-settings";
 import { useAiSettings } from "../../ai/ai-settings-store";
 import { refineWithAi, tastesForAi, type AiRefinement } from "../../ai/recommend-with-ai";
 import { coverUrl, tasteSubjects, type Recommendation, type TasteProfile } from "../../library/recommendations";
@@ -164,7 +165,7 @@ function Recommendations({ onEdit, profile }: { onEdit: () => void; profile: Tas
   const result = state?.key === key ? state.result : null;
   const aiItems = (ai.refinement?.items ?? []).filter((item) => !profile.dismissed.includes(item.key));
   const items = [...aiItems, ...(result?.items ?? []).filter((item) => !aiItems.some((suggested) => suggested.key === item.key))];
-  const provider = askProviderOf(settings);
+  const provider = recommendProviderOf(settings);
   const providerName = budgetProviderNames[provider] ?? provider;
   const aiReady = provider === "ollama" || Boolean(secrets[provider]);
 
@@ -172,7 +173,7 @@ function Recommendations({ onEdit, profile }: { onEdit: () => void; profile: Tas
     const tastes = tastesForAi(profile, documents);
     const confirmed = await confirmAction({
       confirmLabel: "Afinar",
-      description: `Se envían a ${providerName} (${askModelOf(settings)}) tus gustos para que proponga libros. Solo se enseñan los que existen en Open Library.`,
+      description: `Se envían a ${providerName} (${recommendModelOf(settings)}) tus gustos para que proponga libros. Solo se enseñan los que existen en Open Library.`,
       details: [
         tastes.subjects.length ? `Temas: ${tastes.subjects.join(", ")}` : "Sin temas",
         tastes.authors.length ? `Autores: ${tastes.authors.join(", ")}` : "Sin autores",
@@ -241,8 +242,16 @@ function Recommendations({ onEdit, profile }: { onEdit: () => void; profile: Tas
           {ai.refinement.verified === 1 ? "existe" : "existen"} en Open Library y {ai.refinement.verified === 1 ? "sale" : "salen"} primero.
         </p>
       ) : !aiReady ? (
-        <p className={styles.note}>Para afinar con IA, pon la clave de {providerName} en Ajustes → IA.</p>
-      ) : null}
+        <p className={styles.note}>
+          Para afinar con IA, pon la clave de {providerName} o elige otra IA en{" "}
+          <Link href="/app/ajustes#ai-recomendaciones">Ajustes → IA → Recomendaciones</Link>.
+        </p>
+      ) : (
+        <p className={styles.note}>
+          Afina con {providerName} ({recommendModelOf(settings)}).{" "}
+          <Link href="/app/ajustes#ai-recomendaciones">Cambiar la IA de las recomendaciones</Link>
+        </p>
+      )}
 
       {!result ? (
         <p className={styles.note} role="status">
@@ -305,23 +314,23 @@ function RecommendationCard({ item }: { item: Recommendation }) {
             </li>
           ))}
         </ul>
-        <div className={styles.cardActions}>
-          <Button
-            onClick={() =>
-              showBookOffers({ authors: item.author ? [item.author] : [], isbn: item.isbn, label: item.author ? `${item.title}, de ${item.author}` : item.title, title: item.title })
-            }
-            size="sm"
-            variant="secondary"
-          >
-            Dónde conseguirlo
-          </Button>
-          <Button onClick={() => dismissRecommendation(item.key)} size="sm" variant="quiet">
-            No me interesa
-          </Button>
-          <a href={`https://openlibrary.org${item.key}`} rel="noopener noreferrer" target="_blank">
-            Ver en Open Library
-          </a>
-        </div>
+      </div>
+      <div className={styles.cardActions}>
+        <Button
+          onClick={() =>
+            showBookOffers({ authors: item.author ? [item.author] : [], isbn: item.isbn, label: item.author ? `${item.title}, de ${item.author}` : item.title, title: item.title })
+          }
+          size="sm"
+          variant="secondary"
+        >
+          Dónde conseguirlo
+        </Button>
+        <Button onClick={() => dismissRecommendation(item.key)} size="sm" variant="quiet">
+          No me interesa
+        </Button>
+        <a href={`https://openlibrary.org${item.key}`} rel="noopener noreferrer" target="_blank">
+          Ver en Open Library
+        </a>
       </div>
     </li>
   );

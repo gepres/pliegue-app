@@ -6,7 +6,7 @@ import { openLibraryBookUrl, parseCandidates, subjectById, type Recommendation, 
 import { librarySignalsFor } from "../library/taste-store";
 import { adapterFor } from "./adapters";
 import { fetchWithRetry } from "./ai-retry";
-import { askModelOf, askProviderOf, type AiSettings } from "./ai-settings";
+import { recommendModelOf, recommendProviderOf, type AiSettings } from "./ai-settings";
 import { assertWithinBudget, recordAiUsage } from "./ai-usage-store";
 import {
   createSuggestionsPrompt,
@@ -19,7 +19,7 @@ import {
 } from "./book-suggestions";
 
 /**
- * «Afinar con IA» (06.1): con el proveedor y el modelo de «Preguntar». Al modelo le llegan los
+ * «Afinar con IA» (06.1): con la IA de las recomendaciones (Ajustes → IA). Al modelo le llegan los
  * temas y los nombres de autores (los de la biblioteca solo con permiso, y nunca de libros
  * confidenciales o personales); jamás un título. Cada sugerencia se busca en Open Library y solo
  * se enseña si existe con ese título y ese autor.
@@ -59,8 +59,8 @@ export async function refineWithAi(
 ): Promise<AiRefinement> {
   const tastes = tastesForAi(profile, documents);
   if (!tastes.authors.length && !tastes.subjects.length) throw new Error("Elige algún tema o autor para afinar con IA.");
-  const provider = askProviderOf(settings);
-  const model = askModelOf(settings);
+  const provider = recommendProviderOf(settings);
+  const model = recommendModelOf(settings);
   assertWithinBudget(provider);
 
   let json: unknown;

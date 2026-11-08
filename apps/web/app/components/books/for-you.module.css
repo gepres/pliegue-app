@@ -160,12 +160,18 @@
 }
 
 .card {
+  align-content: start;
   border: 1px solid var(--pliegue-color-border-default);
   border-radius: var(--pliegue-radius-md, 12px);
   display: grid;
-  gap: var(--pliegue-spacing-md);
+  gap: var(--pliegue-spacing-sm) var(--pliegue-spacing-md);
   grid-template-columns: 100px minmax(0, 1fr);
   padding: var(--pliegue-spacing-md);
+}
+
+/* La portada ocupa las dos filas: el texto y, debajo, las acciones. */
+.card > .cover {
+  grid-row: span 2;
 }
 
 .cover {
@@ -221,6 +227,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px var(--pliegue-spacing-sm);
+  grid-column: 2;
+  min-width: 0;
 }
 
 .cardActions a {
@@ -241,5 +249,139 @@
 
   .cover {
     width: 72px;
+  }
+
+  /* En estrecho, las acciones van bajo la portada, a todo el ancho de la tarjeta. */
+  .card > .cover {
+    grid-row: auto;
+  }
+
+  .cardActions {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---- «Libros para ti» en Inicio ------------------------------------------------------------- */
+.teaser {
+  align-items: center;
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--pliegue-color-accent-warm) 22%, transparent), transparent 60%),
+    linear-gradient(110deg, var(--pliegue-color-bg-surface), color-mix(in srgb, var(--pliegue-color-accent-warm) 10%, var(--pliegue-color-bg-surface)));
+  border: 1px solid color-mix(in srgb, var(--pliegue-color-accent-warm) 35%, var(--pliegue-color-border-default));
+  display: grid;
+  gap: var(--pliegue-spacing-xl);
+  grid-template-columns: minmax(0, 1fr) auto;
+  /* Como «Primeros pasos»: un respiro respecto a la tarjeta de lectura de encima. */
+  margin-top: var(--pliegue-spacing-lg);
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+.teaserText {
+  min-width: 0;
+}
+
+.teaserText h2 {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 600;
+  line-height: 1.05;
+  margin: var(--pliegue-spacing-sm) 0;
+}
+
+.teaserText p {
+  color: var(--pliegue-color-text-secondary);
+  line-height: 1.55;
+  margin: 0 0 var(--pliegue-spacing-lg);
+  max-width: 40rem;
+}
+
+.teaserText :global(.pliegue-tag) {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.teaserCovers {
+  display: grid;
+  gap: var(--pliegue-spacing-sm);
+  grid-template-columns: repeat(4, 84px);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.teaserCovers a {
+  color: inherit;
+  display: grid;
+  gap: 4px;
+  text-decoration: none;
+}
+
+.teaserCovers a:hover .teaserTitle {
+  text-decoration: underline;
+}
+
+.teaserCovers a:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid var(--pliegue-color-focus-ring);
+  outline-offset: 3px;
+}
+
+.teaserCover {
+  aspect-ratio: 2 / 3;
+  background: linear-gradient(160deg, var(--pliegue-forest-500), var(--pliegue-ink-950));
+  border-radius: 6px;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--pliegue-ink-950) 22%, transparent);
+  height: auto;
+  object-fit: cover;
+  width: 84px;
+}
+
+.teaserCover[data-generated] {
+  color: var(--pliegue-paper-50);
+  display: flex;
+  align-items: flex-end;
+  font-family: var(--pliegue-font-brand);
+  font-size: 0.75rem;
+  line-height: 1.15;
+  overflow: hidden;
+  padding: 8px;
+}
+
+.teaserTitle {
+  display: -webkit-box;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.teaserArt {
+  align-items: center;
+  aspect-ratio: 1;
+  background: color-mix(in srgb, var(--pliegue-color-accent-warm) 16%, transparent);
+  border-radius: 999px;
+  color: var(--pliegue-color-accent-warm);
+  display: flex;
+  justify-content: center;
+  width: 148px;
+}
+
+@media (max-width: 800px) {
+  .teaser {
+    grid-template-columns: 1fr;
+  }
+
+  .teaserArt {
+    display: none;
+  }
+
+  .teaserCovers {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .teaserCover {
+    width: 100%;
   }
 }
