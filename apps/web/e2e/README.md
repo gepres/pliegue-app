@@ -73,3 +73,19 @@ opacidad hasta llegar a ellas, y axe mediría ese contraste a medio aparecer.
   holgados: sirven para que salte una regresión. Medido el 7-nov-2026 en local: 500 libros se
   importan en 4 s; la Biblioteca recarga en 0,8 s; filtrar tarda 70 ms; indexarlos, 5,5 s.
   Buscar entre 6.600 fragmentos tarda 0,9 s la primera vez y 4 ms después.
+
+## Lector de pantalla (06.5)
+
+`lector-pantalla.mjs` lee con CDP (`Accessibility.getFullAXTree`) lo que recibe un lector de
+pantalla en Inicio, Biblioteca, lector, IA, Ajustes y Fuentes. En cada pantalla comprueba:
+- el idioma y su propio título;
+- una sola región principal, y navegación (en el lector, un enlace para volver);
+- un solo nivel 1 y ningún salto de nivel, leídos en el orden del documento, porque el del
+  árbol de CDP no lo es;
+- que cada control tiene nombre y que ninguna imagen se anuncia sin texto.
+
+También comprueba que el resultado de importar llega a una región que se anuncia, que el menú de
+un libro dice si está abierto, que el diálogo es modal y tiene nombre, y que el avance del lector
+dice cuánto va.
+
+La prueba a mano, con NVDA o VoiceOver, está en `docs/lector-de-pantalla.md`.

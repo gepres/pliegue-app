@@ -1565,7 +1565,10 @@ export function LocalReaderShell({
         {peekPosition ? <span className={styles.peekPosition}>{peekPosition}</span> : null}
       </button>
 
-      <main
+      {/* Una región con nombre, no otro <main>: el lector va dentro del <main> del espacio de
+          trabajo, y dos regiones principales confunden a quien navega con un lector de pantalla. */}
+      <section
+        aria-label="Texto del libro"
         className={styles.stage}
         id="reader-stage"
         onPointerUp={handleStagePointerUp}
@@ -1617,7 +1620,7 @@ export function LocalReaderShell({
             }}
           />
         )}
-      </main>
+      </section>
 
       <SelectionToolbar disabled={cropMode || postcard !== null || snippet !== null} onAction={handleSelectionAction} rootRef={previewRef} />
       {snippet ? (
