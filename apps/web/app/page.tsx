@@ -5,7 +5,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { buttonClassName } from "@pliegue/ui";
 
 import { BrandMark } from "./components/brand/brand-mark";
-import { AskTheBook } from "./components/home/ask-the-book";
+import { AskTheBook } from "./components/home/book-question";
 import { PaperToneSample } from "./components/home/paper-tone-sample";
 import { SmoothScroll } from "./components/home/smooth-scroll";
 import { InstallAppButton } from "./components/pwa/install-app";

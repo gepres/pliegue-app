@@ -2,7 +2,7 @@
 
 import { useState, type CSSProperties } from "react";
 
-import styles from "./ask-the-book.module.css";
+import styles from "./book-question.module.css";
 
 /**
  * El pliego de la portada (02.9d): lo que Pliegue hace de verdad con un libro, en un ejemplo.
