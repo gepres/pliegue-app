@@ -12,7 +12,8 @@ export const cloudConfigured = publicConfig.cloud !== null;
 /**
  * El cliente de Supabase, creado al primer uso en el navegador; `null` sin nube o en el
  * servidor. La sesión se guarda en `localStorage` con su propia clave: son los tokens de la
- * cuenta de Pliegue, no las claves de los proveedores de IA, que nunca se guardan.
+ * cuenta de Pliegue, no las claves de los proveedores de IA: esas solo se guardan si la persona
+ * lo elige, y siempre cifradas (bóveda, 02.5).
  *
  * `pkce`: al volver de Google o de un enlace del correo llega un `?code=` que el propio cliente
  * cambia por la sesión (`detectSessionInUrl`), sin que los tokens pasen por la URL.

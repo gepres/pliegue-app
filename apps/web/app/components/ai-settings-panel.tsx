@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, useSyncExternalStore } from "react";
+import { Fragment, useRef, useState, useSyncExternalStore } from "react";
 
 import { Button, Card, Field, Input, Select, Switch, Tag } from "@pliegue/ui";
 
@@ -25,6 +25,20 @@ import {
 } from "../ai/ai-session-secret-store";
 import { catalogProviderNames } from "../ai/ai-readiness";
 import { checkApiKey, normalizeApiKey, type KeyProvider } from "../ai/api-key";
+import {
+  createAccountVault,
+  forgetKey,
+  readKeyVault,
+  rememberKey,
+  resetAccountVault,
+  unlockAccountVault,
+  useKeyVault,
+  VaultLockedError,
+  type KeyPersistence,
+} from "../ai/key-vault";
+import { useAccount } from "../cloud/account-store";
+import { confirmAction } from "./app-ui/confirm-dialog";
+import { askPassphrase } from "./app-ui/passphrase-dialog";
 import { countCatalogPending } from "../ai/catalog-analysis";
 import {
   connectionSignature,
@@ -164,9 +178,16 @@ function ApiKeyField({
 }) {
   const secrets = useAiSessionSecrets();
   const textMask = useTextMask();
+  const vault = useKeyVault();
+  const account = useAccount();
   const [revealKey, setRevealKey] = useState(false);
   const [keyNote, setKeyNote] = useState<string | null>(null);
+  const [vaultNote, setVaultNote] = useState<string | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const apiKey = secrets[provider];
+  const level = vault.levels[provider] ?? "tab";
+  const signedIn = account.status === "signed-in";
+  const withAccount = account.status !== "unavailable";
   // Se avisa al pegar, no al analizar: un texto pegado por error no debe llegar al proveedor.
   const apiKeyCheck = apiKey ? checkApiKey(provider, apiKey) : null;
   // Enmascarada no se ve qué se pegó: el ojo lo enseña.
@@ -174,14 +195,66 @@ function ApiKeyField({
     ? `${apiKeyCheck.error} Con el ojo puedes ver qué se pegó.`
     : (apiKeyCheck?.warning ?? null);
 
+  /**
+   * Guarda la clave como pide `next` (02.5). Para la cuenta hace falta la frase: si no está en
+   * este navegador, se pide (crearla la primera vez, escribirla en otro equipo) y se reintenta.
+   */
+  async function persist(key: string, next: KeyPersistence) {
+    try {
+      await rememberKey(provider, key, next);
+      setVaultNote(null);
+    } catch (error) {
+      if (!(error instanceof VaultLockedError)) {
+        setVaultNote(error instanceof Error ? error.message : "No se pudo guardar la clave.");
+        return;
+      }
+      const hasAccountKeys = readKeyVault().account.remote.length > 0;
+      const opened = await askPassphrase({
+        mode: hasAccountKeys ? "unlock" : "create",
+        verify: async (passphrase) => {
+          if (hasAccountKeys) return unlockAccountVault(passphrase);
+          await createAccountVault(passphrase);
+          return null;
+        },
+      });
+      if (!opened) {
+        setVaultNote("No se guardó en tu cuenta: sigue como estaba.");
+        return;
+      }
+      try {
+        await rememberKey(provider, key, next);
+        setVaultNote(null);
+      } catch (retry) {
+        setVaultNote(retry instanceof Error ? retry.message : "No se pudo guardar la clave.");
+      }
+    }
+  }
+
   function changeApiKey(value: string) {
     const { key, removed } = normalizeApiKey(value);
     setSessionApiKey(provider, key);
     setKeyNote(removed.length ? `Se quitó ${removedList.format(removed)}: queda solo la clave.` : null);
+    // Guardada: se cifra y se guarda al dejar de escribir, no con cada tecla. Con el nivel que
+    // haya entonces, no el de ahora: si mientras tanto se elige otro, manda el nuevo.
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    if (level !== "tab") {
+      saveTimer.current = setTimeout(() => {
+        const current = readKeyVault().levels[provider] ?? "tab";
+        if (current !== "tab") void persist(key, current);
+      }, 500);
+    }
+  }
+
+  function changeLevel(next: KeyPersistence) {
+    // Lo pendiente de guardar se guarda ya, con el nivel elegido.
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    void persist(apiKey, next);
   }
 
   function clearApiKey() {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
     clearSessionApiKey(provider);
+    void forgetKey(provider).catch((error: unknown) => setVaultNote(error instanceof Error ? error.message : null));
     setKeyNote(null);
     setRevealKey(false);
   }
@@ -201,7 +274,7 @@ function ApiKeyField({
           id={id}
           name={`pliegue-ai-session-key-${provider}`}
           onChange={(event) => changeApiKey(event.target.value)}
-          placeholder="Pega una clave para esta sesión"
+          placeholder="Pega tu clave"
           spellCheck={false}
           type={textMask || revealKey ? "text" : "password"}
           value={apiKey}
@@ -217,6 +290,26 @@ function ApiKeyField({
         <Button disabled={!apiKey} onClick={clearApiKey} type="button" variant="danger">
           Borrar
         </Button>
+      </div>
+      <div className={styles.aiSecretRemember}>
+        <label htmlFor={`${id}-remember`}>Recordar</label>
+        <Select id={`${id}-remember`} onChange={(event) => changeLevel(event.target.value as KeyPersistence)} value={level}>
+          <option value="tab">Solo esta pestaña</option>
+          {withAccount ? (
+            <option disabled={!signedIn} value="session">
+              Hasta cerrar sesión{signedIn ? "" : " · inicia sesión"}
+            </option>
+          ) : null}
+          <option value="browser">En este navegador</option>
+          {withAccount ? (
+            <option disabled={!signedIn} value="account">
+              En mi cuenta, con mi frase{signedIn ? "" : " · inicia sesión"}
+            </option>
+          ) : null}
+        </Select>
+        <p aria-live="polite" role="status">
+          {vaultNote ?? rememberNotes[level]}
+        </p>
       </div>
       {apiKeyIssue ? (
         <p className={styles.aiSecretIssue} role="alert">
@@ -393,6 +486,65 @@ function SearchAskConnections({
   );
 }
 
+/** Dónde queda la clave con cada opción de «Recordar» (02.5). */
+const rememberNotes: Record<KeyPersistence, string> = {
+  account: "Cifrada con tu frase y guardada en tu cuenta: en tus otros equipos se abre escribiendo la frase.",
+  browser: "Cifrada en este navegador hasta que pulses «Borrar».",
+  session: "Cifrada en este navegador hasta que cierres sesión en Pliegue.",
+  tab: "Solo en esta pestaña: se borra al recargar o al cerrarla.",
+};
+
+/**
+ * Las claves de la cuenta que aún no se abrieron en este equipo (02.5): se abren con la frase.
+ * Si se olvidó, se pueden borrar de la cuenta para empezar de nuevo.
+ */
+function AccountKeysNotice() {
+  const vault = useKeyVault();
+  const count = vault.account.remote.length;
+  if (vault.error && vault.account.userId) {
+    return (
+      <p className={styles.aiGroupNote} role="alert">
+        {vault.error}
+      </p>
+    );
+  }
+  if (!vault.account.userId || !count || vault.account.unlocked) return null;
+
+  async function open() {
+    await askPassphrase({ mode: "unlock", verify: unlockAccountVault });
+  }
+
+  async function reset() {
+    const confirmed = await confirmAction({
+      confirmLabel: "Borrar de mi cuenta",
+      description: "Sin la frase no se pueden abrir: se borran de tu cuenta y vuelves a pegarlas.",
+      details: [`${count} ${count === 1 ? "clave guardada" : "claves guardadas"} en tu cuenta`],
+      icon: "trash",
+      note: "Las claves siguen en tus cuentas de cada proveedor: solo se borra la copia cifrada de Pliegue.",
+      title: "¿Olvidaste tu frase?",
+      tone: "danger",
+    });
+    if (confirmed) await resetAccountVault();
+  }
+
+  return (
+    <div className={styles.aiAccountKeys} role="note">
+      <strong>
+        {count === 1 ? "Tienes 1 clave guardada en tu cuenta" : `Tienes ${count} claves guardadas en tu cuenta`}
+      </strong>
+      <p>Están cifradas con tu frase. Escríbela una vez para usarlas en este equipo.</p>
+      <div>
+        <Button onClick={() => void open()} size="sm">
+          Abrir mis claves
+        </Button>
+        <Button onClick={() => void reset()} size="sm" variant="quiet">
+          Olvidé la frase
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function AiSettingsPanel() {
   const settings = useAiSettings();
   const secrets = useAiSessionSecrets();
@@ -448,6 +600,8 @@ export function AiSettingsPanel() {
     [draft.provider, translationModelProvider].filter((value): value is AiProvider => Boolean(value) && value !== "ollama"),
   );
   const shownOllama = draft.provider === "ollama" || translationProvider === "ollama";
+  const vault = useKeyVault();
+  const remembered = Object.values(vault.levels).some((level) => level && level !== "tab");
   // Sin clave solo si todas las tareas van con Ollama, el navegador o nadie.
   const searchProvider = indexProviderOf(draft);
   const keyless =
@@ -500,14 +654,13 @@ export function AiSettingsPanel() {
         </div>
         <div className={styles.aiPrivacyStamp}>
           <span>Credencial</span>
-          <strong>
-            {keyless ? "No requerida" : "Solo esta sesión"}
-          </strong>
-          <small>Se elimina al recargar o cerrar la pestaña.</small>
+          <strong>{keyless ? "No requerida" : remembered ? "Guardada, cifrada" : "Solo esta sesión"}</strong>
+          <small>{remembered ? "Cada clave dice dónde se guarda; «Borrar» la olvida." : "Se elimina al recargar o cerrar la pestaña."}</small>
         </div>
       </div>
 
       <ModelUpdateNotice />
+      <AccountKeysNotice />
 
       <form className={styles.aiSettingsForm} onSubmit={save}>
         {/* ---- Catalogar ------------------------------------------------------------ */}

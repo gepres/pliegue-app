@@ -186,9 +186,14 @@ export async function signInWithGoogle() {
   if (error) throw new Error(describeAuthError(error));
 }
 
-/** Cierra la sesión en este equipo; los demás siguen dentro y los datos locales se quedan. */
+/**
+ * Cierra la sesión en este equipo; los demás siguen dentro y los datos locales se quedan. Antes,
+ * la bóveda (02.5) borra de este navegador las claves de «hasta cerrar sesión», la copia de las
+ * de la cuenta y la llave de la frase.
+ */
 export async function signOut() {
   const client = cloudClient();
   if (!client) return;
+  await (await import("../ai/key-vault")).forgetSessionKeys();
   await client.auth.signOut({ scope: "local" });
 }

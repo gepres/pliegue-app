@@ -688,3 +688,54 @@ describe("storage.objects", () => {
     ))).rejects.toMatchObject({ code: "42501" });
   });
 });
+
+describe("user_secrets", () => {
+  // Lo que guarda la bóveda en la cuenta (02.5): solo texto cifrado en el navegador.
+  const kdf = JSON.stringify({ hash: "SHA-256", iterations: 600000, name: "PBKDF2", salt: "c2FsLWRlLXBydWViYQ==" });
+  const insert = (user: string, provider = "openai") =>
+    rows(
+      "insert into public.user_secrets (user_id, provider, ciphertext, iv, kdf) values ($1, $2, $3, 'aXYtZGUtcHJ1ZWJh', $4) returning provider",
+      [user, provider, `cifrado-de-${user.slice(-1)}-${provider}`, kdf],
+    );
+
+  beforeEach(async () => {
+    await insert(userA);
+    await insert(userB);
+  });
+
+  it("A ve, cambia y borra solo su clave cifrada", async () => {
+    await as(userA, async () => {
+      expect(await rows("select provider, ciphertext from public.user_secrets")).toEqual([{ ciphertext: "cifrado-de-a-openai", provider: "openai" }]);
+      expect(await rows("update public.user_secrets set ciphertext = 'otro-cifrado-de-a' where provider = 'openai' returning provider")).toEqual([{ provider: "openai" }]);
+      expect(await rows("delete from public.user_secrets where provider = 'openai' returning provider")).toEqual([{ provider: "openai" }]);
+    });
+  });
+
+  it("B no ve, cambia ni borra la clave de A", async () => {
+    await as(userB, async () => {
+      expect(await rows("select ciphertext from public.user_secrets")).toEqual([{ ciphertext: "cifrado-de-b-openai" }]);
+      expect(await rows("update public.user_secrets set ciphertext = 'pisado' where user_id = $1 returning provider", [userA])).toEqual([]);
+      expect(await rows("delete from public.user_secrets where user_id = $1 returning provider", [userA])).toEqual([]);
+    });
+    expect(await rows("select ciphertext from public.user_secrets where user_id = $1", [userA])).toEqual([{ ciphertext: "cifrado-de-a-openai" }]);
+  });
+
+  it("A no guarda una clave a nombre de B ni le pasa la suya", async () => {
+    await expect(as(userA, () => insert(userB, "gemini"))).rejects.toMatchObject({ code: "42501" });
+    await expect(as(userA, () => rows("update public.user_secrets set user_id = $1 where user_id = $2", [userB, userA]))).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("sin cuenta no se ve ni se guarda ninguna", async () => {
+    expect(await as("anon", () => rows("select * from public.user_secrets"))).toEqual([]);
+    await expect(as("anon", () => insert(userA, "gemini"))).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("solo admite proveedores conocidos y textos de tamaño razonable", async () => {
+    // Como A y con sus propias filas: RLS deja pasar y lo que salta es la restricción de la tabla.
+    await expect(as(userA, () => insert(userA, "otro-proveedor"))).rejects.toMatchObject({ code: "23514" });
+    await expect(as(userA, () => rows(
+      "insert into public.user_secrets (user_id, provider, ciphertext, iv, kdf) values ($1, 'gemini', $2, 'aXYtZGUtcHJ1ZWJh', $3)",
+      [userA, "x".repeat(5000), kdf],
+    ))).rejects.toMatchObject({ code: "23514" });
+  });
+});

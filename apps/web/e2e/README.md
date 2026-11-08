@@ -38,7 +38,7 @@ como en el CI (`.github/workflows/ci.yml`): Supabase se simula entero.
   `Fetch.enable` y `Fetch.fulfillRequest`. Ninguna prueba toca una cuenta real ni usa claves.
 - **Los libros se generan** en la propia prueba (un PDF con `Page.printToPDF`, un EPUB o un DOCX
   con `fflate`): no dependen de archivos de este equipo.
-- **Cada prueba tiene su puerto de depuración** (9382–9411) y su perfil (`<tmp>/pl-e2e-<nombre>`),
+- **Cada prueba tiene su puerto de depuración** (9382–9415) y su perfil (`<tmp>/pl-e2e-<nombre>`),
   que se borra al terminar. Una prueba nueva toma el siguiente puerto libre.
 - **Sin errores de consola.** Casi todas terminan comprobándolo.
 - `run.mjs` corre todas las que haya en la carpeta (menos ella misma) y sale con 1 si alguna falla.
@@ -137,3 +137,22 @@ un libro dice si está abierto, que el diálogo es modal y tiene nombre, y que e
 dice cuánto va.
 
 La prueba a mano, con NVDA o VoiceOver, está en `docs/lector-de-pantalla.md`.
+
+## Bóveda de claves (02.5)
+
+`boveda-claves.mjs` prueba los cuatro niveles de «Recordar» con Supabase simulado y **dos
+equipos** (dos Chrome con su perfil), que comparten la tabla `user_secrets` de mentira.
+
+- **Solo esta pestaña:** al recargar no está.
+- **En este navegador:** sigue tras una recarga de verdad. En ningún almacén está en claro, y
+  «Borrar» la olvida.
+- **Hasta cerrar sesión:** sigue con la sesión abierta y se borra al cerrar sesión.
+- **En mi cuenta:**
+  - la primera vez pide crear la frase (una corta no vale);
+  - sube solo texto cifrado, vector y sal;
+  - al recargar no vuelve a pedirla.
+- **En el otro equipo:** avisa de la clave de la cuenta. Con otra frase no se abre; con la
+  buena, llega.
+
+Ninguna petición lleva la clave ni la frase en claro. Ojo: ir a la misma URL cambiando solo el
+`#` no recarga la página. La prueba recarga de verdad, con `?carga=` distinta cada vez.

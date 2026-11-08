@@ -486,8 +486,9 @@ function RetentionSection() {
         <div>
           <dt>Tus claves de IA</dt>
           <dd>
-            Solo en la memoria de la pestaña: se olvidan al cerrarla. Lo que pides traducir o catalogar pasa por Pliegue
-            sin guardarse y llega, con tu clave, al proveedor que elegiste.
+            Por defecto, solo en la memoria de la pestaña. Si eliges recordarlas (Ajustes → IA), se guardan cifradas: en este
+            navegador o, con una frase tuya, en tu cuenta, sin que Pliegue pueda leerlas. Lo que pides traducir o catalogar
+            pasa por Pliegue sin guardarse y llega, con tu clave, al proveedor que elegiste.
           </dd>
         </div>
       </dl>

@@ -19,6 +19,7 @@ export const knownDatabases = [
   "pliegue-drive",
   "pliegue-duplicates",
   "pliegue-general",
+  "pliegue-key-vault",
   "pliegue-linked-files",
   "pliegue-linked-folders",
   "pliegue-local-library",

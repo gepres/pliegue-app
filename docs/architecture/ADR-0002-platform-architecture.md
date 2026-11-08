@@ -91,11 +91,16 @@ exactly-once, sino procesamiento idempotente y al-menos-una-vez.
 - El router elige proveedor por flujo, política, presupuesto, idioma y disponibilidad.
 - Escritorio/móvil guardan secretos en una bóveda respaldada por el sistema. Para Tauri
   se evaluará Stronghold con una clave derivada y permisos restringidos.
-- Web usa claves de sesión y no recuperables (gate 3). El incremento de catálogo las
-  mantiene en memoria de la pestaña y las transmite en headers únicamente a una ruta fija
-  de proveedor. Una bóveda web persistente requeriría cifrado cliente, autenticación
-  reciente y una decisión explícita de recuperación, y queda fuera del MVP; nunca se
-  guardan claves en `localStorage`, variables `NEXT_PUBLIC_`, logs o telemetría.
+- Web: en claro, la clave solo vive en la memoria de la pestaña y viaja en headers únicamente
+  a una ruta fija de proveedor. **Revisado el 8-nov-2026 (02.5):** la persona puede elegir
+  recordarla de cuatro formas:
+  - solo la pestaña, por defecto;
+  - hasta cerrar sesión, o en este navegador: cifrada con una llave del navegador no
+    exportable;
+  - en su cuenta: cifrada en el cliente con una frase suya (PBKDF2 + AES-GCM), sin que el
+    servidor pueda leerla. Si olvida la frase, la recuperación es volver a pegar la clave.
+
+  Nunca se guardan claves en claro, ni en variables `NEXT_PUBLIC_`, logs o telemetría.
 - Las respuestas conservan citas a fragmentos, versión del documento y proveedor/modelo.
 - Ollama puede operar localmente sin enviar contenido a terceros, sujeto a controles de
   origen y red del cliente nativo.
@@ -173,6 +178,15 @@ requiere coordinar caché e invalidación: [guía oficial](https://nextjs.org/do
    de volver a pegarlas en cada sesión. Una bóveda web persistente seguiría exigiendo
    cifrado en cliente, autenticación reciente y una decisión explícita de recuperación:
    queda fuera del MVP, no descartada.
+   **Revisado el 8-nov-2026 (02.5, decisión del dueño):** la fricción pesaba más de lo
+   previsto. La pestaña sigue siendo el nivel por defecto, y se añaden tres niveles que la
+   persona elige:
+   - hasta cerrar sesión y en este navegador: cifrada con una llave del navegador no
+     exportable;
+   - en la cuenta: cifrada en el cliente con su frase; Supabase guarda solo texto cifrado, en
+     `user_secrets`, fuera de la sincronización documental (gate 4).
+
+   La recuperación decidida es que no la hay: sin la frase, se vuelve a pegar la clave.
 4. **Derivados locales por defecto, ámbito sensible aislado.** El texto extraído, el OCR,
    los embeddings y las fichas de IA se quedan en el dispositivo y no se sincronizan sin
    consentimiento explícito por Área. Lo que sí se suba se borra en cascada al desvincular
