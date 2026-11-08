@@ -1,0 +1,181 @@
+/* La postal de ejemplo del capítulo destacado de las marcas (portada, 02.9d). */
+
+.sample {
+  --postcard-amber: rgb(255 196 0 / 55%);
+  --postcard-green: rgb(92 184 92 / 50%);
+  --postcard-blue: rgb(59 142 232 / 42%);
+  --postcard-rose: rgb(236 95 140 / 42%);
+
+  display: grid;
+  gap: 1.1rem;
+  justify-items: center;
+  margin: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+/* El alto es fijo y el formato cambia el ancho: la página no salta. */
+.stage {
+  align-items: center;
+  display: flex;
+  height: clamp(300px, 34vw, 380px);
+  justify-content: center;
+  width: 100%;
+}
+
+.card {
+  align-content: space-between;
+  background:
+    radial-gradient(ellipse 70% 50% at 20% 10%, rgb(201 146 50 / 16%), transparent 70%),
+    var(--pliegue-color-bg-surface);
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: 6px;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--pliegue-color-text-primary) 6%, transparent),
+    0 28px 52px -24px rgb(40 28 12 / 36%);
+  display: grid;
+  height: 100%;
+  max-width: 100%;
+  padding: clamp(1.1rem, 3vw, 1.6rem);
+  rotate: 1.2deg;
+  transition: aspect-ratio var(--pliegue-motion-base, 200ms) ease;
+}
+
+.quote {
+  font-family: var(--pliegue-font-brand);
+  font-size: clamp(1.45rem, 2.6vw, 1.95rem);
+  font-weight: 600;
+  line-height: 1.12;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.card mark {
+  background: linear-gradient(transparent 52%, var(--postcard-amber) 52%, var(--postcard-amber) 92%, transparent 92%);
+  box-decoration-break: clone;
+  color: inherit;
+  -webkit-box-decoration-break: clone;
+}
+
+.card[data-color="green"] mark {
+  background: linear-gradient(transparent 52%, var(--postcard-green) 52%, var(--postcard-green) 92%, transparent 92%);
+}
+
+.card[data-color="blue"] mark {
+  background: linear-gradient(transparent 52%, var(--postcard-blue) 52%, var(--postcard-blue) 92%, transparent 92%);
+}
+
+.card[data-color="rose"] mark {
+  background: linear-gradient(transparent 52%, var(--postcard-rose) 52%, var(--postcard-rose) 92%, transparent 92%);
+}
+
+.credit {
+  border-top: 1px solid var(--pliegue-color-border-default);
+  color: var(--pliegue-color-text-secondary);
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.9rem;
+  font-style: italic;
+  margin: 0;
+  padding-top: 0.6rem;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  justify-content: center;
+}
+
+.choices {
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+}
+
+.choices legend {
+  color: var(--pliegue-color-text-secondary);
+  float: left;
+  font-family: var(--pliegue-font-data);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  margin: 0 0 0.45rem;
+  width: 100%;
+}
+
+.choices label {
+  align-items: center;
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--pliegue-font-reading);
+  font-size: 0.95rem;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 0.3rem 0.8rem;
+  position: relative;
+}
+
+.choices input {
+  height: 1px;
+  opacity: 0;
+  position: absolute;
+  width: 1px;
+}
+
+.choices label:has(input:checked) {
+  border-color: var(--pliegue-color-text-primary);
+  box-shadow: inset 0 0 0 1px var(--pliegue-color-text-primary);
+}
+
+.choices label:has(input:focus-visible) {
+  outline: 3px solid var(--pliegue-color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Los colores, como muestras: el nombre queda para el lector de pantalla. */
+.choices label[data-color] {
+  padding: 0;
+}
+
+.choices label[data-color]::before {
+  border-radius: 50%;
+  content: "";
+  height: 1.3rem;
+  width: 1.3rem;
+}
+
+.choices label[data-color="amber"]::before {
+  background: var(--postcard-amber);
+}
+
+.choices label[data-color="green"]::before {
+  background: var(--postcard-green);
+}
+
+.choices label[data-color="blue"]::before {
+  background: var(--postcard-blue);
+}
+
+.choices label[data-color="rose"]::before {
+  background: var(--postcard-rose);
+}
+
+.swatchLabel {
+  clip: rect(0 0 0 0);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}

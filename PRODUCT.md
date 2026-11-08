@@ -83,7 +83,7 @@ Confirmadas en el código a 8-nov-2026:
   - sensibilidad por fuente o por libro: lo confidencial no sale a la nube y lo personal pide permiso;
   - bóveda de claves: solo la pestaña, cifrada en el navegador o en la cuenta con una frase.
 - **Cuenta y sincronización:** opcional, con Google o correo; historial de conflictos; borrar la cuenta.
-- **Bibliotecas compartidas:** códigos con caducidad y usos, lectores sin cuenta y registro de entradas.
+- **Bibliotecas compartidas:** códigos con caducidad y usos, lectores sin cuenta y registro de entradas: quién, cuándo, desde qué navegador y equipo (`library-admin-panel.tsx`).
 - **Tus datos:** copias en un ZIP, copia de seguridad JSON, notas en Markdown y «Borrar todo en este navegador».
 - **Sin rastreo:** la app no lleva analítica ni rastreo de terceros (comprobado en el código el 8-nov-2026).
 

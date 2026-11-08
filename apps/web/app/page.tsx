@@ -7,9 +7,11 @@ import { buttonClassName } from "@pliegue/ui";
 import { BrandMark } from "./components/brand/brand-mark";
 import { AskTheBook } from "./components/home/book-question";
 import { PaperToneSample } from "./components/home/paper-tone-sample";
+import { PostcardSample } from "./components/home/postcard-sample";
 import { SmoothScroll } from "./components/home/smooth-scroll";
 import { InstallAppButton } from "./components/pwa/install-app";
 import { ThemeToggle } from "./components/theme-toggle";
+import { TranslationModes } from "./components/home/translation-modes";
 import styles from "./page.module.css";
 
 /**
@@ -35,6 +37,8 @@ interface Chapter {
   /** Un botón propio del capítulo, con su aclaración. */
   action?: { href: string; label: string; note: string };
   details: string[];
+  /** Capítulo destacado: a todo el ancho, con su ejemplo al lado (02.9d, a pedido del dueño). */
+  feature?: Feature;
   id: string;
   lead: string;
   /** Notas al margen, en cursiva de lectura. */
@@ -42,10 +46,13 @@ interface Chapter {
   number: string;
   /** Datos de verdad (formatos, proporciones, proveedores), en letra de máquina. */
   specs?: string[];
+  /** Pasos numerados, en lugar de los detalles. */
+  steps?: { text: string; title: string }[];
   title: string;
 }
 
-type Demo = "ledger" | "pass" | "recommend" | "tone";
+type Demo = "devices" | "ledger" | "recommend" | "tone";
+type Feature = "postcard" | "share" | "translation";
 
 interface Part {
   chapters: Chapter[];
@@ -124,6 +131,7 @@ const parts: Part[] = [
           "Traduce el libro entero, con el coste a la vista antes de empezar.",
           "Gratis y en tu equipo con el traductor del navegador, o con tu IA. Si quieres, las traducciones se guardan en tu cuenta.",
         ],
+        feature: "translation",
         id: "traduccion",
         lead: "Lee en tu idioma sin perder el del libro.",
         margin: ["En Chrome y Edge, en el dispositivo", "Con tu IA, en cualquier navegador"],
@@ -148,10 +156,10 @@ const parts: Part[] = [
           "Recorta una zona del PDF y guárdala con su nota; exporta tus notas a Markdown.",
           "Convierte una cita en postal, con plantillas, formatos para redes y los créditos de la obra.",
         ],
+        feature: "postcard",
         id: "marcas",
         lead: "Lo que te detuvo al leer, guardado donde pasó y listo para compartir.",
-        margin: ["Ámbar, verde, azul y rosa"],
-        specs: ["Postales 1:1 · 4:5 · 9:16"],
+        margin: ["Con los créditos de la obra", "Tus notas, exportables a Markdown"],
         number: "07",
         title: "Marcas y postales",
       },
@@ -182,20 +190,22 @@ const parts: Part[] = [
           label: "Publicar mi biblioteca",
           note: "Para publicarla necesitas una cuenta de Pliegue; para leerla, solo el código.",
         },
-        details: [
-          "Elige una carpeta pública de tu Google Drive: Pliegue la abre como biblioteca, con tu nombre en la dirección.",
-          "Reparte códigos con caducidad y usos máximos; quien lo recibe lee sin cuenta, en el mismo lector.",
-          "Ves quién entró y cuándo, y sacas a quien quieras.",
-        ],
+        details: [],
+        feature: "share",
         id: "compartir",
-        lead: "Tu carpeta de Drive, abierta como biblioteca para quien tú invites.",
+        lead: "Tu club de lectura, tu clase o tu familia leen tus libros en Pliegue con un código, sin crearse una cuenta. Los archivos se quedan en tu Drive y tú decides quién entra y hasta cuándo.",
+        steps: [
+          { text: "Una carpeta de tu Google Drive que vea cualquiera con el enlace. Pliegue la abre como biblioteca, con tu nombre en la dirección.", title: "Elige tu carpeta" },
+          { text: "Con caducidad y usos máximos. Cada código es un enlace listo para enviar, y quien lo recibe lee en el mismo lector.", title: "Reparte códigos" },
+          { text: "Quién entró, cuándo y desde qué navegador. Sacas a quien quieras, cuando quieras.", title: "Mira quién lee" },
+        ],
         margin: ["Lectores sin cuenta", "Tus archivos, en tu Drive"],
         specs: ["/biblioteca/tu-nombre/CÓDIGO"],
         number: "09",
         title: "Comparte tu biblioteca",
       },
     ],
-    demo: "pass",
+    demo: "devices",
     id: "conectado",
     numeral: "III",
     statement: "Contigo en todos tus equipos, y abierta a quien tú invites: tu club de lectura, tu clase o tu familia.",
@@ -399,36 +409,89 @@ function LedgerDemo() {
   );
 }
 
+/** Los equipos de una cuenta de ejemplo (Parte III): inventados. */
+const devices = [
+  { name: "Escritorio de casa", state: "este equipo · 214 libros" },
+  { name: "Portátil", state: "sincronizado hace 2 min · 86 libros" },
+  { name: "Móvil", state: "copias importadas · 12 libros" },
+];
+
+function DevicesDemo() {
+  return (
+    <figure aria-label="Ejemplo: una cuenta de Pliegue en tres equipos" className={styles.devices}>
+      <div className={styles.devicesCard}>
+        <p className={styles.devicesTitle}>
+          Tus equipos <span>ejemplo</span>
+        </p>
+        <ul>
+          {devices.map((device) => (
+            <li key={device.name}>
+              <strong>{device.name}</strong>
+              <span>{device.state}</span>
+            </li>
+          ))}
+        </ul>
+        <p className={styles.devicesNote}>Viajan favoritos, notas, progreso, fichas y ajustes. Tus archivos, no.</p>
+      </div>
+    </figure>
+  );
+}
+
 const demos: Record<Demo, () => ReactNode> = {
+  devices: DevicesDemo,
   ledger: LedgerDemo,
-  pass: PassDemo,
   recommend: RecommendDemo,
   tone: PaperToneSample,
 };
 
+/** El ejemplo de cada capítulo destacado. */
+const features: Record<Feature, () => ReactNode> = {
+  postcard: PostcardSample,
+  share: PassDemo,
+  translation: TranslationModes,
+};
+
 function ChapterArticle({ chapter }: { chapter: Chapter }) {
+  const FeatureDemo = chapter.feature ? features[chapter.feature] : null;
   return (
-    <article aria-labelledby={`${chapter.id}-title`} className={styles.chapter} id={chapter.id}>
-      <header className={styles.chapterHead}>
-        <span aria-hidden="true" className={styles.numeral}>
-          {chapter.number}
-        </span>
-        <h3 id={`${chapter.id}-title`}>{chapter.title}</h3>
-      </header>
-      <p className={styles.chapterLead}>{chapter.lead}</p>
-      <ul className={styles.details}>
-        {chapter.details.map((detail) => (
-          <li key={detail}>{detail}</li>
-        ))}
-      </ul>
-      {chapter.action ? (
-        <div className={styles.chapterAction}>
-          <Link className={buttonClassName({ size: "md", variant: "secondary" })} href={chapter.action.href}>
-            {chapter.action.label}
-          </Link>
-          <p>{chapter.action.note}</p>
-        </div>
-      ) : null}
+    <article
+      aria-labelledby={`${chapter.id}-title`}
+      className={FeatureDemo ? `${styles.chapter} ${styles.featured}` : styles.chapter}
+      id={chapter.id}
+    >
+      <div className={styles.chapterMain}>
+        <header className={styles.chapterHead}>
+          <span aria-hidden="true" className={styles.numeral}>
+            {chapter.number}
+          </span>
+          <h3 id={`${chapter.id}-title`}>{chapter.title}</h3>
+        </header>
+        <p className={styles.chapterLead}>{chapter.lead}</p>
+        {chapter.details.length ? (
+          <ul className={styles.details}>
+            {chapter.details.map((detail) => (
+              <li key={detail}>{detail}</li>
+            ))}
+          </ul>
+        ) : null}
+        {chapter.steps ? (
+          <ol className={styles.chapterSteps}>
+            {chapter.steps.map((step) => (
+              <li key={step.title}>
+                <strong>{step.title}.</strong> {step.text}
+              </li>
+            ))}
+          </ol>
+        ) : null}
+        {chapter.action ? (
+          <div className={styles.chapterAction}>
+            <Link className={buttonClassName({ size: FeatureDemo ? "lg" : "md", variant: FeatureDemo ? "primary" : "secondary" })} href={chapter.action.href}>
+              {chapter.action.label}
+            </Link>
+            <p>{chapter.action.note}</p>
+          </div>
+        ) : null}
+      </div>
       <aside aria-label={`Notas de ${chapter.title}`} className={styles.marginalia}>
         {chapter.margin.length ? (
           <ul>
@@ -442,15 +505,12 @@ function ChapterArticle({ chapter }: { chapter: Chapter }) {
             {spec}
           </p>
         ))}
-        {chapter.id === "marcas" ? (
-          <span aria-hidden="true" className={styles.swatches}>
-            <i data-color="amber" />
-            <i data-color="green" />
-            <i data-color="blue" />
-            <i data-color="rose" />
-          </span>
-        ) : null}
       </aside>
+      {FeatureDemo ? (
+        <div className={styles.featureDemo}>
+          <FeatureDemo />
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -592,7 +652,11 @@ export default function HomePage() {
                   <PartDemo />
                 </div>
               </div>
-              <div className={styles.chapters} data-count={part.chapters.length}>
+              <div
+                className={styles.chapters}
+                data-count={part.chapters.length}
+                data-layout={part.chapters.some((chapter) => chapter.feature) ? "stack" : "grid"}
+              >
                 {part.chapters.map((chapter) => (
                   <ChapterArticle chapter={chapter} key={chapter.id} />
                 ))}
