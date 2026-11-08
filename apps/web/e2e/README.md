@@ -38,7 +38,7 @@ como en el CI (`.github/workflows/ci.yml`): Supabase se simula entero.
   `Fetch.enable` y `Fetch.fulfillRequest`. Ninguna prueba toca una cuenta real ni usa claves.
 - **Los libros se generan** en la propia prueba (un PDF con `Page.printToPDF`, un EPUB o un DOCX
   con `fflate`): no dependen de archivos de este equipo.
-- **Cada prueba tiene su puerto de depuración** (9382–9415) y su perfil (`<tmp>/pl-e2e-<nombre>`),
+- **Cada prueba tiene su puerto de depuración** (9382–9416) y su perfil (`<tmp>/pl-e2e-<nombre>`),
   que se borra al terminar. Una prueba nueva toma el siguiente puerto libre.
 - **Sin errores de consola.** Casi todas terminan comprobándolo.
 - `run.mjs` corre todas las que haya en la carpeta (menos ella misma) y sale con 1 si alguna falla.
@@ -156,3 +156,17 @@ equipos** (dos Chrome con su perfil), que comparten la tabla `user_secrets` de m
 
 Ninguna petición lleva la clave ni la frase en claro. Ojo: ir a la misma URL cambiando solo el
 `#` no recarga la página. La prueba recarga de verdad, con `?carga=` distinta cada vez.
+
+## Dónde conseguirlo (06.2)
+
+`ofertas-libros.mjs` abre «Dónde conseguirlo» desde el menú de un libro, con un navegador en
+español de Perú (`Emulation.setUserAgentOverride` con `acceptLanguage` y `setLocaleOverride`).
+Comprueba:
+- **Buscalibre:** la tienda del país y el enlace por título y autor, que abre en otra pestaña y
+  con `noreferrer`. Al cambiar a Chile, la tienda y la moneda cambian, y se recuerda.
+- **Google Play:** el precio (simulado) con su rebaja y la fecha de la consulta. En el mismo día
+  no se vuelve a pedir.
+- **Sin la Books API** (403): lo dice, y Buscalibre sigue.
+
+Pliegue nunca pide nada a Buscalibre: la prueba bloquea cualquier petición a sus dominios y
+comprueba que no hubo ninguna.

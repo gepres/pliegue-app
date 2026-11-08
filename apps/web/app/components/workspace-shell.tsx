@@ -24,6 +24,7 @@ import { NoticesBanner } from "./cloud/notices-banner";
 import { InstallAppNavItem } from "./pwa/install-app";
 import { IconButton } from "./app-ui/controls";
 import { PassphraseDialogHost } from "./app-ui/passphrase-dialog";
+import { BookOffersHost } from "./books/book-offers";
 import { KeyVaultLoader } from "./ai/key-vault-loader";
 import { Icon } from "./app-ui/icons";
 import { ThemeToggle } from "./theme-toggle";
@@ -219,6 +220,7 @@ export function WorkspaceShell({ children }: Readonly<{ children: ReactNode }>) 
       <NextStepHost />
       <BudgetAlerts />
       <SensitivityPickerHost />
+      <BookOffersHost />
       <BookCopiesSync />
       <CloudSync />
     </div>

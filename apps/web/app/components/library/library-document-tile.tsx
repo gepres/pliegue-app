@@ -7,6 +7,7 @@ import { Tag, cx } from "@pliegue/ui";
 import type { DocumentWorkType } from "../../ai/document-catalog";
 import { documentLanguage, type LibraryDocument } from "../../library/documents";
 import { languageLabel } from "../../library/language";
+import { coverQueryFor } from "../../library/open-library-covers";
 import { useReadingProgress } from "../../library/reading-progress-store";
 import { sensitivityNames } from "../../library/sensitivity";
 import { useDocumentSensitivity, useSensitivityMarks } from "../../library/sensitivity-store";
@@ -15,6 +16,7 @@ import { Icon, type IconName } from "../app-ui/icons";
 import { MenuItem, MenuSeparator, Popover } from "../app-ui/overlays";
 import styles from "./library.module.css";
 import { pickSensitivity } from "./sensitivity-picker";
+import { showBookOffers } from "../books/book-offers";
 
 export type LibraryView = "grid" | "list";
 
@@ -337,6 +339,18 @@ export function LibraryDocumentTile({
                   }}
                 />
               ) : null}
+              <MenuItem
+                description="Buscalibre y Google Play"
+                icon="link"
+                label="Dónde conseguirlo"
+                onSelect={() => {
+                  close();
+                  // Título, autores e ISBN de la ficha o, sin ella, del nombre del archivo.
+                  const query = coverQueryFor(document);
+                  const book = query ?? { authors: [], isbn: null, title };
+                  showBookOffers({ ...book, label: book.authors[0] ? `${book.title}, de ${book.authors[0]}` : book.title });
+                }}
+              />
               <MenuItem
                 description={ownSensitivity ? "Marcada en este libro" : "La de su fuente"}
                 icon="info"
