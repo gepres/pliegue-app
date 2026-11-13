@@ -1,6 +1,21 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import { generalNotices, localDay, noticeDateLabel, noticeToShow, type GeneralNotice } from "./general-library-notices";
+
+/** Ancho y alto de un WebP, de su cabecera: VP8 (con pérdida), VP8L (sin pérdida) o VP8X. */
+function webpSize(bytes: Buffer) {
+  expect(bytes.toString("ascii", 0, 4) + bytes.toString("ascii", 8, 12)).toBe("RIFFWEBP");
+  const chunk = bytes.toString("ascii", 12, 16);
+  if (chunk === "VP8X") return { height: bytes.readUIntLE(27, 3) + 1, width: bytes.readUIntLE(24, 3) + 1 };
+  if (chunk === "VP8L") {
+    const bits = bytes.readUInt32LE(21);
+    return { height: ((bits >> 14) & 0x3fff) + 1, width: (bits & 0x3fff) + 1 };
+  }
+  return { height: bytes.readUInt16LE(28) & 0x3fff, width: bytes.readUInt16LE(26) & 0x3fff };
+}
 
 const invitation: GeneralNotice = { date: "2026-11-12", id: "pliegue", kind: "pliegue", text: "Úsalo con los tuyos.", title: "Haz lo mismo con tus libros" };
 const news = (id: string, date: string, until?: string): GeneralNotice => ({ date, id, kind: "novedad", text: "…", title: id, ...(until ? { until } : {}) });
@@ -44,6 +59,19 @@ describe("avisos de la biblioteca general (03.13d)", () => {
     }
     // La invitación a usar Pliegue está y lleva a la app.
     expect(generalNotices.find((notice) => notice.kind === "pliegue")?.action?.href).toBe("/app");
+  });
+
+  it("los banners publicados existen en public/, miden lo que dicen y tienen su texto alternativo", () => {
+    for (const notice of generalNotices) {
+      if (!notice.banner) continue;
+      // El texto alternativo dice lo mismo que la imagen: al menos el título.
+      expect(notice.banner.alt).toContain(notice.title);
+      for (const image of [notice.banner.desktop, notice.banner.mobile]) {
+        expect(image.src).toMatch(/^\/avisos\/[\w-]+\.webp$/);
+        const bytes = readFileSync(fileURLToPath(new URL(`../../public${image.src}`, import.meta.url)));
+        expect(webpSize(bytes)).toEqual({ height: image.height, width: image.width });
+      }
+    }
   });
 
   it("el día local y la fecha a la vista", () => {

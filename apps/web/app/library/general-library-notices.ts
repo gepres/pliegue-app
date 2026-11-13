@@ -9,6 +9,8 @@
  * - `date` (AAAA-MM-DD): se muestra el más reciente; en una novedad, además, se ve la fecha.
  * - `until` (opcional, incluido): a partir del día siguiente deja de mostrarse.
  * - `action` y `more` (opcionales): un enlace principal y otro discreto.
+ * - `banner` (opcional): dos imágenes con el texto dentro, en `public/avisos/`. Sin él, la
+ *   tarjeta pinta el título, el texto y los enlaces.
  *
  * Se muestra uno a la vez: la novedad más reciente que siga vigente y no se haya ocultado y, si no
  * queda ninguna, la invitación. Ocultar una novedad deja ver la siguiente o la invitación; una
@@ -20,8 +22,28 @@ export interface GeneralNoticeLink {
   label: string;
 }
 
+export interface GeneralNoticeImage {
+  height: number;
+  /** Ruta pública, bajo `public/avisos/`. */
+  src: string;
+  width: number;
+}
+
+/**
+ * El aviso como banner: una imagen con el texto dentro, una para escritorio y otra para el móvil,
+ * y toda ella es el enlace de `action`. El dueño lo prefirió así a la tarjeta de texto (13-nov).
+ */
+export interface GeneralNoticeBanner {
+  /** Lo que dice la imagen, entero: es lo único que oye quien usa un lector de pantalla. */
+  alt: string;
+  desktop: GeneralNoticeImage;
+  mobile: GeneralNoticeImage;
+}
+
 export interface GeneralNotice {
   action?: GeneralNoticeLink;
+  /** Si lo lleva, se muestra la imagen en lugar del título, el texto y los enlaces. */
+  banner?: GeneralNoticeBanner;
   /** Fecha de publicación, AAAA-MM-DD. */
   date: string;
   id: string;
@@ -37,6 +59,13 @@ export interface GeneralNotice {
 export const generalNotices: readonly GeneralNotice[] = [
   {
     action: { href: "/app", label: "Empezar con mis libros" },
+    // Los hizo Codex (13-nov): ilustración generada sin letras y texto compuesto en HTML con las
+    // fuentes de Pliegue. Fuentes y script de render en `pliegue-promo/banners-biblioteca-general`.
+    banner: {
+      alt: "Haz lo mismo con tus libros. Ordénalos, léelos, tradúcelos y pregúntales. Gratis, y tus archivos no se suben. Empezar con mis libros.",
+      desktop: { height: 600, src: "/avisos/pliegue-con-tus-libros-escritorio.webp", width: 2400 },
+      mobile: { height: 960, src: "/avisos/pliegue-con-tus-libros-movil.webp", width: 1080 },
+    },
     date: "2026-11-12",
     id: "pliegue-con-tus-libros",
     kind: "pliegue",

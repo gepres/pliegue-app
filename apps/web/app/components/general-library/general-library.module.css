@@ -573,3 +573,94 @@
     font-size: 0.875rem;
   }
 }
+
+/* ---- El aviso como banner: la imagen con el texto dentro (13-nov) ---- */
+
+/* La misma hoja con la esquina doblada, ahora con la imagen a sangre. La imagen es clara en los
+   dos temas: es un impreso, no la interfaz. */
+.bulletinBanner {
+  --bulletin-fold: 22px;
+  border: 1px solid var(--pliegue-color-border-default);
+  border-radius: var(--pliegue-radius-md);
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - var(--bulletin-fold)),
+    calc(100% - var(--bulletin-fold)) 100%,
+    0 100%
+  );
+  line-height: 0;
+  margin: 0 0 var(--pliegue-spacing-lg);
+  overflow: hidden;
+  position: relative;
+}
+
+.bulletinBanner::after {
+  background: linear-gradient(
+    to top left,
+    transparent 50%,
+    color-mix(in srgb, var(--pliegue-paper-200) 85%, var(--pliegue-ink-900)) 50%,
+    var(--pliegue-paper-200) 62%
+  );
+  border-top-left-radius: 3px;
+  bottom: 0;
+  content: "";
+  height: var(--bulletin-fold);
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  width: var(--bulletin-fold);
+}
+
+.bulletinBanner img {
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+.bulletinBannerLink {
+  display: block;
+}
+
+/* El foco, por dentro: por fuera lo cortaría el recorte de la esquina. */
+.bulletinBannerLink:focus-visible {
+  outline: 3px solid var(--pliegue-forest-500);
+  outline-offset: -3px;
+}
+
+.bulletinBannerLink:focus-visible img,
+.bulletinBannerLink:hover img {
+  filter: brightness(1.02) saturate(1.04);
+}
+
+/* «Ocultar», sobre la imagen: en su esquina libre, en papel y tinta en los dos temas. */
+.bulletinBanner .bulletinClose {
+  background: color-mix(in srgb, var(--pliegue-paper-50) 88%, transparent);
+  color: var(--pliegue-ink-900);
+  margin: 0;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+}
+
+.bulletinBanner .bulletinClose:hover:not(:disabled) {
+  background: var(--pliegue-paper-50);
+}
+
+/* En pantallas medianas sale la imagen del móvil; más ancha que esto, crecería sin aportar. */
+@media (max-width: 899px) {
+  .bulletinBanner {
+    max-width: 560px;
+  }
+}
+
+@media (max-width: 640px) {
+  .bulletinBanner {
+    --bulletin-fold: 18px;
+  }
+
+  .bulletinBanner .bulletinClose {
+    right: 6px;
+    top: 6px;
+  }
+}
