@@ -16,7 +16,8 @@ import { documentDisplayTitle, documentLanguage, type LibraryDocument } from "./
  * - **El título,** cuando uno de los dos no tiene texto (un escaneo sin OCR): casi idéntico y
  *   del mismo autor.
  * Y tres frenos: dos tomos distintos («Platón I» y «Platón II»), dos idiomas distintos (una
- * traducción) y dos autores distintos no son el mismo libro.
+ * traducción) y dos autores distintos no son el mismo libro. Un cuarto, sin adivinar nada: dos
+ * fichas que declaran ediciones distintas («Versión PDF» y «Versión EPUB») ya están decididas.
  *
  * Medido contra los 16 marcados a mano del corpus (439 libros): ver la prueba y el avance de
  * 03.6. Son sugerencias: la persona decide cuál conservar o que no son el mismo libro.
@@ -27,6 +28,11 @@ export interface DuplicateItem {
   authors?: readonly string[];
   /** Huella dHash de la portada, 16 cifras hexadecimales; `null` sin portada. */
   coverHash?: string | null;
+  /**
+   * La edición o versión que declara la ficha («Versión PDF», «2.ª»). Dos fichas que declaran
+   * ediciones distintas ya están decididas: son versiones del mismo libro, no copias.
+   */
+  edition?: string | null;
   id: string;
   /** Idioma del libro, si se sabe: dos idiomas distintos son una traducción, no una copia. */
   language?: string | null;
@@ -44,6 +50,7 @@ export function duplicateItemOf(document: LibraryDocument, text: string, coverHa
   return {
     authors: document.catalog?.authors ?? [],
     coverHash,
+    edition: document.bibliographic?.edition ?? null,
     id: document.id,
     language: documentLanguage(document),
     text,
@@ -239,6 +246,16 @@ export function differentAuthors(left: DuplicateItem, right: DuplicateItem) {
 const differentLanguages = (left: DuplicateItem, right: DuplicateItem) =>
   Boolean(left.language && right.language && left.language.split("-")[0] !== right.language.split("-")[0]);
 
+/**
+ * ¿Ediciones declaradas distintas? Solo si las dos fichas dicen la suya: el PDF y el EPUB del
+ * mismo libro marcados como «Versión PDF» y «Versión EPUB» ya son versiones, no repetidos.
+ */
+export function differentEditions(left: DuplicateItem, right: DuplicateItem) {
+  const a = normalizeWords(left.edition ?? "").join(" ");
+  const b = normalizeWords(right.edition ?? "").join(" ");
+  return Boolean(a && b && a !== b);
+}
+
 /** Las palabras de título que salen en muchos libros: las de colección o serie. */
 function frequentTitleWords(items: readonly DuplicateItem[]) {
   const counts = new Map<string, number>();
@@ -260,7 +277,8 @@ export function findDuplicatePairs(items: readonly DuplicateItem[], precomputed?
   const frequent = frequentTitleWords(items);
   const pairs = new Map<string, DuplicatePair>();
   const keyOf = (a: number, b: number) => (a < b ? `${a}:${b}` : `${b}:${a}`);
-  const blocked = (a: number, b: number) => differentVolumes(items[a]!, items[b]!) || differentLanguages(items[a]!, items[b]!);
+  const blocked = (a: number, b: number) =>
+    differentVolumes(items[a]!, items[b]!) || differentLanguages(items[a]!, items[b]!) || differentEditions(items[a]!, items[b]!);
   const add = (a: number, b: number, reason: DuplicatePair["reason"], score: number) =>
     pairs.set(keyOf(a, b), { ids: [items[a]!.id, items[b]!.id], reason, score: Math.round(score * 100) / 100 });
 

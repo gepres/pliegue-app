@@ -610,6 +610,21 @@
   text-transform: uppercase;
 }
 
+/* Qué versión o edición es: la misma pastilla. Una edición larga se corta; el título la da entera. */
+.tileEdition {
+  border: 1px solid var(--pliegue-color-border-control);
+  border-radius: var(--pliegue-radius-full);
+  color: var(--pliegue-color-text-secondary);
+  font-size: 0.625rem;
+  letter-spacing: 0.06em;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0 6px;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .tileWarning {
   color: var(--pliegue-color-status-danger);
 }

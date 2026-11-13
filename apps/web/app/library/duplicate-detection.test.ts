@@ -5,6 +5,7 @@ import {
   containment,
   differenceHash,
   differentAuthors,
+  differentEditions,
   differentVolumes,
   duplicateItemOf,
   findDuplicatePairs,
@@ -93,6 +94,33 @@ describe("libros repetidos que no son el mismo archivo (03.6)", () => {
     // Con «gredos» como palabra de colección, lo que queda de los dos títulos es «Bruno».
     expect(titleSimilarity(item("a", "Gredos - Bruno"), item("b", "Giordano Bruno"))).toBe(0.5);
     expect(titleSimilarity(item("a", "Gredos - Bruno"), item("b", "Giordano Bruno"), new Set(["gredos"]))).toBe(1);
+  });
+
+  it("el PDF y el EPUB que la ficha declara como versiones no se proponen como repetidos (03.6c)", () => {
+    const book = prose("trenza");
+    const pdf = item("pdf", "Una trenza de hierba sagrada", { edition: "Versión PDF", text: book });
+    const epub = item("epub", "Una trenza de hierba sagrada", { edition: "Versión EPUB", text: book });
+    expect(differentEditions(pdf, epub)).toBe(true);
+    expect(findDuplicatePairs([pdf, epub])).toEqual([]);
+
+    // Si solo una ficha la declara, o las dos dicen la misma, decide el texto como siempre.
+    expect(findDuplicatePairs([pdf, { ...epub, edition: null }]).map((pair) => pair.reason)).toEqual(["text"]);
+    expect(differentEditions(pdf, { ...epub, edition: "versión pdf" })).toBe(false);
+
+    // La edición sale de la ficha bibliográfica del documento.
+    const document = {
+      author: "Copia importada",
+      availability: "available",
+      bibliographic: { edition: "Versión EPUB" },
+      format: "epub",
+      id: "epub",
+      meta: "",
+      origin: "local",
+      reference: { kind: "local-copy", storageId: "c" },
+      tags: [],
+      title: "Una trenza de hierba sagrada",
+    } as unknown as LibraryDocument;
+    expect(duplicateItemOf(document, book, null).edition).toBe("Versión EPUB");
   });
 
   it("dHash: un bit por par de píxeles vecinos, y la distancia en bits", () => {
