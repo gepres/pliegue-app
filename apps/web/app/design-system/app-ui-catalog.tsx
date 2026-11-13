@@ -11,8 +11,23 @@ import { NextStepHost, suggestNextStep } from "../components/app-ui/next-step-di
 import { MenuItem, MenuSeparator, Popover, Sheet } from "../components/app-ui/overlays";
 import { Skeleton, SkeletonGroup, SkeletonPage, SkeletonText } from "../components/app-ui/skeleton";
 import { DocumentCard, DocumentCardSkeletons, MetricCard, PageHeader } from "../components/workspace-page";
+import { GeneralNoticeCard, showNoticesAgain } from "../components/general-library/general-notice";
+import { generalNotices, type GeneralNotice } from "../library/general-library-notices";
 import pageStyles from "./page.module.css";
 import styles from "./app-ui-catalog.module.css";
+
+/** Los avisos de muestra: una novedad y la invitación de verdad, con ids propios del catálogo. */
+const sampleNotices: GeneralNotice[] = [
+  ...generalNotices.filter((notice) => notice.kind === "pliegue").map((notice) => ({ ...notice, id: `muestra-${notice.id}` })),
+  {
+    action: { href: "/design-system#app-ui-title", label: "Ver los libros nuevos" },
+    date: "2026-11-12",
+    id: "muestra-libros-nuevos",
+    kind: "novedad",
+    text: "Llegaron «Ficciones» y «El Aleph» de Borges, y las «Meditaciones» de Marco Aurelio en la edición de Gredos.",
+    title: "Tres libros nuevos en la biblioteca",
+  },
+];
 
 /**
  * Los controles de `components/app-ui` en el catálogo (02.2b). Viven en la app y no en
@@ -359,6 +374,25 @@ export function AppUiCatalog() {
           >
             Enseñar la sugerencia
           </Button>
+        </div>
+      </Card>
+
+      <Card className={`${pageStyles.componentDemo} ${styles.stackedCard}`}>
+        <div>
+          <h3>Aviso de la biblioteca general</h3>
+          <p>
+            Bajo la cabecera de la biblioteca general: invita a usar Pliegue con los libros propios y
+            cuenta las novedades. Sale el más reciente que siga vigente; «Ocultar» lo quita en ese
+            navegador y deja ver el siguiente. Aquí, con avisos de muestra que no tocan los de verdad.
+          </p>
+        </div>
+        <div className={styles.column}>
+          <GeneralNoticeCard notices={sampleNotices} />
+          <div className={styles.row}>
+            <Button onClick={() => showNoticesAgain(sampleNotices.map((notice) => notice.id))} size="sm" variant="secondary">
+              Volver a mostrar los avisos
+            </Button>
+          </div>
         </div>
       </Card>
 
