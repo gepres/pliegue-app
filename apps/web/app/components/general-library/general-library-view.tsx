@@ -26,6 +26,7 @@ import { categoryChipLimit, sortLabels, usePhoneWidth } from "../library/library
 import { Skeleton, SkeletonGroup } from "../app-ui/skeleton";
 import libraryStyles from "../library/library.module.css";
 import styles from "./general-library.module.css";
+import { GeneralNoticeCard } from "./general-notice";
 
 const plural = (count: number, one: string, many: string) => `${count.toLocaleString("es")} ${count === 1 ? one : many}`;
 
@@ -223,6 +224,12 @@ export function GeneralLibraryView({
           </p>
         </div>
       </header>
+
+      {/* La invitación a usar Pliegue y las novedades: solo en la general, que es de Pliegue. Una
+          compartida es de quien la publica. */}
+      {place.library === generalLibraryPlace.library ? (
+        <GeneralNoticeCard onHidden={() => document.getElementById("general-search")?.focus()} />
+      ) : null}
 
       {state.error ? (
         <p className={styles.error} role="status">
