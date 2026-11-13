@@ -106,6 +106,32 @@ export function GeneralNoticeCard({
     if (event.detail === 0) onHidden?.();
   }
 
+  const close = <IconButton className={styles.bulletinClose} icon="close" label="Ocultar este aviso" onClick={dismiss} size="sm" />;
+
+  if (notice.banner) {
+    const { alt, desktop, mobile } = notice.banner;
+    // Una imagen para el móvil y otra para el escritorio (art direction): el texto va dentro, y
+    // con la de escritorio encogida a un móvil no se leería. Son WebP ya a su tamaño.
+    const picture = (
+      <picture>
+        <source height={mobile.height} media="(max-width: 899px)" srcSet={mobile.src} width={mobile.width} />
+        <img alt={alt} decoding="async" height={desktop.height} src={desktop.src} width={desktop.width} />
+      </picture>
+    );
+    return (
+      <aside aria-label={notice.title} className={styles.bulletinBanner} data-kind={notice.kind}>
+        {notice.action ? (
+          <Link className={styles.bulletinBannerLink} href={notice.action.href}>
+            {picture}
+          </Link>
+        ) : (
+          picture
+        )}
+        {close}
+      </aside>
+    );
+  }
+
   return (
     <aside aria-labelledby={titleId} className={styles.bulletin} data-kind={notice.kind}>
       <BrandMark className={cx(styles.bulletinMark)} size={44} />
@@ -128,7 +154,7 @@ export function GeneralNoticeCard({
           </div>
         ) : null}
       </div>
-      <IconButton className={styles.bulletinClose} icon="close" label="Ocultar este aviso" onClick={dismiss} size="sm" />
+      {close}
     </aside>
   );
 }

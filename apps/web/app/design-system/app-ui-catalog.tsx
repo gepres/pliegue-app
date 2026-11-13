@@ -382,8 +382,10 @@ export function AppUiCatalog() {
           <h3>Aviso de la biblioteca general</h3>
           <p>
             Bajo la cabecera de la biblioteca general: invita a usar Pliegue con los libros propios y
-            cuenta las novedades. Sale el más reciente que siga vigente; «Ocultar» lo quita en ese
-            navegador y deja ver el siguiente. Aquí, con avisos de muestra que no tocan los de verdad.
+            cuenta las novedades. Un aviso con banner es una imagen (una para escritorio y otra para
+            el móvil) que lleva a su enlace; sin banner, sale en texto. Sale el más reciente que siga
+            vigente; «Ocultar» lo quita en ese navegador y deja ver el siguiente. Aquí, con avisos de
+            muestra que no tocan los de verdad.
           </p>
         </div>
         <div className={styles.column}>
