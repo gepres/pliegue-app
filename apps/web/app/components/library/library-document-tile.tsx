@@ -114,6 +114,9 @@ export function LibraryDocumentTile({
   const unavailable = document.availability !== "available" && document.reference.kind !== "local-copy";
   const volume = document.bibliographic?.volume ?? null;
   const duplicate = Boolean(document.organization?.duplicateOf);
+  // Qué versión es («Versión PDF», «2.ª»): con portada real, el PDF y el EPUB del mismo libro
+  // eran dos tarjetas idénticas.
+  const edition = document.bibliographic?.edition?.trim() || null;
   const image = document.cover?.src ?? null;
   const language = languageLabel(documentLanguage(document));
   const gridDetails = view === "grid" && showDetails;
@@ -239,6 +242,11 @@ export function LibraryDocumentTile({
                 .join("\n")}
             >
               {originLabel}
+            </span>
+          ) : null}
+          {edition ? (
+            <span className={styles.tileEdition} title={edition}>
+              {edition}
             </span>
           ) : null}
           {duplicate ? (
